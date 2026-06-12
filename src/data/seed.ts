@@ -199,52 +199,70 @@ const suppliers: Supplier[] = [
 ]
 
 // ---------------------------------------------------------------------------
-// Productos.  [nombre, barcode, categoría, precio, costo, iva, emoji, unidad, proveedor, perecedero]
+// Productos — precios de referencia de una ventanilla en Armenia, Quindío (COP).
+// Tupla: [nombre, categoría, precio, costo, iva, emoji, unidad, proveedor, perecedero]
+// El código de barras se autogenera; el granel usa código interno.
 // ---------------------------------------------------------------------------
-type P = [string, string, string, number, number, number, string, 'unidad' | 'peso', string, boolean]
+type P = [string, string, number, number, number, string, 'unidad' | 'peso', string, boolean]
 const productDefs: P[] = [
-  ['Gaseosa Postobón 1.5L', '7702011000011', 'c_beb', 4500, 3100, 19, '🥤', 'unidad', 's_postobon', false],
-  ['Coca-Cola 400ml', '7702011000028', 'c_beb', 2500, 1700, 19, '🥤', 'unidad', 's_postobon', false],
-  ['Agua Cristal 600ml', '7702011000035', 'c_beb', 2000, 1200, 19, '💧', 'unidad', 's_postobon', false],
-  ['Jugo Hit Mora 500ml', '7702011000042', 'c_beb', 3000, 2000, 19, '🧃', 'unidad', 's_postobon', false],
-  ['Pony Malta 330ml', '7702011000059', 'c_beb', 2800, 1900, 19, '🍺', 'unidad', 's_postobon', false],
-  ['Papas Margarita Pollo', '7702011000066', 'c_mec', 2000, 1300, 19, '🥔', 'unidad', 's_nutresa', false],
-  ['Doritos Mega Queso', '7702011000073', 'c_mec', 3500, 2400, 19, '🌮', 'unidad', 's_nutresa', false],
-  ['Galleta Festival', '7702011000080', 'c_mec', 1500, 950, 19, '🍪', 'unidad', 's_nutresa', false],
-  ['Chocorramo', '7702011000097', 'c_mec', 1800, 1150, 19, '🍫', 'unidad', 's_nutresa', false],
-  ['Bon Bon Bum', '7702011000103', 'c_mec', 500, 280, 19, '🍭', 'unidad', 's_nutresa', false],
-  ['Jabón Rey 300g', '7702011000110', 'c_aseo', 3200, 2200, 19, '🧼', 'unidad', 's_aseo', false],
-  ['Detergente Fab 1kg', '7702011000127', 'c_aseo', 9800, 7200, 19, '🧴', 'unidad', 's_aseo', false],
-  ['Papel Higiénico x4', '7702011000134', 'c_aseo', 6500, 4600, 19, '🧻', 'unidad', 's_aseo', false],
-  ['Crema Dental Colgate', '7702011000141', 'c_aseo', 5200, 3700, 19, '🪥', 'unidad', 's_aseo', false],
-  ['Arroz Diana 500g', '7702011000158', 'c_aba', 2700, 2000, 5, '🍚', 'unidad', 's_granos', false],
-  ['Aceite Premier 1L', '7702011000165', 'c_aba', 11500, 9000, 5, '🛢️', 'unidad', 's_granos', false],
-  ['Panela Cuadrada 500g', '7702011000172', 'c_aba', 3500, 2600, 5, '🟫', 'unidad', 's_granos', false],
-  ['Sal Refisal 500g', '7702011000189', 'c_aba', 1800, 1200, 5, '🧂', 'unidad', 's_granos', false],
-  ['Atún Van Camps', '7702011000196', 'c_aba', 5800, 4300, 19, '🐟', 'unidad', 's_granos', false],
-  ['Leche Colanta 1L', '7702011000202', 'c_lac', 4200, 3300, 0, '🥛', 'unidad', 's_nutresa', true],
-  ['Yogur Alpina 1L', '7702011000219', 'c_lac', 7500, 5800, 0, '🥛', 'unidad', 's_nutresa', true],
-  ['Queso Campesino 250g', '7702011000226', 'c_lac', 6800, 5200, 0, '🧀', 'unidad', 's_nutresa', true],
-  ['Huevos AA x12', '7702011000233', 'c_lac', 9500, 7800, 0, '🥚', 'unidad', 's_granos', true],
-  ['Cerveza Águila lata', '7702011000240', 'c_lic', 3000, 2100, 19, '🍺', 'unidad', 's_postobon', false],
-  ['Cerveza Poker lata', '7702011000257', 'c_lic', 3000, 2100, 19, '🍺', 'unidad', 's_postobon', false],
-  ['Aguardiente Cristal 375', '7702011000264', 'c_lic', 28000, 22000, 19, '🍶', 'unidad', 's_postobon', false],
+  // Bebidas
+  ['Gaseosa Postobón 1.5L', 'c_beb', 5000, 3700, 19, '🥤', 'unidad', 's_postobon', false],
+  ['Gaseosa Postobón 2.5L', 'c_beb', 6500, 4900, 19, '🥤', 'unidad', 's_postobon', false],
+  ['Coca-Cola 400ml', 'c_beb', 2800, 1900, 19, '🥤', 'unidad', 's_postobon', false],
+  ['Agua Cristal 600ml', 'c_beb', 2000, 1100, 19, '💧', 'unidad', 's_postobon', false],
+  ['Jugo Hit Mora 500ml', 'c_beb', 3000, 2100, 19, '🧃', 'unidad', 's_postobon', false],
+  ['Pony Malta 330ml', 'c_beb', 2800, 1950, 19, '🍺', 'unidad', 's_postobon', false],
+  // Mecato
+  ['Papas Margarita Pollo', 'c_mec', 2000, 1300, 19, '🥔', 'unidad', 's_nutresa', false],
+  ['Doritos Mega Queso', 'c_mec', 4000, 2800, 19, '🌮', 'unidad', 's_nutresa', false],
+  ['Galleta Festival (taco)', 'c_mec', 3500, 2500, 19, '🍪', 'unidad', 's_nutresa', false],
+  ['Chocorramo', 'c_mec', 2000, 1300, 19, '🍫', 'unidad', 's_nutresa', false],
+  ['Chocolatina Jet', 'c_mec', 1200, 750, 19, '🍫', 'unidad', 's_nutresa', false],
+  ['Bon Bon Bum', 'c_mec', 600, 350, 19, '🍭', 'unidad', 's_nutresa', false],
+  ['Maní Moto 25g', 'c_mec', 1500, 950, 19, '🥜', 'unidad', 's_nutresa', false],
+  // Aseo
+  ['Jabón Rey 300g', 'c_aseo', 3000, 2100, 19, '🧼', 'unidad', 's_aseo', false],
+  ['Detergente Fab 1kg', 'c_aseo', 11000, 8200, 19, '🧴', 'unidad', 's_aseo', false],
+  ['Papel Higiénico Familia x4', 'c_aseo', 6500, 4700, 19, '🧻', 'unidad', 's_aseo', false],
+  ['Crema Dental Colgate 75ml', 'c_aseo', 5500, 3900, 19, '🪥', 'unidad', 's_aseo', false],
+  ['Jabón Protex', 'c_aseo', 3500, 2500, 19, '🧼', 'unidad', 's_aseo', false],
+  // Abarrotes
+  ['Arroz Diana 500g', 'c_aba', 2600, 2000, 5, '🍚', 'unidad', 's_granos', false],
+  ['Arroz Diana 1kg', 'c_aba', 5000, 3900, 5, '🍚', 'unidad', 's_granos', false],
+  ['Aceite Premier 1L', 'c_aba', 12500, 9800, 5, '🛢️', 'unidad', 's_granos', false],
+  ['Harina PAN 1kg', 'c_aba', 5500, 4300, 5, '🌽', 'unidad', 's_granos', false],
+  ['Panela cuadrada 500g', 'c_aba', 3500, 2700, 5, '🟫', 'unidad', 's_granos', false],
+  ['Sal Refisal 500g', 'c_aba', 1800, 1100, 5, '🧂', 'unidad', 's_granos', false],
+  ['Atún Van Camps', 'c_aba', 6000, 4500, 19, '🐟', 'unidad', 's_granos', false],
+  ['Café Sello Rojo 250g', 'c_aba', 9800, 7800, 19, '☕', 'unidad', 's_granos', false],
+  ['Chocolate Corona pastilla', 'c_aba', 4500, 3400, 19, '🍫', 'unidad', 's_nutresa', false],
+  // Lácteos (perecederos)
+  ['Leche Colanta 1L', 'c_lac', 4300, 3500, 0, '🥛', 'unidad', 's_nutresa', true],
+  ['Yogur Alpina 1L', 'c_lac', 8000, 6300, 0, '🥛', 'unidad', 's_nutresa', true],
+  ['Queso Campesino 250g', 'c_lac', 7000, 5500, 0, '🧀', 'unidad', 's_nutresa', true],
+  ['Huevos AA x12', 'c_lac', 11000, 9000, 0, '🥚', 'unidad', 's_granos', true],
+  // Licores (característicos del eje cafetero)
+  ['Cerveza Águila lata 330', 'c_lic', 3200, 2300, 19, '🍺', 'unidad', 's_postobon', false],
+  ['Cerveza Poker lata 330', 'c_lic', 3200, 2300, 19, '🍺', 'unidad', 's_postobon', false],
+  ['Aguardiente Cristal 375ml', 'c_lic', 35000, 28000, 19, '🍶', 'unidad', 's_postobon', false],
+  ['Ron Viejo de Caldas 375ml', 'c_lic', 38000, 31000, 19, '🥃', 'unidad', 's_postobon', false],
   // Granel (por peso) — sólo locales con allowBulk
-  ['Arroz a granel', '', 'c_gra', 3800, 2900, 5, '🌾', 'peso', 's_granos', false],
-  ['Fríjol cargamanto', '', 'c_gra', 9500, 7500, 5, '🫘', 'peso', 's_granos', false],
-  ['Lenteja', '', 'c_gra', 6500, 4800, 5, '🫘', 'peso', 's_granos', false],
-  ['Azúcar a granel', '', 'c_gra', 4200, 3200, 5, '🍬', 'peso', 's_granos', false],
+  ['Arroz a granel', 'c_gra', 4200, 3300, 5, '🌾', 'peso', 's_granos', false],
+  ['Fríjol cargamanto', 'c_gra', 9800, 7800, 5, '🫘', 'peso', 's_granos', false],
+  ['Lenteja a granel', 'c_gra', 6500, 5000, 5, '🫘', 'peso', 's_granos', false],
+  ['Azúcar a granel', 'c_gra', 4500, 3500, 5, '🍬', 'peso', 's_granos', false],
 ]
 
 function buildProducts(): Product[] {
   return productDefs.map((d, i) => {
-    const [name, barcode, categoryId, price, cost, ivaRate, emoji, unit, supplierId, perishable] = d
+    const [name, categoryId, price, cost, ivaRate, emoji, unit, supplierId, perishable] = d
+    const hasBarcode = unit !== 'peso'
     return {
       id: `p_${i}`,
       tenantId: TENANT_ID,
       name,
-      barcode: barcode || undefined,
-      internalCode: barcode ? undefined : `VEN-${100000 + i}`,
+      barcode: hasBarcode ? `770201${100000 + i}` : undefined,
+      internalCode: hasBarcode ? undefined : `VEN-${100000 + i}`,
       categoryId,
       unit,
       price,
@@ -268,7 +286,8 @@ function buildStock(products: Product[]): Stock[] {
     for (const p of products) {
       // El granel sólo existe en locales que lo permiten
       if (p.unit === 'peso' && !loc.allowBulk) continue
-      const fast = ['p_0', 'p_1', 'p_2', 'p_5', 'p_19', 'p_23', 'p_24'].includes(p.id)
+      // Alta rotación: bebidas, mecato y cervezas → umbral más alto
+      const fast = p.categoryId === 'c_beb' || p.categoryId === 'c_mec' || p.name.startsWith('Cerveza')
       const base = p.unit === 'peso' ? rnd(8, 40) : rnd(6, 80)
       // Algunos productos quedan deliberadamente bajos
       const low = Math.random() < 0.18
@@ -507,10 +526,29 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Carga inicial
 // ---------------------------------------------------------------------------
+// Al subir una versión nueva del modelo de demo, se recarga automáticamente
+// para que cualquier visitante vea los datos/precios más recientes.
+const SEED_VERSION = '2-armenia'
+const SEED_KEY = 'ventanilla-seed-version'
+
 export async function seedIfEmpty(): Promise<void> {
+  let stored: string | null = null
+  try {
+    stored = localStorage.getItem(SEED_KEY)
+  } catch {
+    /* localStorage no disponible */
+  }
+  if (stored !== SEED_VERSION) {
+    await resetDemo()
+    try {
+      localStorage.setItem(SEED_KEY, SEED_VERSION)
+    } catch {
+      /* ignore */
+    }
+    return
+  }
   const count = await db.tenants.count()
-  if (count > 0) return
-  await seedNow()
+  if (count === 0) await seedNow()
 }
 
 export async function seedNow(): Promise<void> {

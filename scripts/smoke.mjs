@@ -1,0 +1,161 @@
+// Verificación headless: recorre todas las pantallas y reporta errores de
+// consola o excepciones. Uso: node scripts/smoke.mjs
+import puppeteer from 'puppeteer'
+
+const BASE = process.env.SMOKE_URL || 'http://localhost:5173/'
+const errors = []
+let ctx = 'inicio'
+
+function attach(page) {
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`[${ctx}] console.error: ${m.text()}`)
+  })
+  page.on('pageerror', (e) => errors.push(`[${ctx}] pageerror: ${e.message}`))
+  page.on('requestfailed', (r) => {
+    const u = r.url()
+    if (!u.includes('favicon')) errors.push(`[${ctx}] requestfailed: ${u} (${r.failure()?.errorText})`)
+  })
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+async function clickText(page, text) {
+  const handle = await page.evaluateHandle((t) => {
+    const els = [...document.querySelectorAll('button, a')]
+    return els.find((e) => e.textContent && e.textContent.trim().includes(t)) || null
+  }, text)
+  const el = handle.asElement()
+  if (!el) throw new Error(`No encontré el botón con texto: "${text}"`)
+  await el.click()
+}
+
+async function bodyText(page) {
+  return page.evaluate(() => document.body.innerText)
+}
+
+async function main() {
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  })
+  const page = await browser.newPage()
+  await page.setViewport({ width: 390, height: 844, isMobile: true })
+  attach(page)
+
+  // 1) Carga inicial (seed + login)
+  ctx = 'carga'
+  await page.goto(BASE, { waitUntil: 'networkidle2', timeout: 60000 })
+  await sleep(2500) // seed (resetDemo) + render
+  let txt = await bodyText(page)
+  if (!txt.includes('Ventanilla')) throw new Error('No renderizó la pantalla de inicio')
+  console.log('✓ Pantalla de login renderiza')
+
+  // 2) Entrar como Dueño
+  ctx = 'login-admin'
+  await clickText(page, 'Dueño de la tienda')
+  await sleep(1800)
+  txt = await bodyText(page)
+  if (!/Hola,/.test(txt)) throw new Error('Dashboard de admin no renderizó')
+  console.log('✓ Dashboard (Dueño) renderiza')
+
+  // 3) Recorrer todas las rutas del admin
+  const routes = [
+    ['#/pos', 'Producto nuevo'],
+    ['#/inventario', 'Inventario'],
+    ['#/caja', 'Caja'],
+    ['#/proveedores', 'Proveedores'],
+    ['#/ventas', 'Ventas'],
+    ['#/reportes', 'Reportes'],
+    ['#/clientes', 'Clientes'],
+    ['#/notificaciones', 'Notificaciones'],
+    ['#/auditoria', 'Auditoría'],
+    ['#/ajustes', 'Ajustes'],
+    ['#/mas', 'Más'],
+    ['#/', 'Hola,'],
+  ]
+  for (const [hash, expect] of routes) {
+    ctx = `ruta ${hash}`
+    await page.evaluate((h) => { location.hash = h }, hash)
+    await sleep(900)
+    txt = await bodyText(page)
+    if (!txt.includes(expect)) throw new Error(`Ruta ${hash}: no se encontró "${expect}"`)
+    console.log(`✓ ${hash}`)
+  }
+
+  // 4) Abrir el carrito vendiendo: tocar primer producto y abrir cobro
+  ctx = 'venta-pos'
+  await page.evaluate(() => { location.hash = '#/pos' })
+  await sleep(900)
+  // tocar el primer producto (botón con $ y stock)
+  await page.evaluate(() => {
+    const btns = [...document.querySelectorAll('button')]
+    const prod = btns.find((b) => /en stock|Agotado/.test(b.textContent || ''))
+    if (prod) prod.click()
+  })
+  await sleep(600)
+  txt = await bodyText(page)
+  if (!/Ver carrito/.test(txt)) console.log('· (aviso) no apareció la barra de carrito tras tocar producto')
+  else console.log('✓ Agregar al carrito funciona')
+
+  // 4b) Venta completa de extremo a extremo: carrito → cobrar → recibo
+  ctx = 'checkout'
+  await clickText(page, 'Ver carrito')
+  await sleep(700)
+  await clickText(page, 'Cobrar')
+  await sleep(700)
+  await clickText(page, 'Recibí el pago')
+  await sleep(1200)
+  txt = await bodyText(page)
+  if (!/Venta lista|Total cobrado/.test(txt)) throw new Error('No se completó la venta (sin recibo)')
+  console.log('✓ Venta completa → recibo generado (DIAN + stock + auditoría)')
+  await clickText(page, 'Nueva venta')
+  await sleep(500)
+
+  // 5) Cerrar sesión y entrar como Super-Admin
+  ctx = 'login-super'
+  await page.evaluate(() => { localStorage.removeItem('ventanilla-session') })
+  await page.goto(BASE, { waitUntil: 'networkidle2' })
+  await sleep(1200)
+  await clickText(page, 'Super-Admin (plataforma)')
+  await sleep(1400)
+  txt = await bodyText(page)
+  if (!txt.includes('Consola Super-Admin')) throw new Error('Consola Super-Admin no renderizó')
+  console.log('✓ Consola Super-Admin renderiza')
+
+  // 6) Cajero con PIN
+  ctx = 'login-cajero'
+  await page.evaluate(() => { localStorage.removeItem('ventanilla-session') })
+  await page.goto(BASE, { waitUntil: 'networkidle2' })
+  await sleep(1200)
+  await clickText(page, 'Cajero / Empleado')
+  await sleep(600)
+  for (const d of ['1', '2', '3', '4']) {
+    await page.evaluate((digit) => {
+      const b = [...document.querySelectorAll('button')].find((x) => x.textContent?.trim() === digit)
+      if (b) b.click()
+    }, d)
+    await sleep(150)
+  }
+  await sleep(1500)
+  txt = await bodyText(page)
+  if (!/Producto nuevo/.test(txt)) throw new Error('POS del cajero no renderizó tras el PIN')
+  console.log('✓ Login cajero por PIN → POS renderiza')
+
+  await browser.close()
+
+  console.log('\n===== RESULTADO =====')
+  if (errors.length === 0) {
+    console.log('✅ Sin errores de consola ni excepciones en ninguna pantalla.')
+    process.exit(0)
+  } else {
+    console.log(`❌ ${errors.length} problema(s):`)
+    for (const e of errors) console.log('  - ' + e)
+    process.exit(1)
+  }
+}
+
+main().catch((e) => {
+  console.log('FALLO DE LA PRUEBA: ' + e.message)
+  for (const er of errors) console.log('  - ' + er)
+  process.exit(1)
+})
