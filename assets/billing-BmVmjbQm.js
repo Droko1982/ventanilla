@@ -1,0 +1,1 @@
+const a=[1,.8,.7,.6];function c(r,l){let t=0;for(let o=0;o<r;o++){const e=a[Math.min(o,a.length-1)];t+=Math.round(l*e)}return t}function i(r,l){const t=[];for(let n=0;n<r;n++){const s=a[Math.min(n,a.length-1)];t.push({index:n+1,price:Math.round(l*s),factor:s})}const o=l*r,e=t.reduce((n,s)=>n+s.price,0);return{lines:t,total:e,savings:o-e}}export{i as b,c as m};
