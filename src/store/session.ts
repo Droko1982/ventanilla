@@ -1,0 +1,84 @@
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import { db } from '@/data/db'
+import type { Role, User } from '@/types'
+
+// ============================================================================
+// Sesión actual: quién está usando la app y con qué alcance.
+//  - superadmin: ve toda la plataforma (no tiene tenant)
+//  - admin: dueño; ve todos sus locales (locationFilter = 'all') o filtra uno
+//  - empleado: sólo su local asignado
+// Se persiste en localStorage para sobrevivir recargas / cierre de pestaña.
+// ============================================================================
+
+interface SessionState {
+  userId: string | null
+  role: Role | null
+  tenantId: string | null
+  employeeLocationId: string | null // sólo empleados
+  locationFilter: string // 'all' o id de local (lo usa el admin)
+  ready: boolean
+
+  loginAs: (userId: string) => Promise<boolean>
+  loginEmployeeByPin: (pin: string) => Promise<User | null>
+  setLocationFilter: (id: string) => void
+  logout: () => void
+}
+
+export const useSession = create<SessionState>()(
+  persist(
+    (set) => ({
+      userId: null,
+      role: null,
+      tenantId: null,
+      employeeLocationId: null,
+      locationFilter: 'all',
+      ready: true,
+
+      async loginAs(userId) {
+        const user = await db.users.get(userId)
+        if (!user || !user.active) return false
+        set({
+          userId: user.id,
+          role: user.role,
+          tenantId: user.tenantId,
+          employeeLocationId: user.locationId ?? null,
+          locationFilter: user.role === 'empleado' ? user.locationId ?? 'all' : 'all',
+        })
+        return true
+      },
+
+      async loginEmployeeByPin(pin) {
+        const user = await db.users
+          .where('pin')
+          .equals(pin)
+          .and((u) => u.role === 'empleado' && u.active)
+          .first()
+        if (!user) return null
+        set({
+          userId: user.id,
+          role: 'empleado',
+          tenantId: user.tenantId,
+          employeeLocationId: user.locationId ?? null,
+          locationFilter: user.locationId ?? 'all',
+        })
+        return user
+      },
+
+      setLocationFilter(id) {
+        set({ locationFilter: id })
+      },
+
+      logout() {
+        set({
+          userId: null,
+          role: null,
+          tenantId: null,
+          employeeLocationId: null,
+          locationFilter: 'all',
+        })
+      },
+    }),
+    { name: 'ventanilla-session' },
+  ),
+)

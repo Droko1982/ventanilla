@@ -1,0 +1,174 @@
+import { useMemo, useState } from 'react'
+import { useScopeSales, useLocations, useCurrentUser, useTenant } from '@/hooks/data'
+import { transmitDian, voidSale } from '@/data/repo'
+import { Sheet } from '@/components/Sheet'
+import { Segmented, EmptyState, PageHeader, DianChip, Money } from '@/components/ui'
+import { Icon } from '@/components/icons'
+import { toast } from '@/components/Toast'
+import { cop, kg } from '@/lib/money'
+import { fmtDateTime, fmtTime, timeAgo } from '@/lib/format'
+import type { Sale } from '@/types'
+
+const methodEmoji: Record<string, string> = {
+  efectivo: '💵', nequi: '📲', tarjeta: '💳', transferencia: '🏦', fiado: '📒',
+}
+
+export default function Ventas() {
+  const sales = useScopeSales()
+  const locations = useLocations()
+  const user = useCurrentUser()
+  const tenant = useTenant()
+  const [filter, setFilter] = useState<'todas' | 'pendiente'>('todas')
+  const [detail, setDetail] = useState<Sale | null>(null)
+
+  const locName = useMemo(() => new Map((locations ?? []).map((l) => [l.id, l.name])), [locations])
+
+  const pending = (sales ?? []).filter((s) => s.dianStatus === 'pendiente' && s.status === 'completada')
+  const list = filter === 'pendiente' ? pending : (sales ?? [])
+
+  // Alerta de pendientes "viejos" (más de 24h sin transmitir → riesgo de sanción)
+  const oldPending = pending.filter((s) => Date.now() - new Date(s.createdAt).getTime() > 24 * 3600000)
+
+  return (
+    <div>
+      <PageHeader title="Ventas y DIAN" subtitle="Historial y documentos electrónicos" />
+
+      {oldPending.length > 0 && (
+        <div className="mb-3 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+          <Icon name="alert" className="h-5 w-5 shrink-0 text-amber-600" />
+          <p className="text-sm text-amber-700">
+            <b>{oldPending.length} ventas</b> llevan más de 24 h sin transmitir a la DIAN. Tienes 48 h de contingencia: transmítelas pronto.
+          </p>
+        </div>
+      )}
+
+      <div className="mb-4">
+        <Segmented
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: 'todas', label: `Todas (${sales?.length ?? 0})` },
+            { value: 'pendiente', label: `DIAN pendiente (${pending.length})` },
+          ]}
+        />
+      </div>
+
+      <div className="space-y-2">
+        {list.slice(0, 100).map((s) => (
+          <button key={s.id} onClick={() => setDetail(s)} className="card flex w-full items-center gap-3 p-3 text-left active:scale-[0.99]">
+            <span className="text-2xl">{methodEmoji[s.payments[0]?.method] ?? '🧾'}</span>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-slate-700">
+                {cop(s.total)} {s.status === 'anulada' && <span className="text-xs text-rose-500">(anulada)</span>}
+              </p>
+              <p className="truncate text-xs text-slate-400">
+                {locName.get(s.locationId)} · {timeAgo(s.createdAt)} · {s.items.length} items
+              </p>
+            </div>
+            <DianChip status={s.dianStatus} />
+          </button>
+        ))}
+        {list.length === 0 && <EmptyState emoji="🧾" title="Sin ventas" hint="Las ventas aparecerán aquí." />}
+      </div>
+
+      {detail && (
+        <SaleDetail
+          sale={detail}
+          locName={locName.get(detail.locationId) ?? ''}
+          tenantName={tenant?.businessName ?? ''}
+          onClose={() => setDetail(null)}
+          onTransmit={async () => {
+            await transmitDian(detail.id)
+            toast('success', 'Documento DIAN generado y transmitido')
+            setDetail(null)
+          }}
+          onVoid={async () => {
+            await voidSale(detail.id, user!.id, user!.name)
+            toast('success', 'Venta anulada · nota crédito generada')
+            setDetail(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function SaleDetail({
+  sale, locName, tenantName, onClose, onTransmit, onVoid,
+}: {
+  sale: Sale; locName: string; tenantName: string; onClose: () => void; onTransmit: () => void; onVoid: () => void
+}) {
+  return (
+    <Sheet open onClose={onClose} title={`Venta · ${fmtTime(sale.createdAt)}`}>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-400">{tenantName} · {locName}</p>
+            <p className="text-xs text-slate-400">{fmtDateTime(sale.createdAt)}</p>
+          </div>
+          <DianChip status={sale.dianStatus} />
+        </div>
+
+        <div className="space-y-1.5 rounded-xl bg-slate-50 p-3">
+          {sale.items.map((it, i) => (
+            <div key={i} className="flex items-center justify-between text-sm">
+              <span className="flex-1 truncate text-slate-600">
+                {it.unit === 'peso' ? kg(it.qty) : `${it.qty} x`} {it.name}
+              </span>
+              <span className="font-semibold text-slate-700">{cop(it.unitPrice * it.qty - it.lineDiscount)}</span>
+            </div>
+          ))}
+          {sale.discount > 0 && (
+            <div className="flex justify-between text-sm text-emerald-600">
+              <span>Descuento</span><span>-{cop(sale.discount)}</span>
+            </div>
+          )}
+          <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-bold">
+            <span>Total</span><span className="text-brand-700">{cop(sale.total)}</span>
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-1 text-sm font-semibold text-slate-600">Pago</p>
+          {sale.payments.map((p, i) => (
+            <div key={i} className="flex justify-between text-sm text-slate-500">
+              <span>{methodEmoji[p.method]} {p.method}</span>
+              <span>{cop(p.amount)}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Botón DIAN: revisar y transmitir */}
+        {sale.status === 'completada' && (
+          <div className="rounded-xl border border-brand-100 bg-brand-50/50 p-3">
+            {sale.dianStatus === 'enviado' ? (
+              <p className="text-sm text-emerald-700">
+                ✓ Documento {sale.dianDocType.replace('_', ' ')} {sale.dianDocNumber} transmitido a la DIAN.
+              </p>
+            ) : (
+              <>
+                <p className="mb-2 text-sm text-slate-600">
+                  Revisa la venta y genera el Documento Equivalente Electrónico (DEE POS).
+                </p>
+                <button onClick={onTransmit} className="btn btn-primary w-full">
+                  <Icon name="doc" className="h-5 w-5" /> Generar y transmitir a la DIAN
+                </button>
+                <p className="mt-1 text-center text-[11px] text-slate-400">Simulado en el demo · cada cliente conecta su proveedor real.</p>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Anular / devolver */}
+        {sale.status === 'completada' && (
+          <button onClick={onVoid} className="btn btn-secondary w-full text-rose-600">
+            <Icon name="trash" className="h-5 w-5" /> Anular venta (devolución + nota crédito)
+          </button>
+        )}
+        {sale.status === 'anulada' && (
+          <p className="rounded-xl bg-rose-50 p-3 text-center text-sm text-rose-600">Venta anulada. El stock fue devuelto.</p>
+        )}
+      </div>
+    </Sheet>
+  )
+}

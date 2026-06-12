@@ -1,0 +1,584 @@
+import { db } from './db'
+import { uid } from '@/lib/id'
+import { startOfToday } from '@/lib/format'
+import type {
+  Sale,
+  SaleItem,
+  Payment,
+  Product,
+  Stock,
+  AuditLog,
+  AppNotification,
+  PurchaseOrder,
+  CashSession,
+  Customer,
+} from '@/types'
+
+// ============================================================================
+// Lógica de negocio (mutaciones) y consultas reutilizables.
+// Esta capa concentra TODO lo que cambia datos para que sea fácil, mañana,
+// reflejar lo mismo contra un backend real (cada función sería una llamada API).
+// ============================================================================
+
+// ---- Auditoría: cada acción sensible queda firmada ------------------------
+export async function audit(entry: {
+  tenantId: string
+  locationId?: string
+  userId: string
+  userName: string
+  action: string
+  entity: string
+  entityId: string
+  detail: string
+}): Promise<void> {
+  const log: AuditLog = {
+    id: uid('al'),
+    createdAt: new Date().toISOString(),
+    ...entry,
+  }
+  await db.auditLogs.put(log)
+}
+
+export async function notify(n: Omit<AppNotification, 'id' | 'read' | 'createdAt'>): Promise<void> {
+  await db.notifications.put({
+    id: uid('n'),
+    read: false,
+    createdAt: new Date().toISOString(),
+    ...n,
+  })
+}
+
+// ---- DIAN (simulado en demo) ----------------------------------------------
+// Genera un número consecutivo del Documento Equivalente Electrónico POS.
+let dianCounter = 5000
+export function nextDianNumber(): string {
+  dianCounter += 1
+  return `POS1-${dianCounter}`
+}
+
+// ---- Registrar una venta ---------------------------------------------------
+export interface RecordSaleInput {
+  tenantId: string
+  locationId: string
+  userId: string
+  userName: string
+  items: SaleItem[]
+  discount: number
+  payments: Payment[]
+  customerId?: string
+  customerDoc?: string
+  transmitDian: boolean // ¿generar/transmitir el DEE ya?
+}
+
+export async function recordSale(input: RecordSaleInput): Promise<Sale> {
+  const subtotal = input.items.reduce(
+    (s, it) => s + it.unitPrice * it.qty - it.lineDiscount,
+    0,
+  )
+  const total = Math.max(0, Math.round(subtotal - input.discount))
+  const now = new Date().toISOString()
+
+  const sale: Sale = {
+    id: uid('s'),
+    tenantId: input.tenantId,
+    locationId: input.locationId,
+    userId: input.userId,
+    items: input.items,
+    subtotal: Math.round(subtotal),
+    discount: input.discount,
+    total,
+    payments: input.payments,
+    customerId: input.customerId,
+    customerDoc: input.customerDoc,
+    status: 'completada',
+    dianStatus: input.transmitDian ? 'enviado' : 'pendiente',
+    dianDocType: input.customerDoc ? 'factura' : 'tiquete_pos',
+    dianDocNumber: input.transmitDian ? nextDianNumber() : undefined,
+    createdAt: now,
+    syncedAt: navigator.onLine ? now : undefined, // offline: queda sin sincronizar
+  }
+
+  await db.transaction(
+    'rw',
+    [db.sales, db.stock, db.stockMovements, db.customers, db.notifications, db.auditLogs],
+    async () => {
+      await db.sales.put(sale)
+
+      // Descontar stock + movimiento por cada ítem
+      for (const it of input.items) {
+        const stockId = `${input.locationId}:${it.productId}`
+        const st = await db.stock.get(stockId)
+        if (st) {
+          st.quantity = Number((st.quantity - it.qty).toFixed(3))
+          st.updatedAt = now
+          await db.stock.put(st)
+          // Alerta si cruzó el umbral
+          if (st.quantity <= st.reorderThreshold) {
+            await notify({
+              tenantId: input.tenantId,
+              locationId: input.locationId,
+              type: 'stock',
+              severity: st.quantity <= 0 ? 'critico' : 'aviso',
+              title: st.quantity <= 0 ? 'Producto agotado' : 'Stock bajo',
+              message: `"${it.name}" quedó en ${st.quantity}. Conviene reabastecer.`,
+            })
+          }
+        }
+        await db.stockMovements.put({
+          id: uid('mv'),
+          tenantId: input.tenantId,
+          locationId: input.locationId,
+          productId: it.productId,
+          type: 'venta',
+          qty: -it.qty,
+          refId: sale.id,
+          userId: input.userId,
+          createdAt: now,
+        })
+      }
+
+      // Fiado: aumenta saldo del cliente
+      const fiado = input.payments.find((p) => p.method === 'fiado')
+      if (fiado && input.customerId) {
+        const c = await db.customers.get(input.customerId)
+        if (c) {
+          c.creditBalance += fiado.amount
+          c.totalSpent += total
+          await db.customers.put(c)
+        }
+      } else if (input.customerId) {
+        const c = await db.customers.get(input.customerId)
+        if (c) {
+          c.totalSpent += total
+          await db.customers.put(c)
+        }
+      }
+
+      // Antifraude simple: efectivo muy por encima del promedio del local
+      await detectAnomaly(sale)
+    },
+  )
+
+  await audit({
+    tenantId: input.tenantId,
+    locationId: input.locationId,
+    userId: input.userId,
+    userName: input.userName,
+    action: 'registró venta',
+    entity: 'venta',
+    entityId: sale.id,
+    detail: `Total ${total} · ${input.payments.map((p) => p.method).join(', ')}`,
+  })
+
+  return sale
+}
+
+// Alerta al dashboard si una venta en efectivo supera mucho el promedio.
+async function detectAnomaly(sale: Sale): Promise<void> {
+  const cash = sale.payments.find((p) => p.method === 'efectivo')
+  if (!cash) return
+  const recent = await db.sales
+    .where('locationId')
+    .equals(sale.locationId)
+    .reverse()
+    .limit(50)
+    .toArray()
+  if (recent.length < 10) return
+  const avg = recent.reduce((s, x) => s + x.total, 0) / recent.length
+  if (sale.total > avg * 4 && sale.total > 50000) {
+    await notify({
+      tenantId: sale.tenantId,
+      locationId: sale.locationId,
+      type: 'fraude',
+      severity: 'aviso',
+      title: 'Venta inusual en efectivo',
+      message: `Una venta de ${sale.total} supera 4× el promedio del local. Revísela.`,
+    })
+  }
+}
+
+// ---- Anular / Devolver venta ----------------------------------------------
+export async function voidSale(saleId: string, userId: string, userName: string): Promise<void> {
+  const sale = await db.sales.get(saleId)
+  if (!sale || sale.status !== 'completada') return
+  const now = new Date().toISOString()
+  await db.transaction('rw', [db.sales, db.stock, db.stockMovements], async () => {
+    sale.status = 'anulada'
+    await db.sales.put(sale)
+    // Devuelve el stock
+    for (const it of sale.items) {
+      const st = await db.stock.get(`${sale.locationId}:${it.productId}`)
+      if (st) {
+        st.quantity = Number((st.quantity + it.qty).toFixed(3))
+        st.updatedAt = now
+        await db.stock.put(st)
+      }
+      await db.stockMovements.put({
+        id: uid('mv'),
+        tenantId: sale.tenantId,
+        locationId: sale.locationId,
+        productId: it.productId,
+        type: 'devolucion',
+        qty: it.qty,
+        refId: sale.id,
+        userId,
+        createdAt: now,
+      })
+    }
+  })
+  await audit({
+    tenantId: sale.tenantId,
+    locationId: sale.locationId,
+    userId,
+    userName,
+    action: 'anuló venta',
+    entity: 'venta',
+    entityId: sale.id,
+    detail: `Genera nota crédito ante la DIAN. Total ${sale.total}.`,
+  })
+}
+
+// ---- Ajuste manual de stock (entrada/conteo) ------------------------------
+export async function adjustStock(args: {
+  locationId: string
+  productId: string
+  newQty: number
+  userId: string
+  userName: string
+  tenantId: string
+  reason: string
+}): Promise<void> {
+  const stockId = `${args.locationId}:${args.productId}`
+  const st = await db.stock.get(stockId)
+  if (!st) return
+  const delta = Number((args.newQty - st.quantity).toFixed(3))
+  st.quantity = args.newQty
+  st.updatedAt = new Date().toISOString()
+  await db.stock.put(st)
+  await db.stockMovements.put({
+    id: uid('mv'),
+    tenantId: args.tenantId,
+    locationId: args.locationId,
+    productId: args.productId,
+    type: 'ajuste',
+    qty: delta,
+    userId: args.userId,
+    createdAt: st.updatedAt,
+  })
+  await audit({
+    tenantId: args.tenantId,
+    locationId: args.locationId,
+    userId: args.userId,
+    userName: args.userName,
+    action: 'ajustó stock',
+    entity: 'producto',
+    entityId: args.productId,
+    detail: `${args.reason}. Nuevo: ${args.newQty} (Δ ${delta}).`,
+  })
+}
+
+// ---- Reabastecimiento: umbral dinámico por velocidad de venta -------------
+export interface ReorderSuggestion {
+  product: Product
+  stock: Stock
+  avgDaily: number
+  suggestedQty: number
+  supplierId?: string
+}
+
+// Calcula sugerencias de pedido para un local: cuánto pedir según velocidad.
+export async function suggestReorder(
+  tenantId: string,
+  locationId: string,
+): Promise<ReorderSuggestion[]> {
+  const window = 30 // días de análisis
+  const since = Date.now() - window * 86400000
+  const sales = await db.sales.where('locationId').equals(locationId).toArray()
+  const sold: Record<string, number> = {}
+  for (const s of sales) {
+    if (new Date(s.createdAt).getTime() < since || s.status !== 'completada') continue
+    for (const it of s.items) sold[it.productId] = (sold[it.productId] || 0) + it.qty
+  }
+  const stocks = await db.stock.where('locationId').equals(locationId).toArray()
+  const products = await db.products.where('tenantId').equals(tenantId).toArray()
+  const pById = new Map(products.map((p) => [p.id, p]))
+
+  const out: ReorderSuggestion[] = []
+  for (const st of stocks) {
+    const p = pById.get(st.productId)
+    if (!p || !p.active) continue
+    const avgDaily = (sold[st.productId] || 0) / window
+    // Umbral dinámico: lo que se vende en (lead time + 3 días de colchón).
+    // Más rápido se vende → umbral más alto (no quedarse sin él).
+    if (st.quantity <= st.reorderThreshold) {
+      const target = Math.max(st.reorderTarget, Math.ceil(avgDaily * 14))
+      const suggestedQty = Math.max(1, Math.ceil(target - st.quantity))
+      out.push({ product: p, stock: st, avgDaily, suggestedQty, supplierId: p.supplierId })
+    }
+  }
+  // Los más vendidos primero
+  return out.sort((a, b) => b.avgDaily - a.avgDaily)
+}
+
+// Recalcula y guarda el umbral dinámico de cada producto del local.
+export async function recalcThresholds(tenantId: string, locationId: string): Promise<number> {
+  const window = 30
+  const since = Date.now() - window * 86400000
+  const sales = await db.sales.where('locationId').equals(locationId).toArray()
+  const sold: Record<string, number> = {}
+  for (const s of sales) {
+    if (new Date(s.createdAt).getTime() < since || s.status !== 'completada') continue
+    for (const it of s.items) sold[it.productId] = (sold[it.productId] || 0) + it.qty
+  }
+  const stocks = await db.stock.where('locationId').equals(locationId).toArray()
+  const suppliers = await db.suppliers.where('tenantId').equals(tenantId).toArray()
+  const products = await db.products.where('tenantId').equals(tenantId).toArray()
+  const pById = new Map(products.map((p) => [p.id, p]))
+  const sById = new Map(suppliers.map((s) => [s.id, s]))
+  let updated = 0
+  for (const st of stocks) {
+    const p = pById.get(st.productId)
+    const lead = (p?.supplierId && sById.get(p.supplierId)?.leadTimeDays) || 3
+    const avgDaily = (sold[st.productId] || 0) / window
+    const threshold = Math.max(2, Math.ceil(avgDaily * (lead + 3)))
+    const target = Math.max(threshold + 2, Math.ceil(avgDaily * 14))
+    if (threshold !== st.reorderThreshold || target !== st.reorderTarget) {
+      st.reorderThreshold = threshold
+      st.reorderTarget = target
+      await db.stock.put(st)
+      updated++
+    }
+  }
+  return updated
+}
+
+// ---- Crear orden de compra a partir de sugerencias ------------------------
+export async function createPurchaseOrder(
+  tenantId: string,
+  locationId: string,
+  supplierId: string,
+  items: { productId: string; name: string; suggestedQty: number; cost: number }[],
+): Promise<PurchaseOrder> {
+  const po: PurchaseOrder = {
+    id: uid('po'),
+    tenantId,
+    locationId,
+    supplierId,
+    items: items.map((i) => ({ ...i })),
+    status: 'enviado',
+    createdAt: new Date().toISOString(),
+    sentAt: new Date().toISOString(),
+  }
+  await db.purchaseOrders.put(po)
+  return po
+}
+
+// Recibir mercancía: confirmar qué llegó de verdad y sumar al stock.
+export async function receivePurchase(
+  poId: string,
+  received: Record<string, number>,
+  userId: string,
+  userName: string,
+): Promise<void> {
+  const po = await db.purchaseOrders.get(poId)
+  if (!po) return
+  const now = new Date().toISOString()
+  await db.transaction('rw', [db.purchaseOrders, db.stock, db.stockMovements], async () => {
+    for (const it of po.items) {
+      const qty = received[it.productId] ?? 0
+      it.receivedQty = qty
+      if (qty > 0) {
+        const st = await db.stock.get(`${po.locationId}:${it.productId}`)
+        if (st) {
+          st.quantity = Number((st.quantity + qty).toFixed(3))
+          st.updatedAt = now
+          await db.stock.put(st)
+        }
+        await db.stockMovements.put({
+          id: uid('mv'),
+          tenantId: po.tenantId,
+          locationId: po.locationId,
+          productId: it.productId,
+          type: 'entrada',
+          qty,
+          refId: po.id,
+          userId,
+          createdAt: now,
+        })
+      }
+    }
+    po.status = 'recibido'
+    po.receivedAt = now
+    await db.purchaseOrders.put(po)
+  })
+  await audit({
+    tenantId: po.tenantId,
+    locationId: po.locationId,
+    userId,
+    userName,
+    action: 'recibió mercancía',
+    entity: 'pedido',
+    entityId: po.id,
+    detail: `Entrada confirmada contra el pedido.`,
+  })
+}
+
+// ---- Traslado entre locales -----------------------------------------------
+export async function transferStock(args: {
+  tenantId: string
+  fromLocationId: string
+  toLocationId: string
+  productId: string
+  qty: number
+  userId: string
+  userName: string
+}): Promise<void> {
+  const now = new Date().toISOString()
+  await db.transaction('rw', [db.stock, db.stockMovements], async () => {
+    const from = await db.stock.get(`${args.fromLocationId}:${args.productId}`)
+    const to = await db.stock.get(`${args.toLocationId}:${args.productId}`)
+    if (from) {
+      from.quantity = Number((from.quantity - args.qty).toFixed(3))
+      from.updatedAt = now
+      await db.stock.put(from)
+    }
+    if (to) {
+      to.quantity = Number((to.quantity + args.qty).toFixed(3))
+      to.updatedAt = now
+      await db.stock.put(to)
+    } else {
+      // crea registro de stock en destino si no existía
+      await db.stock.put({
+        id: `${args.toLocationId}:${args.productId}`,
+        tenantId: args.tenantId,
+        locationId: args.toLocationId,
+        productId: args.productId,
+        quantity: args.qty,
+        reorderThreshold: from?.reorderThreshold ?? 4,
+        reorderTarget: from?.reorderTarget ?? 12,
+        updatedAt: now,
+      })
+    }
+    await db.stockMovements.bulkPut([
+      {
+        id: uid('mv'), tenantId: args.tenantId, locationId: args.fromLocationId,
+        productId: args.productId, type: 'traslado_salida', qty: -args.qty,
+        userId: args.userId, createdAt: now,
+      },
+      {
+        id: uid('mv'), tenantId: args.tenantId, locationId: args.toLocationId,
+        productId: args.productId, type: 'traslado_entrada', qty: args.qty,
+        userId: args.userId, createdAt: now,
+      },
+    ])
+  })
+  await audit({
+    tenantId: args.tenantId,
+    locationId: args.fromLocationId,
+    userId: args.userId,
+    userName: args.userName,
+    action: 'trasladó stock',
+    entity: 'producto',
+    entityId: args.productId,
+    detail: `Movió ${args.qty} unidades a otro local.`,
+  })
+}
+
+// ---- Caja: abrir y cerrar (arqueo) ----------------------------------------
+export async function openCashSession(args: {
+  tenantId: string
+  locationId: string
+  userId: string
+  openingFloat: number
+}): Promise<CashSession> {
+  // Cierra cualquier sesión abierta previa del local
+  const open = await db.cashSessions
+    .where('locationId').equals(args.locationId)
+    .and((c) => c.status === 'abierta')
+    .first()
+  if (open) return open
+  const cs: CashSession = {
+    id: uid('cs'),
+    tenantId: args.tenantId,
+    locationId: args.locationId,
+    userId: args.userId,
+    openedAt: new Date().toISOString(),
+    openingFloat: args.openingFloat,
+    status: 'abierta',
+  }
+  await db.cashSessions.put(cs)
+  return cs
+}
+
+export async function closeCashSession(args: {
+  sessionId: string
+  countedCash: number
+  userId: string
+  userName: string
+}): Promise<CashSession | null> {
+  const cs = await db.cashSessions.get(args.sessionId)
+  if (!cs) return null
+  // Efectivo esperado = base + ventas en efectivo desde que abrió
+  const sales = await db.sales.where('locationId').equals(cs.locationId).toArray()
+  const since = new Date(cs.openedAt).getTime()
+  let cashSales = 0
+  for (const s of sales) {
+    if (new Date(s.createdAt).getTime() < since || s.status !== 'completada') continue
+    for (const p of s.payments) if (p.method === 'efectivo') cashSales += p.amount
+  }
+  const expected = cs.openingFloat + cashSales
+  cs.closedAt = new Date().toISOString()
+  cs.countedCash = args.countedCash
+  cs.expectedCash = expected
+  cs.difference = args.countedCash - expected
+  cs.status = 'cerrada'
+  await db.cashSessions.put(cs)
+  if (Math.abs(cs.difference) >= 1000) {
+    await notify({
+      tenantId: cs.tenantId,
+      locationId: cs.locationId,
+      type: 'caja',
+      severity: cs.difference < 0 ? 'aviso' : 'info',
+      title: cs.difference < 0 ? 'Faltante en caja' : 'Sobrante en caja',
+      message: `Diferencia de ${cs.difference} en el cierre.`,
+    })
+  }
+  await audit({
+    tenantId: cs.tenantId,
+    locationId: cs.locationId,
+    userId: args.userId,
+    userName: args.userName,
+    action: 'cerró caja',
+    entity: 'caja',
+    entityId: cs.id,
+    detail: `Contado ${args.countedCash} · esperado ${expected} · dif ${cs.difference}.`,
+  })
+  return cs
+}
+
+// ---- Fiado: registrar abono de un cliente ---------------------------------
+export async function payCredit(customerId: string, amount: number): Promise<Customer | null> {
+  const c = await db.customers.get(customerId)
+  if (!c) return null
+  c.creditBalance = Math.max(0, c.creditBalance - amount)
+  await db.customers.put(c)
+  return c
+}
+
+// ---- Marcar venta como transmitida a la DIAN ------------------------------
+export async function transmitDian(saleId: string): Promise<void> {
+  const sale = await db.sales.get(saleId)
+  if (!sale) return
+  sale.dianStatus = 'enviado'
+  if (!sale.dianDocNumber) sale.dianDocNumber = nextDianNumber()
+  await db.sales.put(sale)
+}
+
+// ---- Ventas de hoy de un local (para el POS / caja) -----------------------
+export async function todaySales(locationId: string): Promise<Sale[]> {
+  const since = startOfToday()
+  const all = await db.sales.where('locationId').equals(locationId).toArray()
+  return all
+    .filter((s) => new Date(s.createdAt).getTime() >= since)
+    .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+}
