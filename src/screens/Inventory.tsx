@@ -8,7 +8,7 @@ import { db } from '@/data/db'
 import { adjustStock, recalcThresholds, transferStock } from '@/data/repo'
 import { ProductForm } from '@/components/ProductForm'
 import { Sheet } from '@/components/Sheet'
-import { Segmented, EmptyState, PageHeader } from '@/components/ui'
+import { Segmented, EmptyState, PageHeader, ProductThumb } from '@/components/ui'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
 import { cop, kg } from '@/lib/money'
@@ -48,7 +48,13 @@ export default function Inventory() {
     let list = (products ?? []).filter((p) => p.active)
     if (search.trim()) {
       const q = search.toLowerCase()
-      list = list.filter((p) => p.name.toLowerCase().includes(q) || p.barcode?.includes(search))
+      list = list.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.barcode?.includes(search) ||
+          p.brand?.toLowerCase().includes(q) ||
+          p.description?.toLowerCase().includes(q),
+      )
     }
     const withStock = list
       .map((p) => ({ product: p, stock: stockMap.get(p.id) }))
@@ -121,7 +127,7 @@ export default function Inventory() {
               onClick={() => setDetail({ product, stock })}
               className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3 text-left shadow-sm active:scale-[0.99]"
             >
-              <span className="text-2xl">{product.imageEmoji ?? '📦'}</span>
+              <ProductThumb photo={product.photo} emoji={product.imageEmoji} size={44} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-slate-700">{product.name}</p>
                 <p className="text-xs text-slate-400">
@@ -200,13 +206,14 @@ function ProductDetailSheet({
     <Sheet open onClose={onClose} title={product.name}>
       <div className="space-y-5">
         <div className="flex items-center gap-3">
-          <span className="text-4xl">{product.imageEmoji ?? '📦'}</span>
-          <div>
+          <ProductThumb photo={product.photo} emoji={product.imageEmoji} size={64} />
+          <div className="min-w-0">
+            {product.brand && <p className="text-xs font-medium text-slate-400">{product.brand}</p>}
             <p className="text-2xl font-bold text-brand-700">
               {cop(product.price)}
               {product.unit === 'peso' && <span className="text-sm text-slate-400">/kg</span>}
             </p>
-            <p className="text-xs text-slate-400">
+            <p className="truncate text-xs text-slate-400">
               Costo {cop(product.cost)} · IVA {product.ivaRate}% · {product.barcode || product.internalCode}
             </p>
           </div>
@@ -214,6 +221,10 @@ function ProductDetailSheet({
             <Icon name="edit" className="h-4 w-4" /> Editar
           </button>
         </div>
+
+        {product.description && (
+          <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{product.description}</p>
+        )}
 
         {dExp !== null && dExp <= 30 && (
           <div className="flex items-center justify-between rounded-xl bg-rose-50 p-3">

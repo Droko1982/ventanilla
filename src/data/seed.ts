@@ -14,6 +14,7 @@ import type {
   PaymentMethod,
   AppNotification,
   Expense,
+  Remision,
 } from '@/types'
 import { daysUntil } from '@/lib/format'
 
@@ -480,6 +481,58 @@ function buildNotifications(stock: Stock[]): AppNotification[] {
 }
 
 // ---------------------------------------------------------------------------
+// Facturas electrónicas y remisiones de ejemplo
+// ---------------------------------------------------------------------------
+function mkItem(p: Product, qty: number): SaleItem {
+  return {
+    productId: p.id, name: p.name, unit: p.unit, qty,
+    unitPrice: p.price, lineDiscount: 0, ivaRate: p.ivaRate, cost: p.cost,
+  }
+}
+const sumItems = (items: SaleItem[]) => items.reduce((s, it) => s + it.unitPrice * it.qty, 0)
+
+function buildSampleFacturas(products: Product[]): Sale[] {
+  const p = (i: number) => products[i] ?? products[0]
+  const i1 = [mkItem(p(19), 4), mkItem(p(15), 2), mkItem(p(0), 12)]
+  const i2 = [mkItem(p(33), 3), mkItem(p(34), 2)]
+  const mk = (id: string, num: string, items: SaleItem[], name: string, doc: string, idType: 'CC' | 'NIT', addr: string, ago: number): Sale => {
+    const total = Math.round(sumItems(items))
+    const when = iso(new Date(Date.now() - ago * 86400000))
+    return {
+      id, tenantId: TENANT_ID, locationId: 'l_centro', userId: 'u_admin',
+      items, subtotal: total, discount: 0, total,
+      payments: [{ method: 'transferencia', amount: total, confirmed: true }],
+      customerName: name, customerDoc: doc, customerIdType: idType, customerAddress: addr,
+      status: 'completada', dianStatus: 'enviado', dianDocType: 'factura', dianDocNumber: num,
+      createdAt: when, syncedAt: when,
+    }
+  }
+  return [
+    mk('sf_fe_1', 'FE-941', i1, 'Restaurante El Sabor S.A.S.', '901.222.333-1', 'NIT', 'Cra 19 #12-40, Armenia', 3),
+    mk('sf_fe_2', 'FE-942', i2, 'Carlos Mejía', '1.094.555.222', 'CC', 'Calle 21 #14-08, Armenia', 1),
+  ]
+}
+
+function buildRemisiones(products: Product[]): Remision[] {
+  const p = (i: number) => products[i] ?? products[0]
+  const r1 = [mkItem(p(0), 24), mkItem(p(23), 12)]
+  const r2 = [mkItem(p(18), 10), mkItem(p(20), 6)]
+  const mk = (id: string, num: string, items: SaleItem[], name: string, addr: string, ago: number): Remision => {
+    const total = Math.round(sumItems(items))
+    return {
+      id, tenantId: TENANT_ID, locationId: 'l_centro', userId: 'u_admin', number: num,
+      customerName: name, customerAddress: addr, items, subtotal: total, discount: 0, total,
+      note: 'Entrega a domicilio', status: 'emitida',
+      createdAt: iso(new Date(Date.now() - ago * 86400000)),
+    }
+  }
+  return [
+    mk('rem_1', 'REM-121', r1, 'Tienda Doña Luz', 'Barrio La Patria, Armenia', 2),
+    mk('rem_2', 'REM-122', r2, 'Cafetería La 15', 'Av. Centenario #15-22, Armenia', 0),
+  ]
+}
+
+// ---------------------------------------------------------------------------
 // Otros clientes del SaaS (para el panel del Super-Admin)
 // ---------------------------------------------------------------------------
 const otherTenants: Tenant[] = [
@@ -528,7 +581,7 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Al subir una versión nueva del modelo de demo, se recarga automáticamente
 // para que cualquier visitante vea los datos/precios más recientes.
-const SEED_VERSION = '2-armenia'
+const SEED_VERSION = '3-docs'
 const SEED_KEY = 'ventanilla-seed-version'
 
 export async function seedIfEmpty(): Promise<void> {
@@ -554,15 +607,16 @@ export async function seedIfEmpty(): Promise<void> {
 export async function seedNow(): Promise<void> {
   const products = buildProducts()
   const stock = buildStock(products)
-  const sales = buildHistory(products)
+  const sales = [...buildHistory(products), ...buildSampleFacturas(products)]
   const expenses = buildExpenses()
   const notifications = buildNotifications(stock)
+  const remisiones = buildRemisiones(products)
 
   await db.transaction(
     'rw',
     [
       db.tenants, db.locations, db.users, db.categories, db.products, db.stock,
-      db.sales, db.customers, db.suppliers, db.expenses, db.notifications,
+      db.sales, db.customers, db.suppliers, db.expenses, db.notifications, db.remisiones,
     ],
     async () => {
       await db.tenants.bulkPut([tenant, ...otherTenants])
@@ -576,6 +630,7 @@ export async function seedNow(): Promise<void> {
       await db.sales.bulkPut(sales)
       await db.expenses.bulkPut(expenses)
       await db.notifications.bulkPut(notifications)
+      await db.remisiones.bulkPut(remisiones)
     },
   )
 }

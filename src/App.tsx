@@ -17,6 +17,7 @@ const Mas = lazy(() => import('@/screens/Mas'))
 const Proveedores = lazy(() => import('@/screens/Proveedores'))
 const Clientes = lazy(() => import('@/screens/Clientes'))
 const Ventas = lazy(() => import('@/screens/Ventas'))
+const Documentos = lazy(() => import('@/screens/Documentos'))
 const Reportes = lazy(() => import('@/screens/Reportes'))
 const Notificaciones = lazy(() => import('@/screens/Notificaciones'))
 const Ajustes = lazy(() => import('@/screens/Ajustes'))
@@ -45,6 +46,7 @@ export default function App() {
               <Route path="/proveedores" element={<Proveedores />} />
               <Route path="/clientes" element={<Clientes />} />
               <Route path="/ventas" element={<Ventas />} />
+            <Route path="/documentos" element={<Documentos />} />
               <Route path="/reportes" element={<Reportes />} />
               <Route path="/notificaciones" element={<Notificaciones />} />
               <Route path="/ajustes" element={<Ajustes />} />

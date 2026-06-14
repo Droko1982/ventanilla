@@ -32,6 +32,30 @@ export function Money({ value, className = '' }: { value: number; className?: st
   return <span className={className}>{cop(value)}</span>
 }
 
+// Miniatura del producto: muestra la foto si existe; si no, el ícono.
+export function ProductThumb({
+  photo,
+  emoji,
+  size = 48,
+}: {
+  photo?: string
+  emoji?: string
+  size?: number
+}) {
+  const style = { width: size, height: size }
+  if (photo) {
+    return <img src={photo} alt="" style={style} className="shrink-0 rounded-xl object-cover" />
+  }
+  return (
+    <span
+      style={{ ...style, fontSize: size * 0.55 }}
+      className="flex shrink-0 items-center justify-center rounded-xl bg-slate-50"
+    >
+      {emoji ?? '📦'}
+    </span>
+  )
+}
+
 export function EmptyState({
   emoji = '📭',
   title,

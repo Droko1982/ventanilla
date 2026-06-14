@@ -65,6 +65,7 @@ async function main() {
     ['#/caja', 'Caja'],
     ['#/proveedores', 'Proveedores'],
     ['#/ventas', 'Ventas'],
+    ['#/documentos', 'Facturas y remisiones'],
     ['#/reportes', 'Reportes'],
     ['#/clientes', 'Clientes'],
     ['#/notificaciones', 'Notificaciones'],
@@ -111,6 +112,26 @@ async function main() {
   await clickText(page, 'Nueva venta')
   await sleep(500)
 
+  // 4c) Documentos: abrir factura electrónica y remisión de ejemplo
+  ctx = 'documentos'
+  await page.evaluate(() => { location.hash = '#/documentos' })
+  await sleep(900)
+  await clickText(page, 'FE-9')
+  await sleep(700)
+  txt = await bodyText(page)
+  if (!/Base gravable/.test(txt)) throw new Error('Detalle de factura no renderizó')
+  await page.keyboard.press('Escape')
+  await sleep(400)
+  await clickText(page, 'Remisiones')
+  await sleep(500)
+  await clickText(page, 'REM-1')
+  await sleep(700)
+  txt = await bodyText(page)
+  if (!/Convertir en factura/.test(txt)) throw new Error('Detalle de remisión no renderizó')
+  await page.keyboard.press('Escape')
+  await sleep(400)
+  console.log('✓ Documentos: factura y remisión de ejemplo se abren')
+
   // 5) Cerrar sesión y entrar como Super-Admin
   ctx = 'login-super'
   await page.evaluate(() => { localStorage.removeItem('ventanilla-session') })
@@ -140,6 +161,14 @@ async function main() {
   txt = await bodyText(page)
   if (!/Producto nuevo/.test(txt)) throw new Error('POS del cajero no renderizó tras el PIN')
   console.log('✓ Login cajero por PIN → POS renderiza')
+
+  // 7) Landing de Ventanilla (página de presentación)
+  ctx = 'landing'
+  await page.goto(BASE + 'landing.html', { waitUntil: 'networkidle2' })
+  await sleep(600)
+  txt = await bodyText(page)
+  if (!/Probar el demo/.test(txt) || !/Ventanilla/.test(txt)) throw new Error('Landing no renderizó')
+  console.log('✓ Landing de Ventanilla renderiza')
 
   await browser.close()
 

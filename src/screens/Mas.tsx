@@ -6,7 +6,8 @@ import { PageHeader } from '@/components/ui'
 export default function Mas() {
   const navigate = useNavigate()
   const items: { to: string; icon: any; label: string; desc: string; color: string }[] = [
-    { to: '/ventas', icon: 'doc', label: 'Ventas y DIAN', desc: 'Historial, documentos, pendientes', color: 'bg-blue-100 text-blue-700' },
+    { to: '/ventas', icon: 'doc', label: 'Ventas y DIAN', desc: 'Historial, documentos POS, pendientes', color: 'bg-blue-100 text-blue-700' },
+    { to: '/documentos', icon: 'tag', label: 'Facturas y remisiones', desc: 'Factura electrónica y notas de entrega', color: 'bg-indigo-100 text-indigo-700' },
     { to: '/reportes', icon: 'chart', label: 'Reportes', desc: 'Márgenes, más/menos vendidos, stock muerto', color: 'bg-emerald-100 text-emerald-700' },
     { to: '/proveedores', icon: 'truck', label: 'Proveedores', desc: 'Reabastecer, pedidos, directorio', color: 'bg-amber-100 text-amber-700' },
     { to: '/clientes', icon: 'users', label: 'Clientes / Fiado', desc: 'Crédito, historial, abonos', color: 'bg-rose-100 text-rose-700' },

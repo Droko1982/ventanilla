@@ -4,6 +4,7 @@ import { toast } from './Toast'
 import { db } from '@/data/db'
 import { uid, internalCode } from '@/lib/id'
 import { parseCop } from '@/lib/money'
+import { fileToCompressedDataUrl } from '@/lib/image'
 import type { Category, Location, Product, Supplier } from '@/types'
 
 // Formulario de producto reutilizable: crear (con stock inicial) o editar.
@@ -40,8 +41,25 @@ export function ProductForm({
   const [supplierId, setSupplierId] = useState(product?.supplierId ?? '')
   const [perishable, setPerishable] = useState(product?.perishable ?? false)
   const [emoji, setEmoji] = useState(product?.imageEmoji ?? '📦')
+  const [photo, setPhoto] = useState(product?.photo ?? '')
+  const [brand, setBrand] = useState(product?.brand ?? '')
+  const [description, setDescription] = useState(product?.description ?? '')
+  const [uploading, setUploading] = useState(false)
   const [initialQty, setInitialQty] = useState('')
   const [saving, setSaving] = useState(false)
+
+  async function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      setPhoto(await fileToCompressedDataUrl(file))
+    } catch {
+      toast('error', 'No se pudo cargar la foto')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   async function save() {
     if (!name.trim()) {
@@ -63,6 +81,9 @@ export function ProductForm({
       supplierId: supplierId || undefined,
       perishable,
       imageEmoji: emoji,
+      photo: photo || undefined,
+      brand: brand.trim() || undefined,
+      description: description.trim() || undefined,
       active: product?.active ?? true,
       createdAt: product?.createdAt ?? new Date().toISOString(),
     }
@@ -113,8 +134,36 @@ export function ProductForm({
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Gaseosa 1.5L" />
         </div>
 
+        {/* Foto del producto (opcional) */}
         <div>
-          <label className="label">Ícono rápido</label>
+          <label className="label">Foto del producto (opcional)</label>
+          <div className="flex items-center gap-3">
+            {photo ? (
+              <img src={photo} alt="" className="h-20 w-20 rounded-xl border border-slate-200 object-cover" />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-slate-100 text-3xl">{emoji}</div>
+            )}
+            <div className="flex flex-1 flex-col gap-2">
+              <label className="btn btn-secondary cursor-pointer text-sm">
+                {uploading ? 'Cargando…' : photo ? '📷 Cambiar foto' : '📷 Subir foto'}
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={onPhoto} />
+              </label>
+              {photo && (
+                <button onClick={() => setPhoto('')} className="text-left text-xs text-rose-500">
+                  Quitar foto
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label className="label">Marca (opcional)</label>
+          <input className="input" value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Ej. Postobón, Colanta…" />
+        </div>
+
+        <div>
+          <label className="label">{photo ? 'Ícono de respaldo' : 'Ícono rápido'}</label>
           <div className="no-scrollbar flex gap-2 overflow-x-auto">
             {emojiOptions.map((e) => (
               <button
@@ -194,6 +243,16 @@ export function ProductForm({
             <input className="input" inputMode="numeric" value={initialQty} onChange={(e) => setInitialQty(e.target.value)} placeholder="0" />
           </div>
         )}
+
+        <div>
+          <label className="label">Detalles / descripción (opcional)</label>
+          <textarea
+            className="input min-h-[72px] resize-none"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Presentación, contenido, notas para el cliente…"
+          />
+        </div>
 
         <label className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
           <input type="checkbox" checked={perishable} onChange={(e) => setPerishable(e.target.checked)} className="h-5 w-5" />

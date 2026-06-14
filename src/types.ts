@@ -96,7 +96,10 @@ export interface Product {
   ivaRate: number // 0, 5, 19 (lo necesita la DIAN)
   supplierId?: string
   perishable: boolean
-  imageEmoji?: string // imagen rápida para el POS
+  imageEmoji?: string // imagen rápida para el POS (si no hay foto)
+  photo?: string // foto real del producto (dataURL, opcional)
+  brand?: string // marca (opcional)
+  description?: string // detalles / descripción (opcional)
   active: boolean
   createdAt: string
 }
@@ -145,14 +148,43 @@ export interface Sale {
   payments: Payment[]
   customerId?: string
   customerDoc?: string // CC/NIT si pide factura electrónica completa
+  // Datos fiscales del adquiriente (factura electrónica de venta)
+  customerName?: string
+  customerIdType?: 'CC' | 'NIT' | 'CE'
+  customerAddress?: string
+  customerEmail?: string
   status: SaleStatus
   dianStatus: DianStatus
   dianDocType: 'tiquete_pos' | 'factura' | 'nota_credito'
   dianDocNumber?: string
   note?: string
   editedFromId?: string // si es una edición de otra venta (auditoría)
+  remisionId?: string // si la factura se generó a partir de una remisión
   createdAt: string
   syncedAt?: string // null mientras está sólo en local (offline)
+}
+
+// --- Remisión (nota de despacho/entrega; NO es documento DIAN) --------------
+export type RemisionStatus = 'emitida' | 'facturada' | 'anulada'
+
+export interface Remision {
+  id: string
+  tenantId: string
+  locationId: string
+  userId: string
+  number: string // REM-####
+  customerName: string
+  customerId?: string
+  customerDoc?: string
+  customerAddress?: string
+  items: SaleItem[]
+  subtotal: number
+  discount: number
+  total: number
+  note?: string
+  status: RemisionStatus
+  facturaId?: string // venta (factura) generada al convertir
+  createdAt: string
 }
 
 // --- Clientes (CRM + fiado) --------------------------------------------------
@@ -210,6 +242,7 @@ export type StockMovementType =
   | 'traslado_entrada'
   | 'ajuste'
   | 'devolucion'
+  | 'remision'
 
 export interface StockMovement {
   id: string

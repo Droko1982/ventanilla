@@ -17,7 +17,7 @@ import { Sheet } from '@/components/Sheet'
 import { ProductForm } from '@/components/ProductForm'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
-import { EmptyState } from '@/components/ui'
+import { EmptyState, ProductThumb } from '@/components/ui'
 import { cop, kg, parseCop } from '@/lib/money'
 import { recordSale } from '@/data/repo'
 import { receiptText, printReceipt } from '@/lib/receipt'
@@ -64,7 +64,9 @@ export default function POS() {
         (p) =>
           p.name.toLowerCase().includes(q) ||
           p.barcode?.includes(search) ||
-          p.internalCode?.toLowerCase().includes(q),
+          p.internalCode?.toLowerCase().includes(q) ||
+          p.brand?.toLowerCase().includes(q) ||
+          p.description?.toLowerCase().includes(q),
       )
     }
     return list
@@ -152,7 +154,7 @@ export default function POS() {
                 out ? 'border-rose-200 opacity-70' : 'border-slate-100'
               }`}
             >
-              <span className="text-3xl">{p.imageEmoji ?? '📦'}</span>
+              <ProductThumb photo={p.photo} emoji={p.imageEmoji} size={44} />
               <span className="mt-1 line-clamp-2 text-sm font-semibold leading-tight text-slate-700">
                 {p.name}
               </span>

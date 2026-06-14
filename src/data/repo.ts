@@ -12,6 +12,7 @@ import type {
   PurchaseOrder,
   CashSession,
   Customer,
+  Remision,
 } from '@/types'
 
 // ============================================================================
@@ -49,11 +50,24 @@ export async function notify(n: Omit<AppNotification, 'id' | 'read' | 'createdAt
 }
 
 // ---- DIAN (simulado en demo) ----------------------------------------------
-// Genera un número consecutivo del Documento Equivalente Electrónico POS.
+// Numeración consecutiva por tipo de documento.
+//  POS1-####  tiquete (documento equivalente POS)
+//  FE-####    factura electrónica de venta
+//  REM-####   remisión (no es documento DIAN)
 let dianCounter = 5000
 export function nextDianNumber(): string {
   dianCounter += 1
   return `POS1-${dianCounter}`
+}
+let facturaCounter = 940
+export function nextFacturaNumber(): string {
+  facturaCounter += 1
+  return `FE-${facturaCounter}`
+}
+let remisionCounter = 120
+export function nextRemisionNumber(): string {
+  remisionCounter += 1
+  return `REM-${remisionCounter}`
 }
 
 // ---- Registrar una venta ---------------------------------------------------
@@ -68,6 +82,14 @@ export interface RecordSaleInput {
   customerId?: string
   customerDoc?: string
   transmitDian: boolean // ¿generar/transmitir el DEE ya?
+  // Factura electrónica: tipo de documento y datos fiscales del adquiriente
+  docType?: 'tiquete_pos' | 'factura'
+  customerName?: string
+  customerIdType?: 'CC' | 'NIT' | 'CE'
+  customerAddress?: string
+  customerEmail?: string
+  remisionId?: string // si la factura nace de una remisión
+  skipStock?: boolean // true cuando el stock ya se descontó (p.ej. en la remisión)
 }
 
 export async function recordSale(input: RecordSaleInput): Promise<Sale> {
@@ -77,6 +99,8 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
   )
   const total = Math.max(0, Math.round(subtotal - input.discount))
   const now = new Date().toISOString()
+  const docType = input.docType ?? (input.customerDoc ? 'factura' : 'tiquete_pos')
+  const docNumber = docType === 'factura' ? nextFacturaNumber() : nextDianNumber()
 
   const sale: Sale = {
     id: uid('s'),
@@ -90,10 +114,15 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
     payments: input.payments,
     customerId: input.customerId,
     customerDoc: input.customerDoc,
+    customerName: input.customerName,
+    customerIdType: input.customerIdType,
+    customerAddress: input.customerAddress,
+    customerEmail: input.customerEmail,
     status: 'completada',
     dianStatus: input.transmitDian ? 'enviado' : 'pendiente',
-    dianDocType: input.customerDoc ? 'factura' : 'tiquete_pos',
-    dianDocNumber: input.transmitDian ? nextDianNumber() : undefined,
+    dianDocType: docType,
+    dianDocNumber: input.transmitDian ? docNumber : undefined,
+    remisionId: input.remisionId,
     createdAt: now,
     syncedAt: navigator.onLine ? now : undefined, // offline: queda sin sincronizar
   }
@@ -104,8 +133,8 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
     async () => {
       await db.sales.put(sale)
 
-      // Descontar stock + movimiento por cada ítem
-      for (const it of input.items) {
+      // Descontar stock + movimiento por cada ítem (salvo que ya se descontó)
+      if (!input.skipStock) for (const it of input.items) {
         const stockId = `${input.locationId}:${it.productId}`
         const st = await db.stock.get(stockId)
         if (st) {
@@ -570,8 +599,161 @@ export async function transmitDian(saleId: string): Promise<void> {
   const sale = await db.sales.get(saleId)
   if (!sale) return
   sale.dianStatus = 'enviado'
-  if (!sale.dianDocNumber) sale.dianDocNumber = nextDianNumber()
+  if (!sale.dianDocNumber) {
+    sale.dianDocNumber = sale.dianDocType === 'factura' ? nextFacturaNumber() : nextDianNumber()
+  }
   await db.sales.put(sale)
+}
+
+// ---- Remisiones (notas de despacho/entrega) -------------------------------
+export interface CreateRemisionInput {
+  tenantId: string
+  locationId: string
+  userId: string
+  userName: string
+  customerName: string
+  customerId?: string
+  customerDoc?: string
+  customerAddress?: string
+  items: SaleItem[]
+  discount: number
+  note?: string
+}
+
+export async function createRemision(input: CreateRemisionInput): Promise<Remision> {
+  const subtotal = input.items.reduce((s, it) => s + it.unitPrice * it.qty - it.lineDiscount, 0)
+  const total = Math.max(0, Math.round(subtotal - input.discount))
+  const now = new Date().toISOString()
+  const rem: Remision = {
+    id: uid('rem'),
+    tenantId: input.tenantId,
+    locationId: input.locationId,
+    userId: input.userId,
+    number: nextRemisionNumber(),
+    customerName: input.customerName,
+    customerId: input.customerId,
+    customerDoc: input.customerDoc,
+    customerAddress: input.customerAddress,
+    items: input.items,
+    subtotal: Math.round(subtotal),
+    discount: input.discount,
+    total,
+    note: input.note,
+    status: 'emitida',
+    createdAt: now,
+  }
+  await db.transaction('rw', [db.remisiones, db.stock, db.stockMovements], async () => {
+    await db.remisiones.put(rem)
+    // La remisión despacha mercancía → descuenta stock
+    for (const it of input.items) {
+      const st = await db.stock.get(`${input.locationId}:${it.productId}`)
+      if (st) {
+        st.quantity = Number((st.quantity - it.qty).toFixed(3))
+        st.updatedAt = now
+        await db.stock.put(st)
+      }
+      await db.stockMovements.put({
+        id: uid('mv'),
+        tenantId: input.tenantId,
+        locationId: input.locationId,
+        productId: it.productId,
+        type: 'remision',
+        qty: -it.qty,
+        refId: rem.id,
+        userId: input.userId,
+        createdAt: now,
+      })
+    }
+  })
+  await audit({
+    tenantId: input.tenantId,
+    locationId: input.locationId,
+    userId: input.userId,
+    userName: input.userName,
+    action: 'emitió remisión',
+    entity: 'remision',
+    entityId: rem.id,
+    detail: `${rem.number} · ${input.customerName} · total ${total}`,
+  })
+  return rem
+}
+
+// Convierte una remisión en factura electrónica (sin volver a descontar stock).
+export async function convertRemisionToFactura(
+  remisionId: string,
+  payments: Payment[],
+  fiscal: {
+    userId: string
+    userName: string
+    customerIdType?: 'CC' | 'NIT' | 'CE'
+    customerEmail?: string
+  },
+): Promise<Sale | null> {
+  const rem = await db.remisiones.get(remisionId)
+  if (!rem || rem.status !== 'emitida') return null
+  const sale = await recordSale({
+    tenantId: rem.tenantId,
+    locationId: rem.locationId,
+    userId: fiscal.userId,
+    userName: fiscal.userName,
+    items: rem.items,
+    discount: rem.discount,
+    payments,
+    customerId: rem.customerId,
+    customerDoc: rem.customerDoc,
+    customerName: rem.customerName,
+    customerAddress: rem.customerAddress,
+    customerIdType: fiscal.customerIdType,
+    customerEmail: fiscal.customerEmail,
+    transmitDian: true,
+    docType: 'factura',
+    remisionId: rem.id,
+    skipStock: true, // el stock ya se descontó al emitir la remisión
+  })
+  rem.status = 'facturada'
+  rem.facturaId = sale.id
+  await db.remisiones.put(rem)
+  return sale
+}
+
+// Anula una remisión y devuelve el stock.
+export async function voidRemision(remisionId: string, userId: string, userName: string): Promise<void> {
+  const rem = await db.remisiones.get(remisionId)
+  if (!rem || rem.status !== 'emitida') return
+  const now = new Date().toISOString()
+  await db.transaction('rw', [db.remisiones, db.stock, db.stockMovements], async () => {
+    rem.status = 'anulada'
+    await db.remisiones.put(rem)
+    for (const it of rem.items) {
+      const st = await db.stock.get(`${rem.locationId}:${it.productId}`)
+      if (st) {
+        st.quantity = Number((st.quantity + it.qty).toFixed(3))
+        st.updatedAt = now
+        await db.stock.put(st)
+      }
+      await db.stockMovements.put({
+        id: uid('mv'),
+        tenantId: rem.tenantId,
+        locationId: rem.locationId,
+        productId: it.productId,
+        type: 'devolucion',
+        qty: it.qty,
+        refId: rem.id,
+        userId,
+        createdAt: now,
+      })
+    }
+  })
+  await audit({
+    tenantId: rem.tenantId,
+    locationId: rem.locationId,
+    userId,
+    userName,
+    action: 'anuló remisión',
+    entity: 'remision',
+    entityId: rem.id,
+    detail: `${rem.number} anulada · stock devuelto`,
+  })
 }
 
 // ---- Ventas de hoy de un local (para el POS / caja) -----------------------

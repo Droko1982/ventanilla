@@ -15,6 +15,7 @@ import type {
   AuditLog,
   AppNotification,
   Expense,
+  Remision,
 } from '@/types'
 
 // ============================================================================
@@ -42,6 +43,7 @@ export class VentanillaDB extends Dexie {
   auditLogs!: Table<AuditLog, string>
   notifications!: Table<AppNotification, string>
   expenses!: Table<Expense, string>
+  remisiones!: Table<Remision, string>
 
   constructor() {
     super('ventanilla')
@@ -61,6 +63,10 @@ export class VentanillaDB extends Dexie {
       auditLogs: 'id, tenantId, locationId, createdAt',
       notifications: 'id, tenantId, locationId, read, createdAt',
       expenses: 'id, tenantId, locationId, date',
+    })
+    // v2: remisiones (notas de despacho) + datos fiscales en ventas (sin índice)
+    this.version(2).stores({
+      remisiones: 'id, tenantId, locationId, status, createdAt',
     })
   }
 }
