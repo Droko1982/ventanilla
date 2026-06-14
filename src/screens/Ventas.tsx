@@ -108,6 +108,7 @@ function SaleDetail({
             <p className="text-xs text-slate-400">{tenantName} · {locName}</p>
             <p className="text-xs text-slate-400">{fmtDateTime(sale.createdAt)}</p>
             {sale.vendedorName && <p className="text-xs text-slate-400">Vendedor: {sale.vendedorName}</p>}
+            {sale.note && <p className="text-xs text-slate-500">📝 {sale.note}</p>}
           </div>
           <DianChip status={sale.dianStatus} />
         </div>

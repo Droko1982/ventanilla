@@ -95,6 +95,7 @@ export interface RecordSaleInput {
   vendedorId?: string
   vendedorName?: string
   discountReason?: string
+  note?: string // nota / observaciones de la venta
   // Factura electrónica: tipo de documento y datos fiscales del adquiriente
   docType?: 'tiquete_pos' | 'factura'
   customerName?: string
@@ -135,6 +136,7 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
     vendedorId: input.vendedorId,
     vendedorName: input.vendedorName,
     discountReason: input.discountReason,
+    note: input.note,
     status: 'completada',
     dianStatus: input.transmitDian ? 'enviado' : 'pendiente',
     dianDocType: docType,
@@ -153,7 +155,8 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
       // Descontar stock + movimiento por cada ítem (salvo que ya se descontó)
       // Los servicios/recargas (productId "srv:") no afectan inventario.
       if (!input.skipStock) for (const it of input.items) {
-        if (it.productId.startsWith('srv:')) continue
+        // Servicios/recargas ("srv:") y productos manuales ("man:") no tienen inventario.
+        if (it.productId.startsWith('srv:') || it.productId.startsWith('man:')) continue
         const stockId = `${input.locationId}:${it.productId}`
         const st = await db.stock.get(stockId)
         if (st) {
@@ -323,8 +326,8 @@ export async function returnSaleItems(
       const ratio = oldQty > 0 ? (oldQty - qty) / oldQty : 0
       item.lineDiscount = Math.round(item.lineDiscount * ratio)
       item.qty = Number((oldQty - qty).toFixed(3))
-      // Devuelve el stock (los servicios "srv:" no tienen inventario)
-      if (!item.productId.startsWith('srv:')) {
+      // Devuelve el stock (servicios "srv:" y manuales "man:" no tienen inventario)
+      if (!item.productId.startsWith('srv:') && !item.productId.startsWith('man:')) {
         const st = await db.stock.get(`${sale.locationId}:${item.productId}`)
         if (st) {
           st.quantity = Number((st.quantity + qty).toFixed(3))

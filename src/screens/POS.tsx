@@ -49,6 +49,7 @@ export default function POS() {
   const [quickAdd, setQuickAdd] = useState(false)
   const [scanCreateCode, setScanCreateCode] = useState<string | undefined>()
   const [serviceOpen, setServiceOpen] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
   const [displayOpen, setDisplayOpen] = useState(false)
   const [receipt, setReceipt] = useState<Sale | null>(null)
 
@@ -183,6 +184,7 @@ export default function POS() {
           onAddProduct={(p, qty) => (p.unit === 'peso' ? setWeightProduct(p) : cart.addProduct(p, qty))}
           onPay={() => setPayOpen(true)}
           onScan={() => setScanOpen(true)}
+          onManual={() => setManualOpen(true)}
         />
       ) : (
         <>
@@ -231,6 +233,14 @@ export default function POS() {
         >
           <span className="text-2xl">📱</span>
           <span className="text-xs font-semibold">Recarga / Servicio</span>
+        </button>
+
+        <button
+          onClick={() => setManualOpen(true)}
+          className="flex flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/40 p-3 text-amber-700 active:scale-[0.98]"
+        >
+          <span className="text-2xl">✍️</span>
+          <span className="text-xs font-semibold">Venta manual</span>
         </button>
 
         {visibleProducts.map((p) => {
@@ -333,6 +343,7 @@ export default function POS() {
               vendedorId: cart.meta.vendedorId,
               vendedorName: cart.meta.vendedorName,
               discountReason: cart.meta.discountReason,
+              note: opts.note,
             })
             cart.clear()
             setPayOpen(false)
@@ -366,6 +377,13 @@ export default function POS() {
             setServiceOpen(false)
             toast('success', `${line.name} agregado`)
           }}
+        />
+      )}
+
+      {manualOpen && (
+        <ManualItemSheet
+          onClose={() => setManualOpen(false)}
+          onAdd={(line) => { cart.addLine(line); setManualOpen(false); toast('success', `${line.name} agregado`) }}
         />
       )}
 
@@ -535,9 +553,66 @@ function ServiceSheet({ onClose, onAdd }: { onClose: () => void; onAdd: (line: C
   )
 }
 
+// --- Venta manual (producto libre, no afecta inventario) -------------------
+function ManualItemSheet({ onClose, onAdd }: { onClose: () => void; onAdd: (line: CartLine) => void }) {
+  const [name, setName] = useState('')
+  const [price, setPrice] = useState('')
+  const [qty, setQty] = useState('1')
+  const [cost, setCost] = useState('')
+  const [iva, setIva] = useState(0)
+  const unitPrice = parseCop(price)
+  const n = parseFloat(qty.replace(',', '.')) || 1
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title="Venta manual"
+      footer={
+        <button
+          className="btn btn-primary btn-lg w-full"
+          disabled={!name.trim() || unitPrice <= 0}
+          onClick={() =>
+            onAdd({
+              productId: `man:${uid()}`,
+              name: name.trim(),
+              unit: 'unidad',
+              qty: n,
+              unitPrice,
+              lineDiscount: 0,
+              ivaRate: iva,
+              cost: parseCop(cost),
+              emoji: '✍️',
+            })
+          }
+        >
+          Agregar · {cop(unitPrice * n)}
+        </button>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-slate-500">Para productos que llevas en papel o que no están en el catálogo. No afecta el inventario.</p>
+        <div><label className="label">Descripción</label><input autoFocus className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Tornillos surtidos" /></div>
+        <div className="grid grid-cols-2 gap-2">
+          <div><label className="label">Valor unitario</label><input className="input" inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="$" /></div>
+          <div><label className="label">Cantidad</label><input className="input" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} /></div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div><label className="label">Costo (opcional)</label><input className="input" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="$" /></div>
+          <div>
+            <label className="label">IVA</label>
+            <select className="input" value={iva} onChange={(e) => setIva(Number(e.target.value))}>
+              <option value={0}>0%</option><option value={5}>5%</option><option value={19}>19%</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </Sheet>
+  )
+}
+
 // --- Modo mostrador (formulario clásico tipo SEITEM) -----------------------
 function CounterEntry({
-  products, allProducts, customers, vendedores, canDiscount, onAddCode, onAddProduct, onPay, onScan,
+  products, allProducts, customers, vendedores, canDiscount, onAddCode, onAddProduct, onPay, onScan, onManual,
 }: {
   products: Product[]
   allProducts: Product[]
@@ -548,6 +623,7 @@ function CounterEntry({
   onAddProduct: (p: Product, qty: number) => void
   onPay: () => void
   onScan: () => void
+  onManual: () => void
 }) {
   const cart = useCart()
   const subtotal = cartSubtotal(cart.lines)
@@ -597,6 +673,7 @@ function CounterEntry({
           <input className="input w-16 text-center" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
           <button onClick={submit} className="btn btn-primary px-4">AGREGAR</button>
           <button onClick={onScan} className="btn btn-secondary px-3" aria-label="Escanear"><Icon name="scan" className="h-5 w-5" /></button>
+          <button onClick={onManual} className="btn btn-secondary px-3" title="Venta manual">✍️</button>
         </div>
         {results.length > 0 && (
           <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
@@ -854,6 +931,7 @@ interface PayOpts {
   customerId?: string
   customerDoc?: string
   transmitDian: boolean
+  note?: string
 }
 
 function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total: number; defaultCustomerId?: string; onClose: () => void; onConfirm: (p: Payment[], o: PayOpts) => void }) {
@@ -865,6 +943,7 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? '')
   const [wantInvoice, setWantInvoice] = useState(false)
   const [customerDoc, setCustomerDoc] = useState('')
+  const [note, setNote] = useState('')
   const [transmitDian, setTransmitDian] = useState(tenant?.dian.enabled ?? true)
   const [split, setSplit] = useState<{ method: PaymentMethod; amount: number }[]>([])
 
@@ -926,6 +1005,7 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
               customerId: customerId || undefined,
               customerDoc: wantInvoice ? customerDoc : undefined,
               transmitDian,
+              note: note.trim() || undefined,
             })
           }}
         >
@@ -1044,6 +1124,12 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
         {wantInvoice && (
           <input className="input" value={customerDoc} onChange={(e) => setCustomerDoc(e.target.value)} placeholder="CC o NIT del cliente" />
         )}
+
+        {/* Nota / observaciones de la venta */}
+        <div>
+          <label className="label">Nota / observaciones (opcional)</label>
+          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Detalle de la venta…" />
+        </div>
 
         {/* DIAN */}
         <label className="flex items-center gap-3 rounded-xl border border-brand-100 bg-brand-50/50 px-4 py-3">

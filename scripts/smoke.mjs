@@ -107,17 +107,39 @@ async function main() {
   await sleep(500)
   console.log('✓ Recarga/servicio agregada al carrito')
 
+  // Venta manual (producto libre que se lleva en papel)
+  await clickText(page, 'Venta manual')
+  await sleep(500)
+  await page.keyboard.type('Producto en papel')
+  await sleep(150)
+  await page.evaluate(() => {
+    const i = [...document.querySelectorAll('input')].find((x) => x.placeholder === '$')
+    if (i) { const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(i, '3000'); i.dispatchEvent(new Event('input', { bubbles: true })) }
+  })
+  await sleep(200)
+  await clickText(page, 'Agregar')
+  await sleep(500)
+  console.log('✓ Venta manual (producto libre) agregada')
+
   // 4b) Venta completa de extremo a extremo: carrito → cobrar → recibo
   ctx = 'checkout'
   await clickText(page, 'Ver carrito')
   await sleep(700)
+  txt = await bodyText(page)
+  if (!/Producto en papel/.test(txt)) throw new Error('El producto manual no llegó al carrito')
   await clickText(page, 'Cobrar')
   await sleep(700)
+  // nota / detalles de la venta
+  await page.evaluate(() => {
+    const i = [...document.querySelectorAll('input')].find((x) => (x.placeholder || '').includes('Detalle de la venta'))
+    if (i) { const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(i, 'Venta de mostrador'); i.dispatchEvent(new Event('input', { bubbles: true })) }
+  })
+  await sleep(200)
   await clickText(page, 'Recibí el pago')
   await sleep(1200)
   txt = await bodyText(page)
   if (!/Venta lista|Total cobrado/.test(txt)) throw new Error('No se completó la venta (sin recibo)')
-  console.log('✓ Venta completa → recibo generado (DIAN + stock + auditoría)')
+  console.log('✓ Venta completa (con manual + nota) → recibo generado')
   await clickText(page, 'Nueva venta')
   await sleep(500)
 
