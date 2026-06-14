@@ -15,6 +15,7 @@ import type {
   AppNotification,
   Expense,
   Remision,
+  PurchaseOrder,
 } from '@/types'
 import { daysUntil } from '@/lib/format'
 
@@ -130,6 +131,8 @@ const users: User[] = [
     role: 'empleado',
     pin: '2345',
     locationId: 'l_norte',
+    // Demo de permisos: Laura no puede dar descuentos ni gestionar inventario
+    permissions: { canDiscount: false, canManageInventory: false, canCashMovement: true, canVoid: false },
     active: true,
   },
   {
@@ -272,6 +275,9 @@ function buildProducts(): Product[] {
       supplierId,
       perishable,
       imageEmoji: emoji,
+      // Precio al por mayor en bebidas y licores (desde 6 unidades)
+      wholesalePrice: categoryId === 'c_beb' || categoryId === 'c_lic' ? Math.round(price * 0.9) : undefined,
+      wholesaleMinQty: categoryId === 'c_beb' || categoryId === 'c_lic' ? 6 : undefined,
       active: true,
       createdAt: tenant.createdAt,
     }
@@ -532,6 +538,24 @@ function buildRemisiones(products: Product[]): Remision[] {
   ]
 }
 
+function buildPurchaseOrders(products: Product[]): PurchaseOrder[] {
+  const p = (i: number) => products[i] ?? products[0]
+  const items = [
+    { productId: p(0).id, name: p(0).name, suggestedQty: 24, receivedQty: 24, cost: p(0).cost },
+    { productId: p(2).id, name: p(2).name, suggestedQty: 12, receivedQty: 12, cost: p(2).cost },
+  ]
+  return [
+    {
+      id: 'po_1', tenantId: TENANT_ID, locationId: 'l_centro', supplierId: 's_postobon',
+      items, status: 'recibido',
+      createdAt: iso(new Date(Date.now() - 3 * 86400000)),
+      sentAt: iso(new Date(Date.now() - 3 * 86400000)),
+      receivedAt: iso(new Date(Date.now() - 1 * 86400000)),
+      paid: false,
+    },
+  ]
+}
+
 // ---------------------------------------------------------------------------
 // Otros clientes del SaaS (para el panel del Super-Admin)
 // ---------------------------------------------------------------------------
@@ -581,7 +605,7 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Al subir una versión nueva del modelo de demo, se recarga automáticamente
 // para que cualquier visitante vea los datos/precios más recientes.
-const SEED_VERSION = '4-caja-servicios'
+const SEED_VERSION = '5-mayor-permisos'
 const SEED_KEY = 'ventanilla-seed-version'
 
 export async function seedIfEmpty(): Promise<void> {
@@ -611,12 +635,14 @@ export async function seedNow(): Promise<void> {
   const expenses = buildExpenses()
   const notifications = buildNotifications(stock)
   const remisiones = buildRemisiones(products)
+  const purchaseOrders = buildPurchaseOrders(products)
 
   await db.transaction(
     'rw',
     [
       db.tenants, db.locations, db.users, db.categories, db.products, db.stock,
       db.sales, db.customers, db.suppliers, db.expenses, db.notifications, db.remisiones,
+      db.purchaseOrders,
     ],
     async () => {
       await db.tenants.bulkPut([tenant, ...otherTenants])
@@ -631,6 +657,7 @@ export async function seedNow(): Promise<void> {
       await db.expenses.bulkPut(expenses)
       await db.notifications.bulkPut(notifications)
       await db.remisiones.bulkPut(remisiones)
+      await db.purchaseOrders.bulkPut(purchaseOrders)
     },
   )
 }

@@ -11,6 +11,7 @@ import { toast } from '@/components/Toast'
 import { cop, parseCop } from '@/lib/money'
 import { fmtDateTime, fmtTime } from '@/lib/format'
 import { useSession } from '@/store/session'
+import { can } from '@/lib/permissions'
 
 const methodLabels: Record<string, string> = {
   efectivo: 'Efectivo', nequi: 'Nequi', tarjeta: 'Tarjeta', transferencia: 'Transferencia', fiado: 'Fiado',
@@ -131,10 +132,12 @@ export default function Caja() {
             </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button onClick={() => setMovSheet('ingreso')} className="btn btn-secondary py-2 text-sm">+ Ingreso</button>
-            <button onClick={() => setMovSheet('egreso')} className="btn btn-secondary py-2 text-sm">− Egreso / gasto</button>
-          </div>
+          {can(user, 'canCashMovement') && (
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button onClick={() => setMovSheet('ingreso')} className="btn btn-secondary py-2 text-sm">+ Ingreso</button>
+              <button onClick={() => setMovSheet('egreso')} className="btn btn-secondary py-2 text-sm">− Egreso / gasto</button>
+            </div>
+          )}
 
           {(movements?.length ?? 0) > 0 && (
             <div className="mt-3 space-y-1.5">

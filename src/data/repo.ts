@@ -71,6 +71,11 @@ export function nextRemisionNumber(): string {
   remisionCounter += 1
   return `REM-${remisionCounter}`
 }
+let ncCounter = 300
+export function nextCreditNoteNumber(): string {
+  ncCounter += 1
+  return `NC-${ncCounter}`
+}
 
 // ---- Registrar una venta ---------------------------------------------------
 export interface RecordSaleInput {
@@ -271,6 +276,66 @@ export async function voidSale(saleId: string, userId: string, userName: string)
   })
 }
 
+// ---- Devolución parcial: devolver algunos ítems de una venta --------------
+export async function returnSaleItems(
+  saleId: string,
+  returns: { productId: string; qty: number }[],
+  userId: string,
+  userName: string,
+): Promise<number> {
+  const sale = await db.sales.get(saleId)
+  if (!sale || sale.status !== 'completada') return 0
+  const filtered = returns.filter((r) => r.qty > 0)
+  if (!filtered.length) return 0
+  const now = new Date().toISOString()
+  let refund = 0
+  await db.transaction('rw', [db.sales, db.stock, db.stockMovements], async () => {
+    for (const r of filtered) {
+      const item = sale.items.find((it) => it.productId === r.productId)
+      if (!item) continue
+      const qty = Math.min(r.qty, item.qty)
+      if (qty <= 0) continue
+      const oldQty = item.qty
+      refund += item.unitPrice * qty
+      const ratio = oldQty > 0 ? (oldQty - qty) / oldQty : 0
+      item.lineDiscount = Math.round(item.lineDiscount * ratio)
+      item.qty = Number((oldQty - qty).toFixed(3))
+      // Devuelve el stock (los servicios "srv:" no tienen inventario)
+      if (!item.productId.startsWith('srv:')) {
+        const st = await db.stock.get(`${sale.locationId}:${item.productId}`)
+        if (st) {
+          st.quantity = Number((st.quantity + qty).toFixed(3))
+          st.updatedAt = now
+          await db.stock.put(st)
+        }
+        await db.stockMovements.put({
+          id: uid('mv'), tenantId: sale.tenantId, locationId: sale.locationId,
+          productId: item.productId, type: 'devolucion', qty, refId: sale.id, userId, createdAt: now,
+        })
+      }
+      sale.returns = [...(sale.returns ?? []), { productId: r.productId, qty, at: now }]
+    }
+    sale.items = sale.items.filter((it) => it.qty > 0)
+    const subtotal = sale.items.reduce((s, it) => s + it.unitPrice * it.qty - it.lineDiscount, 0)
+    sale.subtotal = Math.round(subtotal)
+    sale.total = Math.max(0, Math.round(subtotal - sale.discount))
+    if (!sale.creditNoteNumber) sale.creditNoteNumber = nextCreditNoteNumber()
+    if (sale.items.length === 0) sale.status = 'devuelta'
+    await db.sales.put(sale)
+  })
+  await audit({
+    tenantId: sale.tenantId,
+    locationId: sale.locationId,
+    userId,
+    userName,
+    action: 'devolución parcial',
+    entity: 'venta',
+    entityId: sale.id,
+    detail: `Devolución por ${refund} · nota crédito ${sale.creditNoteNumber}`,
+  })
+  return refund
+}
+
 // ---- Ajuste manual de stock (entrada/conteo) ------------------------------
 export async function adjustStock(args: {
   locationId: string
@@ -404,6 +469,15 @@ export async function createPurchaseOrder(
   }
   await db.purchaseOrders.put(po)
   return po
+}
+
+// Marcar un pedido como pagado al proveedor (cuentas por pagar).
+export async function markPurchaseOrderPaid(poId: string): Promise<void> {
+  const po = await db.purchaseOrders.get(poId)
+  if (!po) return
+  po.paid = true
+  po.paidAt = new Date().toISOString()
+  await db.purchaseOrders.put(po)
 }
 
 // Recibir mercancía: confirmar qué llegó de verdad y sumar al stock.

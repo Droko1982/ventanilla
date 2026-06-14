@@ -63,6 +63,13 @@ export interface Location {
 }
 
 // --- Usuarios ----------------------------------------------------------------
+export interface UserPermissions {
+  canDiscount?: boolean // puede aplicar descuentos / redondeo
+  canManageInventory?: boolean // puede crear/editar productos y ajustar stock
+  canVoid?: boolean // puede anular / hacer devoluciones
+  canCashMovement?: boolean // puede registrar ingresos/egresos de caja
+}
+
 export interface User {
   id: string
   tenantId: string | null // null para el super-admin de la plataforma
@@ -71,6 +78,7 @@ export interface User {
   pin: string // 4 dígitos para empleados (y admin en demo)
   email?: string
   locationId?: string // empleado: su local asignado
+  permissions?: UserPermissions // permisos finos (sólo aplican a empleados)
   active: boolean
 }
 
@@ -100,6 +108,8 @@ export interface Product {
   photo?: string // foto real del producto (dataURL, opcional)
   brand?: string // marca (opcional)
   description?: string // detalles / descripción (opcional)
+  wholesalePrice?: number // precio al por mayor (opcional)
+  wholesaleMinQty?: number // cantidad mínima para el precio al por mayor
   active: boolean
   createdAt: string
 }
@@ -160,6 +170,8 @@ export interface Sale {
   note?: string
   editedFromId?: string // si es una edición de otra venta (auditoría)
   remisionId?: string // si la factura se generó a partir de una remisión
+  returns?: { productId: string; qty: number; at: string }[] // devoluciones parciales
+  creditNoteNumber?: string // nota crédito por devolución
   createdAt: string
   syncedAt?: string // null mientras está sólo en local (offline)
 }
@@ -232,6 +244,8 @@ export interface PurchaseOrder {
   sentAt?: string
   receivedAt?: string
   expectedAt?: string
+  paid?: boolean // cuentas por pagar: ¿ya se le pagó al proveedor?
+  paidAt?: string
 }
 
 // --- Movimientos de stock (entradas, traslados, ajustes, devoluciones) -------

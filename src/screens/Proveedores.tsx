@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { useActiveLocationId, useSuppliers, useCurrentUser, useLocations } from '@/hooks/data'
-import { suggestReorder, createPurchaseOrder, receivePurchase, type ReorderSuggestion } from '@/data/repo'
+import { suggestReorder, createPurchaseOrder, receivePurchase, markPurchaseOrderPaid, type ReorderSuggestion } from '@/data/repo'
 import { Sheet } from '@/components/Sheet'
 import { Segmented, EmptyState, PageHeader } from '@/components/ui'
 import { Icon } from '@/components/icons'
@@ -20,7 +20,7 @@ export default function Proveedores() {
   const suppliers = useSuppliers()
   const locations = useLocations()
   const user = useCurrentUser()
-  const [tab, setTab] = useState<'reabastecer' | 'proveedores' | 'pedidos'>('reabastecer')
+  const [tab, setTab] = useState<'reabastecer' | 'proveedores' | 'pedidos' | 'porpagar'>('reabastecer')
   const [editSupplier, setEditSupplier] = useState<Supplier | null>(null)
   const [addOpen, setAddOpen] = useState(false)
 
@@ -46,6 +46,15 @@ export default function Proveedores() {
   const supplierById = useMemo(() => new Map((suppliers ?? []).map((s) => [s.id, s])), [suppliers])
   const activeLoc = locations?.find((l) => l.id === locationId)
 
+  // Cuentas por pagar: pedidos recibidos aún no pagados
+  const poDebt = (po: { items: { receivedQty?: number; suggestedQty: number; cost: number }[] }) =>
+    po.items.reduce((a, it) => a + (it.receivedQty ?? it.suggestedQty) * it.cost, 0)
+  const payables = useMemo(
+    () => (orders ?? []).filter((po) => po.status === 'recibido' && !po.paid),
+    [orders],
+  )
+  const totalDebt = payables.reduce((s, po) => s + poDebt(po), 0)
+
   return (
     <div>
       <PageHeader title="Proveedores" subtitle={activeLoc?.name} />
@@ -57,6 +66,7 @@ export default function Proveedores() {
           options={[
             { value: 'reabastecer', label: 'Reabastecer' },
             { value: 'pedidos', label: 'Pedidos' },
+            { value: 'porpagar', label: 'Por pagar' },
             { value: 'proveedores', label: 'Directorio' },
           ]}
         />
@@ -145,6 +155,34 @@ export default function Proveedores() {
           {(orders?.length ?? 0) === 0 && <EmptyState emoji="📦" title="Sin pedidos" hint="Crea pedidos desde la pestaña Reabastecer." />}
           {orders?.map((po) => (
             <PurchaseOrderCard key={po.id} po={po} supplierName={supplierById.get(po.supplierId)?.name} userId={user!.id} userName={user!.name} />
+          ))}
+        </div>
+      )}
+
+      {tab === 'porpagar' && (
+        <div className="space-y-3">
+          <div className="card flex items-center justify-between p-4">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Total por pagar</p>
+              <p className="text-2xl font-bold text-rose-600">{cop(totalDebt)}</p>
+            </div>
+            <span className="text-3xl">💳</span>
+          </div>
+          {payables.length === 0 && <EmptyState emoji="✅" title="Sin cuentas por pagar" hint="No le debes a ningún proveedor." />}
+          {payables.map((po) => (
+            <div key={po.id} className="card flex items-center gap-3 p-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-slate-700">{supplierById.get(po.supplierId)?.name ?? 'Proveedor'}</p>
+                <p className="text-xs text-slate-400">Recibido {fmtDateTime(po.receivedAt ?? po.createdAt)} · {po.items.length} productos</p>
+              </div>
+              <span className="font-bold text-rose-600">{cop(poDebt(po))}</span>
+              <button
+                onClick={async () => { await markPurchaseOrderPaid(po.id); toast('success', 'Marcado como pagado') }}
+                className="btn btn-success px-3 py-2 text-xs"
+              >
+                Pagar
+              </button>
+            </div>
           ))}
         </div>
       )}

@@ -24,6 +24,7 @@ import { recordSale } from '@/data/repo'
 import { receiptText, printReceipt } from '@/lib/receipt'
 import { waLink, mailtoLink } from '@/lib/whatsapp'
 import { useSession } from '@/store/session'
+import { can } from '@/lib/permissions'
 import type { Payment, PaymentMethod, Product, Sale } from '@/types'
 
 export default function POS() {
@@ -44,8 +45,12 @@ export default function POS() {
   const [cartOpen, setCartOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
   const [quickAdd, setQuickAdd] = useState(false)
+  const [scanCreateCode, setScanCreateCode] = useState<string | undefined>()
   const [serviceOpen, setServiceOpen] = useState(false)
   const [receipt, setReceipt] = useState<Sale | null>(null)
+
+  const canManage = can(user, 'canManageInventory')
+  const canDiscount = can(user, 'canDiscount')
 
   const stockMap = useMemo(() => {
     const m = new Map<string, number>()
@@ -89,14 +94,19 @@ export default function POS() {
   const handleScan = useCallback(
     (code: string) => {
       const found = (products ?? []).find((p) => p.barcode === code || p.internalCode === code)
+      setScanOpen(false)
       if (found) {
         addToCart(found)
+      } else if (canManage) {
+        // Código desconocido → crear el producto con ese código precargado
+        setScanCreateCode(code)
+        setQuickAdd(true)
+        toast('info', `Código nuevo: regístralo`)
       } else {
         toast('error', `Código ${code} no está registrado`)
       }
-      setScanOpen(false)
     },
-    [products, addToCart],
+    [products, addToCart, canManage],
   )
 
   // Lector físico USB/Bluetooth siempre activo en el POS
@@ -137,13 +147,15 @@ export default function POS() {
 
       {/* Grilla de productos */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        <button
-          onClick={() => setQuickAdd(true)}
-          className="flex flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-slate-300 p-3 text-slate-400 active:scale-[0.98]"
-        >
-          <Icon name="plus" className="h-7 w-7" />
-          <span className="text-xs font-semibold">Producto nuevo</span>
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setQuickAdd(true)}
+            className="flex flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-slate-300 p-3 text-slate-400 active:scale-[0.98]"
+          >
+            <Icon name="plus" className="h-7 w-7" />
+            <span className="text-xs font-semibold">Producto nuevo</span>
+          </button>
+        )}
 
         <button
           onClick={() => setServiceOpen(true)}
@@ -172,6 +184,9 @@ export default function POS() {
                 {cop(p.price)}
                 {p.unit === 'peso' && <span className="text-xs font-normal text-slate-400">/kg</span>}
               </span>
+              {p.wholesalePrice && p.wholesaleMinQty ? (
+                <span className="text-[10px] font-medium text-emerald-600">x{p.wholesaleMinQty}+ {cop(p.wholesalePrice)}</span>
+              ) : null}
               <span className={`mt-0.5 text-[11px] ${out ? 'text-rose-500' : 'text-slate-400'}`}>
                 {out ? 'Agotado' : `${p.unit === 'peso' ? kg(qty) : qty} en stock`}
               </span>
@@ -216,7 +231,7 @@ export default function POS() {
         />
       )}
 
-      <CartSheet open={cartOpen} onClose={() => setCartOpen(false)} onCheckout={() => { setCartOpen(false); setPayOpen(true) }} />
+      <CartSheet open={cartOpen} canDiscount={canDiscount} onClose={() => setCartOpen(false)} onCheckout={() => { setCartOpen(false); setPayOpen(true) }} />
 
       {payOpen && (
         <PaymentSheet
@@ -258,13 +273,14 @@ export default function POS() {
       {quickAdd && products && categories && suppliers && locations && (
         <ProductForm
           open={quickAdd}
-          onClose={() => setQuickAdd(false)}
+          onClose={() => { setQuickAdd(false); setScanCreateCode(undefined) }}
           tenantId={tenantId}
           locations={locations}
           categories={categories}
           suppliers={suppliers}
           defaultLocationId={locationId}
-          onSaved={(p) => addToCart(p)}
+          initialBarcode={scanCreateCode}
+          onSaved={(p) => { addToCart(p); setScanCreateCode(undefined) }}
         />
       )}
 
@@ -423,7 +439,7 @@ function WeightSheet({ product, onClose, onConfirm }: { product: Product; onClos
 }
 
 // --- Carrito ----------------------------------------------------------------
-function CartSheet({ open, onClose, onCheckout }: { open: boolean; onClose: () => void; onCheckout: () => void }) {
+function CartSheet({ open, canDiscount, onClose, onCheckout }: { open: boolean; canDiscount: boolean; onClose: () => void; onCheckout: () => void }) {
   const cart = useCart()
   const subtotal = cartSubtotal(cart.lines)
   const total = cartTotal(cart.lines, cart.globalDiscount)
@@ -440,27 +456,31 @@ function CartSheet({ open, onClose, onCheckout }: { open: boolean; onClose: () =
             <span>Subtotal</span>
             <span>{cop(subtotal)}</span>
           </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-500">Descuento venta</span>
-            <input
-              className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-right"
-              inputMode="numeric"
-              value={cart.globalDiscount || ''}
-              onChange={(e) => cart.setGlobalDiscount(parseCop(e.target.value))}
-              placeholder="$ 0"
-            />
-          </div>
-          <div className="flex justify-end">
-            <button
-              onClick={() => {
-                const rem = total % 50
-                if (rem) cart.setGlobalDiscount(cart.globalDiscount + rem)
-              }}
-              className="text-xs font-medium text-brand-600"
-            >
-              Redondear total a $50 ↓
-            </button>
-          </div>
+          {canDiscount && (
+            <>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Descuento venta</span>
+                <input
+                  className="w-28 rounded-lg border border-slate-200 px-2 py-1 text-right"
+                  inputMode="numeric"
+                  value={cart.globalDiscount || ''}
+                  onChange={(e) => cart.setGlobalDiscount(parseCop(e.target.value))}
+                  placeholder="$ 0"
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={() => {
+                    const rem = total % 50
+                    if (rem) cart.setGlobalDiscount(cart.globalDiscount + rem)
+                  }}
+                  className="text-xs font-medium text-brand-600"
+                >
+                  Redondear total a $50 ↓
+                </button>
+              </div>
+            </>
+          )}
           <div className="flex items-center justify-between text-lg font-bold">
             <span>Total</span>
             <span className="text-brand-700">{cop(total)}</span>
@@ -485,9 +505,11 @@ function CartSheet({ open, onClose, onCheckout }: { open: boolean; onClose: () =
                   {l.unit === 'peso' ? '/kg' : ' c/u'}
                   {l.lineDiscount > 0 && <span className="text-emerald-600"> · -{cop(l.lineDiscount)}</span>}
                 </p>
-                <button onClick={() => setDiscProduct(l)} className="mt-0.5 text-[11px] font-medium text-brand-600">
-                  + descuento
-                </button>
+                {canDiscount && (
+                  <button onClick={() => setDiscProduct(l)} className="mt-0.5 text-[11px] font-medium text-brand-600">
+                    + descuento
+                  </button>
+                )}
               </div>
               {l.unit === 'peso' ? (
                 <span className="text-sm font-semibold">{kg(l.qty)}</span>

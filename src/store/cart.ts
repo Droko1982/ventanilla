@@ -7,11 +7,21 @@ export interface CartLine {
   name: string
   unit: 'unidad' | 'peso'
   qty: number
-  unitPrice: number
+  unitPrice: number // precio efectivo (al detal o por mayor según cantidad)
+  basePrice?: number // precio al detal
+  wholesalePrice?: number // precio al por mayor
+  wholesaleMinQty?: number // cantidad mínima para el por mayor
   lineDiscount: number
   ivaRate: number
   cost: number
   emoji?: string
+}
+
+// Precio efectivo según la cantidad (aplica por mayor si corresponde).
+function effPrice(l: Pick<CartLine, 'basePrice' | 'unitPrice' | 'wholesalePrice' | 'wholesaleMinQty'>, qty: number): number {
+  const base = l.basePrice ?? l.unitPrice
+  if (l.wholesalePrice && l.wholesaleMinQty && qty >= l.wholesaleMinQty) return l.wholesalePrice
+  return base
 }
 
 interface CartState {
@@ -36,29 +46,30 @@ export const useCart = create<CartState>((set) => ({
       // Por peso siempre se agrega/edita la cantidad indicada; por unidad se suma.
       if (existing) {
         return {
-          lines: s.lines.map((l) =>
-            l.productId === p.id
-              ? { ...l, qty: p.unit === 'peso' ? (qty ?? l.qty) : l.qty + (qty ?? 1) }
-              : l,
-          ),
+          lines: s.lines.map((l) => {
+            if (l.productId !== p.id) return l
+            const newQty = p.unit === 'peso' ? (qty ?? l.qty) : l.qty + (qty ?? 1)
+            return { ...l, qty: newQty, unitPrice: effPrice(l, newQty) }
+          }),
         }
       }
-      return {
-        lines: [
-          ...s.lines,
-          {
-            productId: p.id,
-            name: p.name,
-            unit: p.unit,
-            qty: qty ?? 1,
-            unitPrice: p.price,
-            lineDiscount: 0,
-            ivaRate: p.ivaRate,
-            cost: p.cost,
-            emoji: p.imageEmoji,
-          },
-        ],
+      const newQty = qty ?? 1
+      const line: CartLine = {
+        productId: p.id,
+        name: p.name,
+        unit: p.unit,
+        qty: newQty,
+        basePrice: p.price,
+        wholesalePrice: p.wholesalePrice,
+        wholesaleMinQty: p.wholesaleMinQty,
+        unitPrice: p.price,
+        lineDiscount: 0,
+        ivaRate: p.ivaRate,
+        cost: p.cost,
+        emoji: p.imageEmoji,
       }
+      line.unitPrice = effPrice(line, newQty)
+      return { lines: [...s.lines, line] }
     }),
 
   addLine: (line) => set((s) => ({ lines: [...s.lines, line] })),
@@ -68,7 +79,7 @@ export const useCart = create<CartState>((set) => ({
       lines:
         qty <= 0
           ? s.lines.filter((l) => l.productId !== productId)
-          : s.lines.map((l) => (l.productId === productId ? { ...l, qty } : l)),
+          : s.lines.map((l) => (l.productId === productId ? { ...l, qty, unitPrice: effPrice(l, qty) } : l)),
     })),
 
   setLineDiscount: (productId, discount) =>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useScopeSales, useLocations, useCurrentUser, useTenant } from '@/hooks/data'
-import { transmitDian, voidSale } from '@/data/repo'
+import { transmitDian, voidSale, returnSaleItems } from '@/data/repo'
 import { Sheet } from '@/components/Sheet'
 import { Segmented, EmptyState, PageHeader, DianChip, Money } from '@/components/ui'
 import { Icon } from '@/components/icons'
@@ -98,6 +98,8 @@ function SaleDetail({
 }: {
   sale: Sale; locName: string; tenantName: string; onClose: () => void; onTransmit: () => void; onVoid: () => void
 }) {
+  const user = useCurrentUser()
+  const [returnOpen, setReturnOpen] = useState(false)
   return (
     <Sheet open onClose={onClose} title={`Venta · ${fmtTime(sale.createdAt)}`}>
       <div className="space-y-4">
@@ -159,15 +161,88 @@ function SaleDetail({
           </div>
         )}
 
-        {/* Anular / devolver */}
+        {/* Devolución parcial / anular */}
+        {sale.status === 'completada' && sale.items.length > 0 && (
+          <button onClick={() => setReturnOpen(true)} className="btn btn-secondary w-full text-amber-600">
+            <Icon name="arrow-left" className="h-5 w-5" /> Devolución parcial (algunos ítems)
+          </button>
+        )}
         {sale.status === 'completada' && (
           <button onClick={onVoid} className="btn btn-secondary w-full text-rose-600">
-            <Icon name="trash" className="h-5 w-5" /> Anular venta (devolución + nota crédito)
+            <Icon name="trash" className="h-5 w-5" /> Anular venta completa (nota crédito)
           </button>
+        )}
+        {sale.creditNoteNumber && (
+          <p className="rounded-xl bg-amber-50 p-2 text-center text-xs text-amber-700">Nota crédito: {sale.creditNoteNumber}</p>
         )}
         {sale.status === 'anulada' && (
           <p className="rounded-xl bg-rose-50 p-3 text-center text-sm text-rose-600">Venta anulada. El stock fue devuelto.</p>
         )}
+      </div>
+
+      {returnOpen && (
+        <ReturnSheet
+          sale={sale}
+          onClose={() => setReturnOpen(false)}
+          onDone={async (returns) => {
+            const refund = await returnSaleItems(sale.id, returns, user!.id, user!.name)
+            toast('success', refund > 0 ? `Devolución por ${cop(refund)} · nota crédito` : 'Sin ítems para devolver')
+            setReturnOpen(false)
+            onClose()
+          }}
+        />
+      )}
+    </Sheet>
+  )
+}
+
+function ReturnSheet({
+  sale, onClose, onDone,
+}: {
+  sale: Sale
+  onClose: () => void
+  onDone: (returns: { productId: string; qty: number }[]) => void
+}) {
+  const [qtys, setQtys] = useState<Record<string, number>>({})
+  const total = sale.items.reduce((s, it) => s + it.unitPrice * (qtys[it.productId] ?? 0), 0)
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title="Devolución parcial"
+      footer={
+        <button
+          className="btn btn-danger btn-lg w-full"
+          disabled={total <= 0}
+          onClick={() => onDone(sale.items.map((it) => ({ productId: it.productId, qty: qtys[it.productId] ?? 0 })))}
+        >
+          Devolver · {cop(total)}
+        </button>
+      }
+    >
+      <p className="mb-3 text-sm text-slate-500">Elige cuántas unidades de cada ítem devuelve el cliente. Se reintegra el stock y se genera nota crédito.</p>
+      <div className="space-y-2">
+        {sale.items.map((it) => {
+          const max = it.unit === 'peso' ? it.qty : Math.floor(it.qty)
+          const val = qtys[it.productId] ?? 0
+          return (
+            <div key={it.productId} className="flex items-center gap-2 rounded-xl border border-slate-100 p-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-slate-700">{it.name}</p>
+                <p className="text-xs text-slate-400">Vendido: {it.unit === 'peso' ? kg(it.qty) : it.qty} · {cop(it.unitPrice)}</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => setQtys({ ...qtys, [it.productId]: Math.max(0, val - 1) })} className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100">
+                  <Icon name="minus" className="h-4 w-4" />
+                </button>
+                <span className="w-8 text-center font-bold">{val}</span>
+                <button onClick={() => setQtys({ ...qtys, [it.productId]: Math.min(max, val + 1) })} className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                  <Icon name="plus" className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </Sheet>
   )

@@ -178,6 +178,55 @@ async function main() {
   await page.keyboard.press('Escape')
   await sleep(400)
 
+  // 4f) Dashboard: cambiar granularidad día/semana/mes/año
+  ctx = 'dashboard-periodos'
+  await page.evaluate(() => { location.hash = '#/' })
+  await sleep(800)
+  await clickText(page, 'Año')
+  await sleep(500)
+  await clickText(page, 'Mes')
+  await sleep(500)
+  await clickText(page, 'Día')
+  await sleep(500)
+  console.log('✓ Dashboard: históricos día/semana/mes/año')
+
+  // 4g) Precio al por mayor visible en POS
+  ctx = 'por-mayor'
+  await page.evaluate(() => { location.hash = '#/pos' })
+  await sleep(800)
+  txt = await bodyText(page)
+  if (!/x6\+/.test(txt)) console.log('· (aviso) no se vio la pista de precio por mayor')
+  else console.log('✓ Precio al por mayor visible en POS')
+
+  // 4h) Proveedores: cuentas por pagar
+  ctx = 'cuentas-por-pagar'
+  await page.evaluate(() => { location.hash = '#/proveedores' })
+  await sleep(1100)
+  await clickText(page, 'Por pagar')
+  await sleep(900)
+  txt = await bodyText(page)
+  if (!/total por pagar/i.test(txt)) throw new Error('Cuentas por pagar no renderizó')
+  console.log('✓ Proveedores: cuentas por pagar')
+
+  // 4i) Ventas: devolución parcial (abre la hoja)
+  ctx = 'devolucion-parcial'
+  await page.evaluate(() => { location.hash = '#/ventas' })
+  await sleep(800)
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('button')].find((x) => / items/.test(x.textContent || ''))
+    if (b) b.click()
+  })
+  await sleep(700)
+  await clickText(page, 'Devolución parcial')
+  await sleep(600)
+  txt = await bodyText(page)
+  if (!/Devolver ·/.test(txt)) throw new Error('Devolución parcial no abrió')
+  console.log('✓ Ventas: devolución parcial')
+  await page.keyboard.press('Escape')
+  await sleep(300)
+  await page.keyboard.press('Escape')
+  await sleep(300)
+
   // 5) Cerrar sesión y entrar como Super-Admin
   ctx = 'login-super'
   await page.evaluate(() => { localStorage.removeItem('ventanilla-session') })
@@ -207,6 +256,25 @@ async function main() {
   txt = await bodyText(page)
   if (!/Producto nuevo/.test(txt)) throw new Error('POS del cajero no renderizó tras el PIN')
   console.log('✓ Login cajero por PIN → POS renderiza')
+
+  // 6b) Permisos: cajera con permisos limitados (Laura, PIN 2345) sin "Producto nuevo"
+  ctx = 'permisos'
+  await page.evaluate(() => { localStorage.removeItem('ventanilla-session') })
+  await page.goto(BASE, { waitUntil: 'networkidle2' })
+  await sleep(1200)
+  await clickText(page, 'Cajero / Empleado')
+  await sleep(600)
+  for (const d of ['2', '3', '4', '5']) {
+    await page.evaluate((digit) => {
+      const b = [...document.querySelectorAll('button')].find((x) => x.textContent?.trim() === digit)
+      if (b) b.click()
+    }, d)
+    await sleep(150)
+  }
+  await sleep(1500)
+  txt = await bodyText(page)
+  if (/Producto nuevo/.test(txt)) throw new Error('Permiso fallido: Laura no debería poder crear productos')
+  console.log('✓ Permisos: cajera limitada sin "Producto nuevo"')
 
   // 7) Landing de Ventanilla (página de presentación)
   ctx = 'landing'

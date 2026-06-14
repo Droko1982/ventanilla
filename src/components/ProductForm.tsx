@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Sheet } from './Sheet'
+import { Scanner } from './Scanner'
+import { Icon } from './icons'
 import { toast } from './Toast'
 import { db } from '@/data/db'
 import { uid, internalCode } from '@/lib/id'
@@ -19,6 +21,7 @@ export function ProductForm({
   product,
   defaultLocationId,
   onSaved,
+  initialBarcode,
 }: {
   open: boolean
   onClose: () => void
@@ -29,10 +32,12 @@ export function ProductForm({
   product?: Product
   defaultLocationId?: string | null
   onSaved?: (p: Product) => void
+  initialBarcode?: string
 }) {
   const editing = !!product
   const [name, setName] = useState(product?.name ?? '')
-  const [barcode, setBarcode] = useState(product?.barcode ?? '')
+  const [barcode, setBarcode] = useState(product?.barcode ?? initialBarcode ?? '')
+  const [scanOpen, setScanOpen] = useState(false)
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? categories[0]?.id ?? '')
   const [unit, setUnit] = useState<'unidad' | 'peso'>(product?.unit ?? 'unidad')
   const [price, setPrice] = useState(product ? String(product.price) : '')
@@ -44,6 +49,8 @@ export function ProductForm({
   const [photo, setPhoto] = useState(product?.photo ?? '')
   const [brand, setBrand] = useState(product?.brand ?? '')
   const [description, setDescription] = useState(product?.description ?? '')
+  const [wholesalePrice, setWholesalePrice] = useState(product?.wholesalePrice ? String(product.wholesalePrice) : '')
+  const [wholesaleMinQty, setWholesaleMinQty] = useState(product?.wholesaleMinQty ? String(product.wholesaleMinQty) : '')
   const [uploading, setUploading] = useState(false)
   const [initialQty, setInitialQty] = useState('')
   const [saving, setSaving] = useState(false)
@@ -84,6 +91,8 @@ export function ProductForm({
       photo: photo || undefined,
       brand: brand.trim() || undefined,
       description: description.trim() || undefined,
+      wholesalePrice: parseCop(wholesalePrice) || undefined,
+      wholesaleMinQty: parseInt(wholesaleMinQty || '0', 10) || undefined,
       active: product?.active ?? true,
       createdAt: product?.createdAt ?? new Date().toISOString(),
     }
@@ -220,8 +229,24 @@ export function ProductForm({
             </select>
           </div>
           <div>
-            <label className="label">Código de barras</label>
-            <input className="input" value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Opcional" />
+            <label className="label">Código de barras / QR</label>
+            <div className="flex gap-2">
+              <input className="input" value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Manual o escanear" />
+              <button type="button" onClick={() => setScanOpen(true)} className="btn btn-secondary px-3" aria-label="Escanear código">
+                <Icon name="scan" className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Precio por mayor (opcional)</label>
+            <input className="input" inputMode="numeric" value={wholesalePrice} onChange={(e) => setWholesalePrice(e.target.value)} placeholder="$" />
+          </div>
+          <div>
+            <label className="label">Desde cuántas unidades</label>
+            <input className="input" inputMode="numeric" value={wholesaleMinQty} onChange={(e) => setWholesaleMinQty(e.target.value)} placeholder="Ej. 6" />
           </div>
         </div>
 
@@ -265,6 +290,16 @@ export function ProductForm({
           </p>
         )}
       </div>
+
+      <Scanner
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onDetected={(code) => {
+          setBarcode(code)
+          setScanOpen(false)
+          toast('success', `Código ${code} capturado`)
+        }}
+      />
     </Sheet>
   )
 }

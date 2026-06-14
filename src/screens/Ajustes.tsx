@@ -174,6 +174,19 @@ function EmployeeForm({ employee, tenantId, locations, onClose }: { employee?: U
   const [name, setName] = useState(employee?.name ?? '')
   const [pin, setPin] = useState(employee?.pin ?? '')
   const [locationId, setLocationId] = useState(employee?.locationId ?? locations[0]?.id ?? '')
+  const p = employee?.permissions
+  const [canDiscount, setCanDiscount] = useState(p?.canDiscount !== false)
+  const [canManageInventory, setCanManageInventory] = useState(p?.canManageInventory !== false)
+  const [canCashMovement, setCanCashMovement] = useState(p?.canCashMovement !== false)
+  const [canVoid, setCanVoid] = useState(p?.canVoid !== false)
+
+  const perms = [
+    { label: 'Aplicar descuentos y redondeo', val: canDiscount, set: setCanDiscount },
+    { label: 'Crear/editar productos y stock', val: canManageInventory, set: setCanManageInventory },
+    { label: 'Registrar ingresos/egresos de caja', val: canCashMovement, set: setCanCashMovement },
+    { label: 'Anular ventas y devoluciones', val: canVoid, set: setCanVoid },
+  ]
+
   return (
     <Sheet
       open onClose={onClose} title={employee ? 'Editar empleado' : 'Nuevo empleado'}
@@ -184,6 +197,7 @@ function EmployeeForm({ employee, tenantId, locations, onClose }: { employee?: U
           await db.users.put({
             id: employee?.id ?? uid('u'), tenantId, name: name.trim(), role: 'empleado',
             pin, locationId, active: employee?.active ?? true,
+            permissions: { canDiscount, canManageInventory, canCashMovement, canVoid },
           })
           toast('success', 'Empleado guardado')
           onClose()
@@ -198,6 +212,17 @@ function EmployeeForm({ employee, tenantId, locations, onClose }: { employee?: U
           <select className="input" value={locationId} onChange={(e) => setLocationId(e.target.value)}>
             {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
+        </div>
+        <div>
+          <label className="label">Permisos</label>
+          <div className="space-y-1.5">
+            {perms.map((pm) => (
+              <label key={pm.label} className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2">
+                <input type="checkbox" checked={pm.val} onChange={(e) => pm.set(e.target.checked)} className="h-5 w-5" />
+                <span className="text-sm text-slate-600">{pm.label}</span>
+              </label>
+            ))}
+          </div>
         </div>
       </div>
     </Sheet>
