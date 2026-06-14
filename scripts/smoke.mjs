@@ -376,7 +376,11 @@ async function main() {
   await sleep(600)
   txt = await bodyText(page)
   if (!/Actual/.test(txt)) throw new Error('Cambio de precio no renderizó')
-  console.log('✓ Ajustes de inventario (entradas/salidas, precio, sección)')
+  await clickText(page, 'Vence')
+  await sleep(600)
+  txt = await bodyText(page)
+  if (!/(Vence|Vencido|Sin fecha)/.test(txt)) throw new Error('Control de vencimientos no renderizó')
+  console.log('✓ Ajustes de inventario (entradas/salidas, precio, sección, vencimientos)')
 
   // 4h-septies) Eventos Recepción DIAN
   ctx = 'eventos-recepcion'

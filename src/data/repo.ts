@@ -420,18 +420,21 @@ export async function stockMove(args: {
   reason: string
   userId: string
   userName: string
+  expiry?: string // fecha de vencimiento del lote (solo perecederos en entradas)
 }): Promise<void> {
   const now = new Date().toISOString()
   const stockId = `${args.locationId}:${args.productId}`
   const st = await db.stock.get(stockId)
   if (st) {
     st.quantity = Number((st.quantity + args.delta).toFixed(3))
+    // Guarda la fecha de vencimiento más próxima (la del lote que entra si es más cercana o no había)
+    if (args.expiry && (!st.nearestExpiry || args.expiry < st.nearestExpiry)) st.nearestExpiry = args.expiry
     st.updatedAt = now
     await db.stock.put(st)
   } else if (args.delta > 0) {
     await db.stock.put({
       id: stockId, tenantId: args.tenantId, locationId: args.locationId, productId: args.productId,
-      quantity: args.delta, reorderThreshold: 4, reorderTarget: 12, updatedAt: now,
+      quantity: args.delta, reorderThreshold: 4, reorderTarget: 12, nearestExpiry: args.expiry, updatedAt: now,
     })
   }
   await db.stockMovements.put({
@@ -443,6 +446,24 @@ export async function stockMove(args: {
     action: args.delta >= 0 ? 'entrada de inventario' : 'salida de inventario',
     entity: 'producto', entityId: args.productId,
     detail: `${args.delta >= 0 ? '+' : ''}${args.delta} · ${args.reason}`,
+  })
+}
+
+// Fija o corrige la fecha de vencimiento del lote de un producto en un local.
+export async function setStockExpiry(
+  locationId: string, productId: string, expiry: string | undefined,
+  meta: { tenantId: string; userId: string; userName: string; productName: string },
+): Promise<void> {
+  const stockId = `${locationId}:${productId}`
+  const st = await db.stock.get(stockId)
+  if (!st) return
+  st.nearestExpiry = expiry
+  st.updatedAt = new Date().toISOString()
+  await db.stock.put(st)
+  await audit({
+    tenantId: meta.tenantId, locationId, userId: meta.userId, userName: meta.userName,
+    action: 'cambió vencimiento', entity: 'producto', entityId: productId,
+    detail: `${meta.productName} → ${expiry ? `vence ${expiry.slice(0, 10)}` : 'sin fecha'}`,
   })
 }
 

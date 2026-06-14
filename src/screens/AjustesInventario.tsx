@@ -3,15 +3,16 @@ import {
   useActiveLocationId, useProducts, useStockForLocation, useCurrentUser,
 } from '@/hooks/data'
 import { db } from '@/data/db'
-import { stockMove, audit } from '@/data/repo'
+import { stockMove, setStockExpiry, audit } from '@/data/repo'
 import { Segmented, EmptyState, PageHeader } from '@/components/ui'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
 import { cop, parseCop, kg } from '@/lib/money'
+import { daysUntil } from '@/lib/format'
 import { useSession } from '@/store/session'
 import type { Product, Stock } from '@/types'
 
-type Mode = 'entrada' | 'salida' | 'precio' | 'seccion'
+type Mode = 'entrada' | 'salida' | 'precio' | 'seccion' | 'vence'
 
 export default function AjustesInventario() {
   const tenantId = useSession((s) => s.tenantId)!
@@ -31,7 +32,7 @@ export default function AjustesInventario() {
 
   return (
     <div>
-      <PageHeader title="Ajustes de inventario" subtitle="Entradas, salidas, precio y sección" />
+      <PageHeader title="Ajustes de inventario" subtitle="Entradas, salidas, precio, sección y vencimientos" />
       <div className="mb-4">
         <Segmented
           value={mode}
@@ -41,6 +42,7 @@ export default function AjustesInventario() {
             { value: 'salida', label: '⬇️ Salida' },
             { value: 'precio', label: '💲 Precio' },
             { value: 'seccion', label: '📍 Sección' },
+            { value: 'vence', label: '⏳ Vence' },
           ]}
         />
       </div>
@@ -68,6 +70,17 @@ export default function AjustesInventario() {
           locationId={locationId}
         />
       )}
+
+      {mode === 'vence' && user && (
+        <ExpiryManager
+          products={(products ?? []).filter((p) => p.active && p.perishable)}
+          stockMap={stockMap}
+          userId={user.id}
+          userName={user.name}
+          tenantId={tenantId}
+          locationId={locationId}
+        />
+      )}
     </div>
   )
 }
@@ -80,6 +93,7 @@ function MoveForm({ mode, products, stockMap, tenantId, locationId, userId, user
   const [code, setCode] = useState('')
   const [qty, setQty] = useState('')
   const [reason, setReason] = useState('')
+  const [expiry, setExpiry] = useState('')
   const [results, setResults] = useState<Product[]>([])
   const [sel, setSel] = useState<Product | null>(null)
   const [done, setDone] = useState<{ name: string; delta: number }[]>([])
@@ -102,10 +116,14 @@ function MoveForm({ mode, products, stockMap, tenantId, locationId, userId, user
     const n = parseFloat(qty.replace(',', '.')) || 0
     if (n <= 0) return toast('error', 'Cantidad inválida')
     const delta = mode === 'entrada' ? n : -n
-    await stockMove({ tenantId, locationId, productId: sel.id, delta, reason: reason || (mode === 'entrada' ? 'Entrada' : 'Salida'), userId, userName })
+    await stockMove({
+      tenantId, locationId, productId: sel.id, delta,
+      reason: reason || (mode === 'entrada' ? 'Entrada' : 'Salida'), userId, userName,
+      expiry: mode === 'entrada' && sel.perishable && expiry ? expiry : undefined,
+    })
     toast('success', mode === 'entrada' ? 'Entrada registrada' : 'Salida registrada')
     setDone((d) => [{ name: sel.name, delta }, ...d])
-    setCode(''); setQty(''); setReason(''); setSel(null); setResults([])
+    setCode(''); setQty(''); setReason(''); setExpiry(''); setSel(null); setResults([])
   }
 
   return (
@@ -136,6 +154,13 @@ function MoveForm({ mode, products, stockMap, tenantId, locationId, userId, user
           {reasons.map((r) => <button key={r} onClick={() => setReason(r)} className="shrink-0 rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-500">{r}</button>)}
         </div>
       </div>
+      {mode === 'entrada' && sel?.perishable && (
+        <div>
+          <label className="label">⏳ Vencimiento del lote (perecedero)</label>
+          <input className="input" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
+          <p className="mt-1 text-xs text-slate-400">Se usará para alertar antes de que se venza.</p>
+        </div>
+      )}
       <button onClick={apply} className={`btn btn-lg w-full ${mode === 'entrada' ? 'btn-success' : 'btn-danger'}`}>
         {mode === 'entrada' ? 'Registrar entrada' : 'Registrar salida'}
       </button>
@@ -213,6 +238,89 @@ function QuickEdit({ field, products, stockMap, userId, userName, tenantId, loca
         ))}
         {list.length === 0 && <EmptyState emoji="🔍" title="Sin productos" />}
       </div>
+    </div>
+  )
+}
+
+// --- Control de vencimientos (perecederos) ---------------------------------
+function ExpiryManager({ products, stockMap, userId, userName, tenantId, locationId }: {
+  products: Product[]; stockMap: Map<string, Stock>
+  userId: string; userName: string; tenantId: string; locationId: string
+}) {
+  const [vals, setVals] = useState<Record<string, string>>({})
+
+  // Ordena: primero lo que vence antes (o ya vencido), luego sin fecha.
+  const list = useMemo(() => {
+    return [...products].sort((a, b) => {
+      const da = stockMap.get(a.id)?.nearestExpiry
+      const dbx = stockMap.get(b.id)?.nearestExpiry
+      if (da && dbx) return da < dbx ? -1 : 1
+      if (da) return -1
+      if (dbx) return 1
+      return 0
+    })
+  }, [products, stockMap])
+
+  async function saveDate(p: Product) {
+    const raw = vals[p.id]
+    if (raw === undefined) return
+    await setStockExpiry(locationId, p.id, raw || undefined, { tenantId, userId, userName, productName: p.name })
+    toast('success', raw ? 'Vencimiento actualizado' : 'Fecha quitada')
+    setVals((v) => { const n = { ...v }; delete n[p.id]; return n })
+  }
+
+  async function darDeBaja(p: Product) {
+    const st = stockMap.get(p.id)
+    const qty = st?.quantity ?? 0
+    if (qty <= 0) return toast('error', 'Sin existencias para dar de baja')
+    await stockMove({ tenantId, locationId, productId: p.id, delta: -qty, reason: 'Vencido / merma', userId, userName })
+    await setStockExpiry(locationId, p.id, undefined, { tenantId, userId, userName, productName: p.name })
+    toast('success', `${p.name}: ${qty} dado(s) de baja por vencimiento`)
+  }
+
+  if (products.length === 0) {
+    return <EmptyState emoji="⏳" title="Sin perecederos" hint="Marca un producto como “perecedero” en su ficha para controlar su vencimiento." />
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+        Fija la fecha de vencimiento del lote en góndola. Te avisamos antes de que se venza para rebajarlo o retirarlo.
+      </p>
+      {list.map((p) => {
+        const st = stockMap.get(p.id)
+        const d = st?.nearestExpiry ? daysUntil(st.nearestExpiry) : null
+        const tone = d === null ? 'text-slate-400'
+          : d < 0 ? 'text-rose-600 font-semibold'
+          : d <= 7 ? 'text-amber-600 font-semibold'
+          : 'text-emerald-600'
+        const etiqueta = d === null ? 'Sin fecha'
+          : d < 0 ? `Vencido hace ${-d} día(s)`
+          : d === 0 ? 'Vence hoy'
+          : `Vence en ${d} día(s)`
+        return (
+          <div key={p.id} className="card p-2.5">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-slate-700">{p.imageEmoji} {p.name}</p>
+                <p className={`text-xs ${tone}`}>{etiqueta} · stock {st?.quantity ?? 0}</p>
+              </div>
+              <input
+                className="w-36 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                type="date"
+                value={vals[p.id] ?? (st?.nearestExpiry?.slice(0, 10) ?? '')}
+                onChange={(e) => setVals((v) => ({ ...v, [p.id]: e.target.value }))}
+              />
+              <button onClick={() => saveDate(p)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white"><Icon name="check" className="h-5 w-5" /></button>
+            </div>
+            {d !== null && d <= 7 && (st?.quantity ?? 0) > 0 && (
+              <button onClick={() => darDeBaja(p)} className="mt-2 w-full rounded-lg bg-rose-50 py-1.5 text-xs font-semibold text-rose-600">
+                Dar de baja por vencimiento (merma)
+              </button>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
