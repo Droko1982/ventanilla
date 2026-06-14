@@ -1,0 +1,25 @@
+# Despliegue GRATIS del backend en Render (plan free, sin tarjeta).
+# En Render: New → Blueprint → conecta el repo → detecta este archivo.
+# Pega DATABASE_URL (de Neon) y SUPERADMIN_PASSWORD cuando lo pida.
+services:
+  - type: web
+    name: ventanilla-api
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npx prisma db push --skip-generate --accept-data-loss && npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # se pega manualmente (cadena de conexión de Neon)
+      - key: JWT_SECRET
+        generateValue: true # Render genera un secreto seguro
+      - key: PORT
+        value: 10000
+      - key: CORS_ORIGIN
+        value: https://droko1982.github.io,http://localhost:5173
+      - key: SUPERADMIN_EMAIL
+        value: admin@ventanilla.co
+      - key: SUPERADMIN_PASSWORD
+        sync: false # define tu clave de super-admin
