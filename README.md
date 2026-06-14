@@ -28,11 +28,15 @@ POS, inventario, caja, **facturación electrónica (DIAN)**, remisiones, reporte
 ## ✨ Funciones
 
 - **POS:** código de barras/QR (cámara o lector USB/Bluetooth), por peso/granel, manual y por código interno; **recargas y servicios**; pagos efectivo (con vuelto), Nequi, tarjeta, transferencia, **fiado** y **mixto**; descuentos, **redondeo a $50**; recibo por impresión/correo/WhatsApp. Escanea un código nuevo → **crea el producto al instante**.
-- **Inventario:** stock por local, umbral de reorden dinámico, vencimientos con descuento sugerido, traslados entre locales, **kardex**, **fotos y detalles**, **precio al por mayor**, carga masiva CSV/Excel.
-- **Proveedores:** pedido sugerido por velocidad de venta, correo + WhatsApp listo, recepción de mercancía y **cuentas por pagar**.
-- **Caja:** apertura, **ingresos/egresos (sangría) y gastos**, cierre/arqueo y conciliación por método.
-- **Documentos:** documento equivalente POS, **factura electrónica de venta** (IVA discriminado), **remisiones** (convertibles a factura), notas crédito y **devoluciones parciales**. Conexión DIAN configurable por cliente (simulada en el demo).
-- **Dashboard y reportes:** históricos por **día / semana / mes / año** con navegación; márgenes, utilidad neta, más/menos vendidos, stock muerto y comparación entre locales (export CSV).
+- **Inventario:** stock por local, umbral de reorden dinámico, **control de vencimientos** (captura del lote, alertas y baja por merma), ajustes de entrada/salida con motivo, cambio rápido de precio/sección, traslados y **desempaque** (caja→unidad), **kardex**, **fotos y detalles**, **precio al por mayor**, **reporte de inventario general** (costo promedio, utilidad %, stock sugerido), carga masiva CSV/Excel.
+- **Compras:** factura de compra, **costo promedio ponderado**, último proveedor, devoluciones a proveedor y **cuentas por pagar**.
+- **Proveedores:** pedido sugerido por velocidad de venta, **reabastecimiento automático por WhatsApp** al bajar el stock, recepción de mercancía y deuda.
+- **Caja:** apertura, **ingresos/egresos (sangría) y gastos**, cierre/arqueo y conciliación por método, **resumen del día al WhatsApp del dueño** e **Informe Z** fiscal.
+- **Documentos:** documento equivalente POS, **factura electrónica de venta** (IVA discriminado), **remisiones** (convertibles a factura), notas crédito y débito, **devoluciones parciales** y **Eventos Recepción DIAN**. Conexión DIAN configurable por cliente (simulada en el demo).
+- **Cartera:** cuentas por cobrar (remisiones a crédito con vencimiento/atraso y fiado por cliente, con abonos).
+- **Domicilios:** entregas con repartidor, estado en vivo, mapa y aviso al cliente por WhatsApp.
+- **Hardware conectado (Web Serial):** **cajón monedero** (pulso ESC/POS, automático en ventas en efectivo), **báscula** para granel y **etiquetas con código de barras Code 128 escaneable**.
+- **Dashboard y reportes:** históricos por **día / semana / mes / año** con navegación; márgenes, utilidad neta, más/menos vendidos, stock muerto, **comisiones por vendedor** y comparación entre locales (export CSV).
 - **Clientes:** fiado/crédito, abonos y recordatorio por WhatsApp.
 - **Roles y permisos:** Super-Admin (plataforma), Admin (dueño) y Empleado con **permisos finos** (descuentos, inventario, caja, anulaciones).
 - **Offline / PWA:** instalable y funciona sin conexión; sincroniza al volver el internet.
@@ -117,7 +121,7 @@ Conectar la app a la nube: **Ajustes → Nube (multi-dispositivo)** (URL del API
 
 ## 🗺️ Próximas funciones sugeridas
 
-Combos/promociones, programa de puntos, variantes/presentaciones (caja→unidad), cotizaciones, lotes por vencimiento, etiquetas imprimibles, domicilios, pasarela de pago de la mensualidad (Wompi/PSE), respaldo/sincronización en la nube, WhatsApp Business API.
+Combos/promociones, programa de puntos, variantes/modificadores de producto, cotizaciones/proformas, impuesto al consumo (INC), pasarela de pago de la mensualidad (Wompi/PSE) y WhatsApp Business API para envío 100% automático (hoy queda el mensaje listo con un toque).
 
 ---
 
