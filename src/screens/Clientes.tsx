@@ -116,8 +116,12 @@ function CustomerDetail({ customer, onClose }: { customer: Customer; onClose: ()
 
 function CustomerForm({ tenantId, onClose }: { tenantId: string; onClose: () => void }) {
   const [name, setName] = useState('')
+  const [nombreComercial, setNombreComercial] = useState('')
   const [phone, setPhone] = useState('')
   const [idNumber, setId] = useState('')
+  const [address, setAddress] = useState('')
+  const [barrio, setBarrio] = useState('')
+  const [city, setCity] = useState('')
   return (
     <Sheet
       open
@@ -129,7 +133,12 @@ function CustomerForm({ tenantId, onClose }: { tenantId: string; onClose: () => 
           onClick={async () => {
             if (!name.trim()) return toast('error', 'Ponle nombre al cliente')
             await db.customers.put({
-              id: uid('cl'), tenantId, name: name.trim(), phone, idNumber,
+              id: uid('cl'), tenantId, name: name.trim(),
+              nombreComercial: nombreComercial.trim() || undefined,
+              phone, idNumber,
+              address: address.trim() || undefined,
+              barrio: barrio.trim() || undefined,
+              city: city.trim() || undefined,
               creditBalance: 0, totalSpent: 0, points: 0, createdAt: new Date().toISOString(),
             })
             toast('success', 'Cliente creado')
@@ -142,8 +151,16 @@ function CustomerForm({ tenantId, onClose }: { tenantId: string; onClose: () => 
     >
       <div className="space-y-3">
         <div><label className="label">Nombre</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></div>
-        <div><label className="label">Celular</label><input className="input" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="3001234567" /></div>
-        <div><label className="label">Cédula / NIT (opcional)</label><input className="input" value={idNumber} onChange={(e) => setId(e.target.value)} /></div>
+        <div><label className="label">Nombre comercial (opcional)</label><input className="input" value={nombreComercial} onChange={(e) => setNombreComercial(e.target.value)} /></div>
+        <div className="grid grid-cols-2 gap-2">
+          <div><label className="label">Celular</label><input className="input" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="3001234567" /></div>
+          <div><label className="label">Cédula / NIT</label><input className="input" value={idNumber} onChange={(e) => setId(e.target.value)} /></div>
+        </div>
+        <div><label className="label">Dirección</label><input className="input" value={address} onChange={(e) => setAddress(e.target.value)} /></div>
+        <div className="grid grid-cols-2 gap-2">
+          <div><label className="label">Barrio</label><input className="input" value={barrio} onChange={(e) => setBarrio(e.target.value)} /></div>
+          <div><label className="label">Ciudad</label><input className="input" value={city} onChange={(e) => setCity(e.target.value)} /></div>
+        </div>
       </div>
     </Sheet>
   )

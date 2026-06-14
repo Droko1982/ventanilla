@@ -288,6 +288,8 @@ function ProductDetailSheet({
 }) {
   const locations = useLocations()
   const tenant = useTenant()
+  const suppliers = useSuppliers()
+  const supplierName = suppliers?.find((s) => s.id === product.supplierId)?.name
   const [newQty, setNewQty] = useState(String(stock.quantity))
   const allStock = useLiveQuery(() => db.stock.where('productId').equals(product.id).toArray(), [product.id])
   const movements = useLiveQuery(
@@ -334,6 +336,21 @@ function ProductDetailSheet({
 
         <button onClick={() => printLabel(product, tenant?.businessName ?? 'Ventanilla')} className="btn btn-secondary w-full text-sm">
           <Icon name="print" className="h-5 w-5" /> Imprimir etiqueta de precio
+        </button>
+
+        {/* Costo promedio, utilidad, sección, último proveedor */}
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="rounded-lg bg-slate-50 p-2"><span className="text-xs text-slate-400">Costo promedio</span><p className="font-semibold text-slate-700">{cop(product.avgCost ?? product.cost)}</p></div>
+          <div className="rounded-lg bg-slate-50 p-2"><span className="text-xs text-slate-400">Utilidad</span><p className="font-semibold text-emerald-600">{product.price > 0 ? Math.round((1 - (product.avgCost ?? product.cost) / product.price) * 100) : 0}%</p></div>
+          {product.section && <div className="rounded-lg bg-slate-50 p-2"><span className="text-xs text-slate-400">Sección</span><p className="font-semibold text-slate-700">{product.section}</p></div>}
+          {supplierName && <div className="rounded-lg bg-slate-50 p-2"><span className="text-xs text-slate-400">Último proveedor</span><p className="truncate font-semibold text-slate-700">{supplierName}</p></div>}
+        </div>
+
+        <button
+          onClick={async () => { await db.products.update(product.id, { active: false }); toast('success', 'Producto inactivado'); onClose() }}
+          className="btn btn-secondary w-full text-sm text-rose-600"
+        >
+          Inactivar producto
         </button>
 
         {dExp !== null && dExp <= 30 && (

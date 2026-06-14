@@ -18,6 +18,7 @@ import type {
   Remision,
   CashMovement,
   ChangeOwed,
+  Purchase,
 } from '@/types'
 
 // ============================================================================
@@ -48,6 +49,7 @@ export class VentanillaDB extends Dexie {
   remisiones!: Table<Remision, string>
   cashMovements!: Table<CashMovement, string>
   changeOwed!: Table<ChangeOwed, string>
+  purchases!: Table<Purchase, string>
 
   constructor() {
     super('ventanilla')
@@ -79,6 +81,10 @@ export class VentanillaDB extends Dexie {
     // v4: vueltas que el negocio quedó debiendo (una fila por local)
     this.version(4).stores({
       changeOwed: 'id, tenantId, locationId',
+    })
+    // v5: facturas de compra (entradas de mercancía con costo)
+    this.version(5).stores({
+      purchases: 'id, tenantId, locationId, supplierId, createdAt',
     })
   }
 }

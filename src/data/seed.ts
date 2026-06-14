@@ -17,6 +17,7 @@ import type {
   Remision,
   PurchaseOrder,
   ChangeOwed,
+  Purchase,
 } from '@/types'
 import { daysUntil } from '@/lib/format'
 
@@ -173,7 +174,9 @@ const suppliers: Supplier[] = [
     contactName: 'Carlos Mejía',
     whatsapp: '573015550199',
     email: 'pedidos.postobon@demo.co',
+    phone: '+57 606 745 1234',
     leadTimeDays: 2,
+    debt: 120000,
     note: 'Entrega martes y viernes.',
   },
   {
@@ -184,6 +187,7 @@ const suppliers: Supplier[] = [
     whatsapp: '573015550288',
     email: 'ventas.nutresa@demo.co',
     leadTimeDays: 3,
+    debt: 0,
   },
   {
     id: 's_aseo',
@@ -193,6 +197,7 @@ const suppliers: Supplier[] = [
     whatsapp: '573015550377',
     email: 'aseohogar@demo.co',
     leadTimeDays: 4,
+    debt: 45000,
   },
   {
     id: 's_granos',
@@ -202,6 +207,7 @@ const suppliers: Supplier[] = [
     whatsapp: '573015550466',
     email: 'eleden.granos@demo.co',
     leadTimeDays: 2,
+    debt: 0,
   },
 ]
 
@@ -274,6 +280,7 @@ function buildProducts(): Product[] {
       unit,
       price,
       cost,
+      avgCost: cost,
       ivaRate,
       supplierId,
       perishable,
@@ -614,7 +621,7 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Al subir una versión nueva del modelo de demo, se recarga automáticamente
 // para que cualquier visitante vea los datos/precios más recientes.
-const SEED_VERSION = '7-mostrador-vueltas'
+const SEED_VERSION = '8-compras-costopromedio'
 const SEED_KEY = 'ventanilla-seed-version'
 
 export async function seedIfEmpty(): Promise<void> {
@@ -648,13 +655,28 @@ export async function seedNow(): Promise<void> {
   const changeOwed: ChangeOwed[] = [
     { id: 'l_centro', tenantId: TENANT_ID, locationId: 'l_centro', amount: 1500, updatedAt: iso(new Date()) },
   ]
+  const p = (i: number) => products[i] ?? products[0]
+  const purItems = [
+    { productId: p(0).id, name: p(0).name, qty: 24, unitCost: p(0).cost },
+    { productId: p(2).id, name: p(2).name, qty: 24, unitCost: p(2).cost },
+  ]
+  const purSub = purItems.reduce((s, it) => s + it.unitCost * it.qty, 0)
+  const purchases: Purchase[] = [
+    {
+      id: 'pur_1', tenantId: TENANT_ID, locationId: 'l_centro',
+      supplierId: 's_postobon', supplierName: 'Distribuidora Postobón',
+      number: 'FC-401', supplierInvoice: '8842',
+      items: purItems, subtotal: purSub, commercialDiscount: 0, weightAdjust: 0, total: purSub,
+      paymentMethod: 'credito', paid: false, createdAt: iso(new Date(Date.now() - 2 * 86400000)),
+    },
+  ]
 
   await db.transaction(
     'rw',
     [
       db.tenants, db.locations, db.users, db.categories, db.products, db.stock,
       db.sales, db.customers, db.suppliers, db.expenses, db.notifications, db.remisiones,
-      db.purchaseOrders, db.changeOwed,
+      db.purchaseOrders, db.changeOwed, db.purchases,
     ],
     async () => {
       await db.tenants.bulkPut([tenant, ...otherTenants])
@@ -671,6 +693,7 @@ export async function seedNow(): Promise<void> {
       await db.remisiones.bulkPut(remisiones)
       await db.purchaseOrders.bulkPut(purchaseOrders)
       await db.changeOwed.bulkPut(changeOwed)
+      await db.purchases.bulkPut(purchases)
     },
   )
 }

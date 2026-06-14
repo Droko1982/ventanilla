@@ -2,12 +2,12 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { useActiveLocationId, useSuppliers, useCurrentUser, useLocations, useTenant } from '@/hooks/data'
-import { suggestReorder, createPurchaseOrder, receivePurchase, markPurchaseOrderPaid, runAutoReorder, type ReorderSuggestion } from '@/data/repo'
+import { suggestReorder, createPurchaseOrder, receivePurchase, markPurchaseOrderPaid, runAutoReorder, paySupplierDebt, type ReorderSuggestion } from '@/data/repo'
 import { Sheet } from '@/components/Sheet'
 import { Segmented, EmptyState, PageHeader } from '@/components/ui'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
-import { cop } from '@/lib/money'
+import { cop, parseCop } from '@/lib/money'
 import { fmtDateTime } from '@/lib/format'
 import { waLink, mailtoLink } from '@/lib/whatsapp'
 import { uid } from '@/lib/id'
@@ -239,6 +239,7 @@ export default function Proveedores() {
                   {s.contactName} · {s.whatsapp ? `📲 ${s.whatsapp}` : 'sin WhatsApp'} · {s.leadTimeDays}d
                 </p>
               </div>
+              {(s.debt ?? 0) > 0 && <span className="chip bg-rose-100 text-rose-700">Debe {cop(s.debt)}</span>}
               <Icon name="edit" className="h-4 w-4 text-slate-300" />
             </button>
           ))}
@@ -335,8 +336,12 @@ function SupplierForm({ supplier, tenantId, onClose }: { supplier?: Supplier; te
   const [name, setName] = useState(supplier?.name ?? '')
   const [contactName, setContactName] = useState(supplier?.contactName ?? '')
   const [whatsapp, setWhatsapp] = useState(supplier?.whatsapp ?? '')
+  const [phone, setPhone] = useState(supplier?.phone ?? '')
   const [email, setEmail] = useState(supplier?.email ?? '')
+  const [address, setAddress] = useState(supplier?.address ?? '')
   const [leadTimeDays, setLead] = useState(String(supplier?.leadTimeDays ?? 3))
+  const [abono, setAbono] = useState('')
+  const debt = supplier?.debt ?? 0
 
   return (
     <Sheet
@@ -350,8 +355,9 @@ function SupplierForm({ supplier, tenantId, onClose }: { supplier?: Supplier; te
             if (!name.trim()) return toast('error', 'Ponle nombre al proveedor')
             await db.suppliers.put({
               id: supplier?.id ?? uid('s'),
-              tenantId, name: name.trim(), contactName, whatsapp, email,
+              tenantId, name: name.trim(), contactName, whatsapp, phone, email, address,
               leadTimeDays: parseInt(leadTimeDays, 10) || 3,
+              debt: supplier?.debt ?? 0,
               note: supplier?.note,
             })
             toast('success', 'Proveedor guardado')
@@ -363,11 +369,27 @@ function SupplierForm({ supplier, tenantId, onClose }: { supplier?: Supplier; te
       }
     >
       <div className="space-y-3">
+        {supplier && debt > 0 && (
+          <div className="rounded-xl bg-rose-50 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-rose-700">Deuda con este proveedor</span>
+              <span className="text-lg font-bold text-rose-700">{cop(debt)}</span>
+            </div>
+            <div className="mt-2 flex gap-2">
+              <input className="input" inputMode="numeric" value={abono} onChange={(e) => setAbono(e.target.value)} placeholder="Abono $" />
+              <button className="btn btn-success px-4" onClick={async () => { await paySupplierDebt(supplier.id, parseCop(abono)); toast('success', 'Abono registrado'); onClose() }}>Abonar</button>
+            </div>
+          </div>
+        )}
         <div><label className="label">Nombre</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></div>
         <div><label className="label">Contacto</label><input className="input" value={contactName} onChange={(e) => setContactName(e.target.value)} /></div>
         <div><label className="label">WhatsApp (con indicativo, ej. 573001234567)</label><input className="input" inputMode="tel" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} /></div>
+        <div className="grid grid-cols-2 gap-2">
+          <div><label className="label">Teléfono empresa</label><input className="input" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
+          <div><label className="label">Tiempo entrega (días)</label><input className="input" inputMode="numeric" value={leadTimeDays} onChange={(e) => setLead(e.target.value)} /></div>
+        </div>
         <div><label className="label">Correo</label><input className="input" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-        <div><label className="label">Tiempo de entrega (días)</label><input className="input" inputMode="numeric" value={leadTimeDays} onChange={(e) => setLead(e.target.value)} /></div>
+        <div><label className="label">Dirección</label><input className="input" value={address} onChange={(e) => setAddress(e.target.value)} /></div>
       </div>
     </Sheet>
   )

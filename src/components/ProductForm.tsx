@@ -53,6 +53,8 @@ export function ProductForm({
   const [wholesaleMinQty, setWholesaleMinQty] = useState(product?.wholesaleMinQty ? String(product.wholesaleMinQty) : '')
   const [promoType, setPromoType] = useState<'none' | '2x1' | 'percent'>(product?.promoType ?? 'none')
   const [promoValue, setPromoValue] = useState(product?.promoValue ? String(product.promoValue) : '')
+  const [section, setSection] = useState(product?.section ?? '')
+  const [avgCost, setAvgCost] = useState(product?.avgCost ? String(product.avgCost) : '')
   const [uploading, setUploading] = useState(false)
   const [initialQty, setInitialQty] = useState('')
   const [saving, setSaving] = useState(false)
@@ -97,6 +99,8 @@ export function ProductForm({
       wholesaleMinQty: parseInt(wholesaleMinQty || '0', 10) || undefined,
       promoType: promoType === 'none' ? undefined : promoType,
       promoValue: promoType === 'percent' ? parseInt(promoValue || '0', 10) || undefined : undefined,
+      section: section.trim() || undefined,
+      avgCost: parseCop(avgCost) || undefined,
       active: product?.active ?? true,
       createdAt: product?.createdAt ?? new Date().toISOString(),
     }
@@ -220,6 +224,17 @@ export function ProductForm({
           <div>
             <label className="label">Costo de compra</label>
             <input className="input" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="$" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Costo promedio</label>
+            <input className="input" inputMode="numeric" value={avgCost} onChange={(e) => setAvgCost(e.target.value)} placeholder="auto al comprar" />
+          </div>
+          <div>
+            <label className="label">Sección / posición</label>
+            <input className="input" value={section} onChange={(e) => setSection(e.target.value)} placeholder="Ej. Góndola 3" />
           </div>
         </div>
 

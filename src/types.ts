@@ -105,7 +105,9 @@ export interface Product {
   price: number // precio de venta (por unidad, o por kg si unit='peso')
   cost: number // costo de compra (para margen)
   ivaRate: number // 0, 5, 19 (lo necesita la DIAN)
-  supplierId?: string
+  supplierId?: string // último proveedor
+  avgCost?: number // costo promedio ponderado (se recalcula al comprar)
+  section?: string // sección / posición en la tienda (ej. "Góndola 3")
   perishable: boolean
   imageEmoji?: string // imagen rápida para el POS (si no hay foto)
   photo?: string // foto real del producto (dataURL, opcional)
@@ -212,8 +214,12 @@ export interface Customer {
   id: string
   tenantId: string
   name: string
+  nombreComercial?: string
   phone?: string
   idNumber?: string // CC / NIT
+  address?: string
+  barrio?: string
+  city?: string
   creditBalance: number // saldo de fiado pendiente
   totalSpent: number
   points: number // puntos de fidelización acumulados
@@ -227,9 +233,39 @@ export interface Supplier {
   name: string
   contactName?: string
   whatsapp?: string // ej. 573001234567
+  phone?: string
   email?: string
+  address?: string
   leadTimeDays: number // tiempo de entrega
+  debt: number // deuda con el proveedor (cuentas por pagar)
   note?: string
+}
+
+// --- Factura de compra (entrada de mercancía con costo) ---------------------
+export interface PurchaseItem {
+  productId: string
+  name: string
+  qty: number
+  unitCost: number
+}
+
+export interface Purchase {
+  id: string
+  tenantId: string
+  locationId: string
+  supplierId: string
+  supplierName: string
+  number: string // consecutivo interno (Cod Factura)
+  supplierInvoice?: string // No. Fac Proveedor
+  items: PurchaseItem[]
+  subtotal: number
+  commercialDiscount: number
+  weightAdjust: number // ajuste al peso (+/-)
+  total: number
+  paymentMethod: 'contado' | 'credito'
+  dueDate?: string
+  paid: boolean
+  createdAt: string
 }
 
 export type PurchaseOrderStatus = 'sugerido' | 'enviado' | 'recibido' | 'cancelado'

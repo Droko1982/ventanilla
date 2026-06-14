@@ -275,6 +275,35 @@ async function main() {
   if (!/total por pagar/i.test(txt)) throw new Error('Cuentas por pagar no renderizó')
   console.log('✓ Proveedores: cuentas por pagar')
 
+  // 4h-bis) Compras: factura de compra + costo promedio
+  ctx = 'compras'
+  await page.evaluate(() => { location.hash = '#/compras' })
+  await sleep(1000)
+  txt = await bodyText(page)
+  if (!/Nueva factura de compra/.test(txt)) throw new Error('Compras no renderizó')
+  if (!/FC-401/.test(txt)) throw new Error('Compra de ejemplo no visible')
+  await clickText(page, 'Nueva factura de compra')
+  await sleep(700)
+  await page.evaluate(() => {
+    const prov = [...document.querySelectorAll('select')].find((s) => [...s.options].some((o) => (o.textContent || '').includes('Seleccione')))
+    if (prov && prov.options.length > 1) {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set
+      setter.call(prov, prov.options[1].value)
+      prov.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+  })
+  await sleep(300)
+  await page.evaluate(() => {
+    const i = [...document.querySelectorAll('input')].find((x) => (x.placeholder || '').includes('Cód. barras'))
+    if (i) { const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(i, '770201100001'); i.dispatchEvent(new Event('input', { bubbles: true })) }
+  })
+  await sleep(300)
+  await clickText(page, 'AGREGAR')
+  await sleep(400)
+  await clickText(page, 'GUARDAR')
+  await sleep(900)
+  console.log('✓ Compras: factura de compra (stock + costo promedio + deuda)')
+
   // 4i) Ventas: devolución parcial (abre la hoja)
   ctx = 'devolucion-parcial'
   await page.evaluate(() => { location.hash = '#/ventas' })

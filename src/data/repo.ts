@@ -16,6 +16,8 @@ import type {
   Remision,
   CashMovement,
   Expense,
+  Purchase,
+  PurchaseItem,
 } from '@/types'
 
 // ============================================================================
@@ -617,6 +619,102 @@ export async function receivePurchase(
     entityId: po.id,
     detail: `Entrada confirmada contra el pedido.`,
   })
+}
+
+// ---- Compras: factura de compra (entrada con costo) -----------------------
+let purchaseCounter = 400
+export function nextPurchaseNumber(): string {
+  purchaseCounter += 1
+  return `FC-${purchaseCounter}`
+}
+
+export interface RecordPurchaseInput {
+  tenantId: string
+  locationId: string
+  supplierId: string
+  supplierName: string
+  supplierInvoice?: string
+  items: PurchaseItem[]
+  commercialDiscount: number
+  weightAdjust: number
+  paymentMethod: 'contado' | 'credito'
+  dueDate?: string
+  userId: string
+  userName: string
+}
+
+export async function recordPurchase(input: RecordPurchaseInput): Promise<Purchase> {
+  const subtotal = input.items.reduce((s, it) => s + it.unitCost * it.qty, 0)
+  const total = Math.max(0, Math.round(subtotal - input.commercialDiscount + input.weightAdjust))
+  const now = new Date().toISOString()
+  const purchase: Purchase = {
+    id: uid('pur'),
+    tenantId: input.tenantId,
+    locationId: input.locationId,
+    supplierId: input.supplierId,
+    supplierName: input.supplierName,
+    number: nextPurchaseNumber(),
+    supplierInvoice: input.supplierInvoice,
+    items: input.items,
+    subtotal: Math.round(subtotal),
+    commercialDiscount: input.commercialDiscount,
+    weightAdjust: input.weightAdjust,
+    total,
+    paymentMethod: input.paymentMethod,
+    dueDate: input.dueDate,
+    paid: input.paymentMethod === 'contado',
+    createdAt: now,
+  }
+  await db.transaction('rw', [db.purchases, db.stock, db.stockMovements, db.products, db.suppliers], async () => {
+    await db.purchases.put(purchase)
+    for (const it of input.items) {
+      const stockId = `${input.locationId}:${it.productId}`
+      const st = await db.stock.get(stockId)
+      const prevQty = st?.quantity ?? 0
+      if (st) {
+        st.quantity = Number((st.quantity + it.qty).toFixed(3))
+        st.updatedAt = now
+        await db.stock.put(st)
+      } else {
+        await db.stock.put({
+          id: stockId, tenantId: input.tenantId, locationId: input.locationId, productId: it.productId,
+          quantity: it.qty, reorderThreshold: 4, reorderTarget: 12, updatedAt: now,
+        })
+      }
+      await db.stockMovements.put({
+        id: uid('mv'), tenantId: input.tenantId, locationId: input.locationId,
+        productId: it.productId, type: 'entrada', qty: it.qty, refId: purchase.id, userId: input.userId, createdAt: now,
+      })
+      // Producto: último costo (P.Compra) + COSTO PROMEDIO ponderado + último proveedor
+      const p = await db.products.get(it.productId)
+      if (p) {
+        const oldAvg = p.avgCost ?? p.cost
+        const denom = prevQty + it.qty
+        p.cost = it.unitCost
+        p.avgCost = denom > 0 ? Math.round((oldAvg * prevQty + it.unitCost * it.qty) / denom) : it.unitCost
+        p.supplierId = input.supplierId
+        await db.products.put(p)
+      }
+    }
+    if (input.paymentMethod === 'credito') {
+      const sup = await db.suppliers.get(input.supplierId)
+      if (sup) { sup.debt = (sup.debt ?? 0) + total; await db.suppliers.put(sup) }
+    }
+  })
+  await audit({
+    tenantId: input.tenantId, locationId: input.locationId, userId: input.userId, userName: input.userName,
+    action: 'registró compra', entity: 'compra', entityId: purchase.id,
+    detail: `${purchase.number} · ${input.supplierName} · total ${total} · ${input.paymentMethod}`,
+  })
+  return purchase
+}
+
+export async function paySupplierDebt(supplierId: string, amount: number): Promise<number> {
+  const sup = await db.suppliers.get(supplierId)
+  if (!sup) return 0
+  sup.debt = Math.max(0, (sup.debt ?? 0) - amount)
+  await db.suppliers.put(sup)
+  return sup.debt
 }
 
 // ---- Traslado entre locales -----------------------------------------------
