@@ -128,7 +128,7 @@ const users: User[] = [
   {
     id: 'u_caj1',
     tenantId: TENANT_ID,
-    name: 'Juan Ortiz',
+    name: 'Mr Melo Caramelo',
     role: 'empleado',
     pin: '1234',
     locationId: 'l_centro',
@@ -635,7 +635,7 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Al subir una versión nueva del modelo de demo, se recarga automáticamente
 // para que cualquier visitante vea los datos/precios más recientes.
-const SEED_VERSION = '12-clientes-analitica'
+const SEED_VERSION = '13-melo-caramelo-limpio'
 const SEED_KEY = 'ventanilla-seed-version'
 
 export async function seedIfEmpty(): Promise<void> {

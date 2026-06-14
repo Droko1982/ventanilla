@@ -73,8 +73,7 @@ async function main() {
   // 1) Carga inicial (seed + login)
   ctx = 'carga'
   await page.goto(BASE, { waitUntil: 'networkidle2', timeout: 60000 })
-  await sleep(2500) // seed (resetDemo) + render
-  let txt = await bodyText(page)
+  let txt = await waitForText(page, 'Ventanilla', 15000) // seed (resetDemo) + render
   if (!txt.includes('Ventanilla')) throw new Error('No renderizó la pantalla de inicio')
   console.log('✓ Pantalla de login renderiza')
 
@@ -473,7 +472,7 @@ async function main() {
   // 4h-septies) Eventos Recepción DIAN
   ctx = 'eventos-recepcion'
   await page.evaluate(() => { location.hash = '#/eventos-recepcion' })
-  txt = await waitForText(page, 'Eventos Recepción', 9000)
+  txt = await waitForText(page, 'FC-401', 9000)
   if (!/Eventos Recepción/.test(txt) || !/FC-401/.test(txt)) throw new Error('Eventos Recepción no renderizó')
   await clickText(page, 'FC-401')
   await sleep(600)
