@@ -8,6 +8,7 @@ import {
 } from '@/hooks/data'
 import { summarize, topProducts, filterByRange } from '@/lib/analytics'
 import { makePeriod, salesInPeriod, periodSeries, type Granularity } from '@/lib/period'
+import { buildInsights } from '@/lib/insights'
 import { daysUntil } from '@/lib/format'
 import { cop, parseCop } from '@/lib/money'
 import { db } from '@/data/db'
@@ -74,6 +75,11 @@ export default function Dashboard() {
   const hello = user?.name.split(' ')[0] ?? ''
   const chartType = gran === 'anio' || gran === 'semana' ? 'bar' : 'area'
 
+  const insights = useMemo(
+    () => buildInsights({ sales: sales ?? [], topName: top[0]?.name, delta, lowStock, expiring, deadStock }),
+    [sales, top, delta, lowStock, expiring, deadStock],
+  )
+
   return (
     <div>
       <div className="mb-4">
@@ -81,6 +87,31 @@ export default function Dashboard() {
         <p className="text-sm text-slate-500">
           {filter === 'all' ? 'Resumen de todos tus locales' : 'Resumen del local'}
         </p>
+      </div>
+
+      {/* Asistente de insights */}
+      <div className="mb-4 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
+        <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-600">
+          <span>🤖</span> Asistente · consejos para tu tienda
+        </p>
+        <div className="space-y-1.5">
+          {insights.slice(0, 4).map((it, i) => (
+            <button
+              key={i}
+              onClick={() => it.to && navigate(it.to)}
+              disabled={!it.to}
+              className={`flex w-full items-start gap-2 rounded-xl px-3 py-2 text-left text-sm ${
+                it.tone === 'good' ? 'bg-emerald-50 text-emerald-800'
+                : it.tone === 'warn' ? 'bg-amber-50 text-amber-800'
+                : 'bg-slate-50 text-slate-600'
+              } ${it.to ? 'active:scale-[0.99]' : ''}`}
+            >
+              <span className="text-base leading-tight">{it.icon}</span>
+              <span className="flex-1">{it.text}</span>
+              {it.to && <Icon name="arrow-left" className="mt-0.5 h-4 w-4 rotate-180 opacity-40" />}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Selector de granularidad */}

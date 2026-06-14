@@ -114,14 +114,23 @@ export interface RecordSaleInput {
   customerEmail?: string
   remisionId?: string // si la factura nace de una remisión
   skipStock?: boolean // true cuando el stock ya se descontó (p.ej. en la remisión)
+  redeemPoints?: number // puntos de fidelización que el cliente canjea en esta venta
 }
 
 export async function recordSale(input: RecordSaleInput): Promise<Sale> {
+  const tenant = await db.tenants.get(input.tenantId)
+  const loyaltyOn = !!tenant?.loyaltyEnabled
+  const redeemVal = tenant?.loyaltyRedeemValue ?? 20
+  const perThousand = tenant?.loyaltyPointsPerThousand ?? 1
   const subtotal = input.items.reduce(
     (s, it) => s + it.unitPrice * it.qty - it.lineDiscount,
     0,
   )
-  const total = Math.max(0, Math.round(subtotal - input.discount))
+  const baseAfterDiscount = Math.max(0, subtotal - input.discount)
+  // Canje de puntos: cada punto vale `redeemVal` pesos, tope al total de la venta
+  const redeemPoints = loyaltyOn && input.customerId ? Math.max(0, Math.floor(input.redeemPoints ?? 0)) : 0
+  const redeemDiscount = Math.min(redeemPoints * redeemVal, baseAfterDiscount)
+  const total = Math.max(0, Math.round(baseAfterDiscount - redeemDiscount))
   const now = new Date().toISOString()
   let crossedThreshold = false // ¿algún producto bajó del umbral en esta venta?
   const docType = input.docType ?? (input.customerDoc ? 'factura' : 'tiquete_pos')
@@ -134,7 +143,7 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
     userId: input.userId,
     items: input.items,
     subtotal: Math.round(subtotal),
-    discount: input.discount,
+    discount: input.discount + redeemDiscount,
     total,
     payments: input.payments,
     customerId: input.customerId,
@@ -200,20 +209,21 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
       }
 
       // Fiado: aumenta saldo del cliente
+      const earned = Math.round(total / 1000) * (loyaltyOn ? perThousand : 1)
       const fiado = input.payments.find((p) => p.method === 'fiado')
       if (fiado && input.customerId) {
         const c = await db.customers.get(input.customerId)
         if (c) {
           c.creditBalance += fiado.amount
           c.totalSpent += total
-          c.points = (c.points ?? 0) + Math.round(total / 1000) // 1 punto por cada $1.000
+          c.points = Math.max(0, (c.points ?? 0) - redeemPoints + earned)
           await db.customers.put(c)
         }
       } else if (input.customerId) {
         const c = await db.customers.get(input.customerId)
         if (c) {
           c.totalSpent += total
-          c.points = (c.points ?? 0) + Math.round(total / 1000) // 1 punto por cada $1.000
+          c.points = Math.max(0, (c.points ?? 0) - redeemPoints + earned)
           await db.customers.put(c)
         }
       }
@@ -237,7 +247,6 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
   // Reabastecimiento automático: si bajó del umbral y está activado, pide solo.
   if (crossedThreshold) {
     try {
-      const tenant = await db.tenants.get(input.tenantId)
       if (tenant?.autoReorder) await runAutoReorder(input.tenantId, input.locationId, input.userId, input.userName)
     } catch {
       /* el auto-pedido nunca debe romper la venta */

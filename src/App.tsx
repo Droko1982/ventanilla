@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useSession } from '@/store/session'
 import { AppLayout } from '@/components/AppLayout'
 import { ToastContainer } from '@/components/Toast'
@@ -25,6 +25,7 @@ const Cartera = lazy(() => import('@/screens/Cartera'))
 const AjustesInventario = lazy(() => import('@/screens/AjustesInventario'))
 const EventosRecepcion = lazy(() => import('@/screens/EventosRecepcion'))
 const Domicilios = lazy(() => import('@/screens/Domicilios'))
+const Tienda = lazy(() => import('@/screens/Tienda'))
 const Reportes = lazy(() => import('@/screens/Reportes'))
 const Notificaciones = lazy(() => import('@/screens/Notificaciones'))
 const Ajustes = lazy(() => import('@/screens/Ajustes'))
@@ -33,6 +34,19 @@ const SuperAdmin = lazy(() => import('@/screens/SuperAdmin'))
 
 export default function App() {
   const role = useSession((s) => s.role)
+  const { pathname } = useLocation()
+
+  // Catálogo público de la tienda (sin login): link para compartir con clientes.
+  if (pathname === '/tienda') {
+    return (
+      <>
+        <ToastContainer />
+        <Suspense fallback={<Spinner label="Cargando…" />}>
+          <Tienda />
+        </Suspense>
+      </>
+    )
+  }
 
   return (
     <>

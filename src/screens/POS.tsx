@@ -26,6 +26,8 @@ import { db } from '@/data/db'
 import { receiptText, printReceipt } from '@/lib/receipt'
 import { openCashDrawer } from '@/lib/cashDrawer'
 import { readWeightOnce, scaleMessage } from '@/lib/scale'
+import { hasBreB, breBPayload } from '@/lib/breB'
+import { QRCode } from '@/components/QRCode'
 import { waLink, mailtoLink } from '@/lib/whatsapp'
 import { useSession } from '@/store/session'
 import { can } from '@/lib/permissions'
@@ -367,6 +369,7 @@ export default function POS() {
               vendedorName: cart.meta.vendedorName,
               discountReason: cart.meta.discountReason,
               note: opts.note,
+              redeemPoints: opts.redeemPoints,
             })
             cart.clear()
             setPayOpen(false)
@@ -986,6 +989,7 @@ interface PayOpts {
   customerDoc?: string
   transmitDian: boolean
   note?: string
+  redeemPoints?: number
 }
 
 function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total: number; defaultCustomerId?: string; onClose: () => void; onConfirm: (p: Payment[], o: PayOpts) => void }) {
@@ -1000,12 +1004,22 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
   const [note, setNote] = useState('')
   const [transmitDian, setTransmitDian] = useState(tenant?.dian.enabled ?? true)
   const [split, setSplit] = useState<{ method: PaymentMethod; amount: number }[]>([])
+  const [redeem, setRedeem] = useState(false)
+
+  // Fidelización: puntos disponibles del cliente seleccionado y su canje
+  const loyaltyOn = !!tenant?.loyaltyEnabled
+  const redeemVal = tenant?.loyaltyRedeemValue ?? 20
+  const selectedCustomer = (customers ?? []).find((c) => c.id === customerId)
+  const availablePoints = selectedCustomer?.points ?? 0
+  const redeemPointsUsed = redeem && loyaltyOn ? Math.min(availablePoints, Math.floor(total / redeemVal)) : 0
+  const redeemValue = redeemPointsUsed * redeemVal
+  const chargeTotal = Math.max(0, total - redeemValue)
 
   const receivedNum = parseCop(received)
-  const change = method === 'efectivo' && receivedNum > total ? receivedNum - total : 0
+  const change = method === 'efectivo' && receivedNum > chargeTotal ? receivedNum - chargeTotal : 0
 
   const splitSum = split.reduce((s, p) => s + p.amount, 0)
-  const splitRemaining = total - splitSum
+  const splitRemaining = chargeTotal - splitSum
 
   const methods: { id: PaymentMethod; label: string; emoji: string }[] = [
     { id: 'efectivo', label: 'Efectivo', emoji: '💵' },
@@ -1027,11 +1041,11 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
       toast('error', 'Elige el cliente para el fiado')
       return null
     }
-    if (method === 'efectivo' && receivedNum > 0 && receivedNum < total) {
+    if (method === 'efectivo' && receivedNum > 0 && receivedNum < chargeTotal) {
       toast('error', 'El efectivo recibido es menor al total')
       return null
     }
-    return [{ method, amount: total, confirmed: method !== 'fiado', proofPhoto: proof }]
+    return [{ method, amount: chargeTotal, confirmed: method !== 'fiado', proofPhoto: proof }]
   }
 
   function pickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1060,6 +1074,7 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
               customerDoc: wantInvoice ? customerDoc : undefined,
               transmitDian,
               note: note.trim() || undefined,
+              redeemPoints: redeemPointsUsed || undefined,
             })
           }}
         >
@@ -1070,7 +1085,15 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
       <div className="space-y-4">
         <div className="rounded-2xl bg-brand-50 p-4 text-center">
           <p className="text-xs uppercase tracking-wide text-brand-600">Total a cobrar</p>
-          <p className="text-4xl font-extrabold text-brand-700">{cop(total)}</p>
+          {redeemValue > 0 ? (
+            <>
+              <p className="text-lg font-semibold text-slate-400 line-through">{cop(total)}</p>
+              <p className="text-4xl font-extrabold text-brand-700">{cop(chargeTotal)}</p>
+              <p className="text-xs font-semibold text-emerald-600">− {cop(redeemValue)} con {redeemPointsUsed} puntos</p>
+            </>
+          ) : (
+            <p className="text-4xl font-extrabold text-brand-700">{cop(total)}</p>
+          )}
         </div>
 
         {/* Método */}
@@ -1101,9 +1124,9 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
         {method === 'efectivo' && (
           <div className="space-y-2">
             <label className="label">¿Con cuánto paga?</label>
-            <input className="input text-center text-xl font-bold" inputMode="numeric" value={received} onChange={(e) => setReceived(e.target.value)} placeholder={cop(total)} />
+            <input className="input text-center text-xl font-bold" inputMode="numeric" value={received} onChange={(e) => setReceived(e.target.value)} placeholder={cop(chargeTotal)} />
             <div className="grid grid-cols-4 gap-2">
-              {[total, 10000, 20000, 50000].map((b, i) => (
+              {[chargeTotal, 10000, 20000, 50000].map((b, i) => (
                 <button key={i} onClick={() => setReceived(String(b))} className="btn btn-secondary py-2 text-xs">
                   {i === 0 ? 'Exacto' : cop(b)}
                 </button>
@@ -1115,6 +1138,16 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
                 <p className="text-2xl font-bold text-emerald-700">{cop(change)}</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Bre-B: QR/llave de cobro para pagos digitales */}
+        {(method === 'nequi' || method === 'transferencia') && tenant && hasBreB(tenant) && (
+          <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-center">
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-cyan-700">Cobra con Bre-B</p>
+            <QRCode value={breBPayload(tenant)} size={150} />
+            <p className="mt-2 text-base font-bold text-slate-700">{tenant.breBKey}</p>
+            <p className="text-xs text-cyan-700">El cliente escanea o escribe tu llave desde cualquier banco/billetera y paga {cop(chargeTotal)}.</p>
           </div>
         )}
 
@@ -1132,11 +1165,11 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
           </div>
         )}
 
-        {/* Fiado / cliente */}
-        {(method === 'fiado' || method === 'mixto') && (
+        {/* Fiado / cliente (también cuando hay programa de puntos) */}
+        {(method === 'fiado' || method === 'mixto' || loyaltyOn) && (
           <div>
-            <label className="label">Cliente {method === 'fiado' && '(obligatorio)'}</label>
-            <select className="input" value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+            <label className="label">Cliente {method === 'fiado' ? '(obligatorio)' : loyaltyOn ? '(para acumular puntos)' : ''}</label>
+            <select className="input" value={customerId} onChange={(e) => { setCustomerId(e.target.value); setRedeem(false) }}>
               <option value="">Sin cliente</option>
               {(customers ?? []).map((c) => (
                 <option key={c.id} value={c.id}>
@@ -1145,6 +1178,16 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
               ))}
             </select>
           </div>
+        )}
+
+        {/* Canje de puntos de fidelización */}
+        {loyaltyOn && selectedCustomer && availablePoints > 0 && (
+          <label className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <span className="text-sm text-amber-800">
+              ⭐ {selectedCustomer.name} tiene <b>{availablePoints} puntos</b> (≈ {cop(availablePoints * redeemVal)})
+            </span>
+            <input type="checkbox" checked={redeem} onChange={(e) => setRedeem(e.target.checked)} className="h-5 w-5" />
+          </label>
         )}
 
         {/* Pago mixto */}

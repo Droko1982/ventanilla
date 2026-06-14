@@ -16,6 +16,8 @@ import { uid } from '@/lib/id'
 import { useSession } from '@/store/session'
 import { drawerSupported, drawerLinked, connectDrawer, unlinkDrawer, openCashDrawer, drawerMessage } from '@/lib/cashDrawer'
 import { scaleSupported, scaleLinked, connectScale, unlinkScale, readWeightOnce, scaleMessage } from '@/lib/scale'
+import { QRCode } from '@/components/QRCode'
+import { breBPayload, BREB_KEY_TYPES } from '@/lib/breB'
 import type { Location, User, DianConfig, Tenant } from '@/types'
 
 export default function Ajustes() {
@@ -135,6 +137,16 @@ export default function Ajustes() {
         </div>
       </Section>
 
+      {/* Pagos Bre-B */}
+      <Section title="Pagos Bre-B">
+        <BreBSection tenant={tenant} tenantId={tenantId} />
+      </Section>
+
+      {/* Programa de puntos */}
+      <Section title="Programa de puntos">
+        <LoyaltySection tenant={tenant} tenantId={tenantId} />
+      </Section>
+
       {/* Cajón monedero */}
       <Section title="Cajón monedero">
         <CashDrawerSection tenant={tenant} tenantId={tenantId} />
@@ -174,6 +186,89 @@ export default function Ajustes() {
         <EmployeeForm employee={empEdit ?? undefined} tenantId={tenantId} locations={locations ?? []} onClose={() => { setEmpEdit(null); setEmpAdd(false) }} />
       )}
       {dianOpen && <DianForm tenantId={tenantId} dian={tenant.dian} onClose={() => setDianOpen(false)} />}
+    </div>
+  )
+}
+
+function BreBSection({ tenant, tenantId }: { tenant: Tenant; tenantId: string }) {
+  const [key, setKey] = useState(tenant.breBKey ?? '')
+  const [type, setType] = useState<string>(tenant.breBKeyType ?? 'celular')
+
+  async function save() {
+    await db.tenants.update(tenantId, { breBKey: key.trim() || undefined, breBKeyType: type as any })
+    toast('success', key.trim() ? 'Llave Bre-B guardada ✓' : 'Llave Bre-B quitada')
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="rounded-xl bg-cyan-50 px-3 py-2 text-xs text-cyan-800">
+        Registra tu <b>llave Bre-B</b>. Al cobrar, la app muestra tu QR/llave y el cliente te paga desde cualquier banco o billetera (Nequi, Daviplata, Bancolombia…), sin datáfono.
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="label">Tipo de llave</label>
+          <select className="input" value={type} onChange={(e) => setType(e.target.value)}>
+            {BREB_KEY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Tu llave</label>
+          <input className="input" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Ej. 3147555896" />
+        </div>
+      </div>
+      <button onClick={save} className="btn btn-primary w-full text-sm">Guardar llave Bre-B</button>
+      {key.trim() && (
+        <div className="rounded-xl border border-slate-100 bg-white p-3 text-center">
+          <p className="mb-2 text-xs font-semibold text-slate-500">Así lo verá el cliente al pagar:</p>
+          <QRCode value={breBPayload({ breBKey: key })} size={160} />
+          <p className="mt-2 text-sm font-bold text-slate-700">{key.trim()}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LoyaltySection({ tenant, tenantId }: { tenant: Tenant; tenantId: string }) {
+  const enabled = tenant.loyaltyEnabled ?? false
+  const [per, setPer] = useState(String(tenant.loyaltyPointsPerThousand ?? 1))
+  const [val, setVal] = useState(String(tenant.loyaltyRedeemValue ?? 20))
+
+  async function toggle(v: boolean) {
+    await db.tenants.update(tenantId, { loyaltyEnabled: v })
+    toast('success', v ? 'Programa de puntos activado' : 'Programa de puntos desactivado')
+  }
+  async function saveConfig() {
+    await db.tenants.update(tenantId, {
+      loyaltyPointsPerThousand: Math.max(0, parseInt(per || '0', 10)) || 1,
+      loyaltyRedeemValue: Math.max(1, parseInt(val || '0', 10)) || 20,
+    })
+    toast('success', 'Configuración de puntos guardada')
+  }
+
+  return (
+    <div className="space-y-3">
+      <label className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
+        <input type="checkbox" checked={enabled} onChange={(e) => toggle(e.target.checked)} className="h-5 w-5" />
+        <span className="text-sm text-slate-600">Activar puntos de fidelización para clientes</span>
+      </label>
+      {enabled && (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="label">Puntos por cada $1.000</label>
+              <input className="input" inputMode="numeric" value={per} onChange={(e) => setPer(e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Valor de cada punto ($)</label>
+              <input className="input" inputMode="numeric" value={val} onChange={(e) => setVal(e.target.value)} />
+            </div>
+          </div>
+          <button onClick={saveConfig} className="btn btn-primary w-full text-sm">Guardar configuración</button>
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Ejemplo: con {per} punto(s) por $1.000, una compra de $10.000 da {10 * (parseInt(per || '1', 10) || 1)} puntos = {cop((10 * (parseInt(per || '1', 10) || 1)) * (parseInt(val || '20', 10) || 20))} para su próxima compra.
+          </p>
+        </>
+      )}
     </div>
   )
 }

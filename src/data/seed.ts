@@ -60,6 +60,11 @@ const tenant: Tenant = {
   locationCount: 3,
   monthlyGoal: 18000000,
   commissionPct: 1,
+  breBKey: '3147555896',
+  breBKeyType: 'celular',
+  loyaltyEnabled: true,
+  loyaltyPointsPerThousand: 1,
+  loyaltyRedeemValue: 20,
 }
 
 // ---------------------------------------------------------------------------
@@ -627,7 +632,7 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Al subir una versión nueva del modelo de demo, se recarga automáticamente
 // para que cualquier visitante vea los datos/precios más recientes.
-const SEED_VERSION = '10-domicilios'
+const SEED_VERSION = '11-breb-puntos'
 const SEED_KEY = 'ventanilla-seed-version'
 
 export async function seedIfEmpty(): Promise<void> {

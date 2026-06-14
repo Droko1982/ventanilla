@@ -43,6 +43,13 @@ export interface Tenant {
   commissionPct?: number // % de comisión por vendedor (para reportes)
   autoReorder?: boolean // reabastecimiento automático: WhatsApp al proveedor al bajar el stock
   autoOpenDrawer?: boolean // abrir el cajón monedero automáticamente en ventas en efectivo
+  // Pagos Bre-B (sistema interoperable del Banco de la República)
+  breBKey?: string // la "llave" del comercio (celular, cédula, correo o alfanumérica)
+  breBKeyType?: 'celular' | 'cedula' | 'correo' | 'alfanumerica'
+  // Programa de fidelización (puntos)
+  loyaltyEnabled?: boolean
+  loyaltyPointsPerThousand?: number // puntos que gana el cliente por cada $1.000 comprados
+  loyaltyRedeemValue?: number // valor en $ de cada punto al canjear (ej. 1 punto = $20)
 }
 
 export interface DianConfig {

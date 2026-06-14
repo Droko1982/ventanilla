@@ -257,7 +257,8 @@ async function main() {
   await sleep(500)
   txt = await bodyText(page)
   if (!/Meta del mes/.test(txt)) throw new Error('Meta del mes no renderizó')
-  console.log('✓ Dashboard: históricos día/semana/mes/año + meta')
+  if (!/Asistente/.test(txt)) throw new Error('Asistente de insights no renderizó')
+  console.log('✓ Dashboard: históricos día/semana/mes/año + meta + asistente')
 
   // 4f-bis) Reportes: comisiones por vendedor + export contable
   ctx = 'reportes-comisiones'
@@ -284,6 +285,12 @@ async function main() {
   ctx = 'bascula'
   if (!/Báscula/i.test(txt) || !/Probar lectura/i.test(txt) || !/Vincular báscula/i.test(txt)) throw new Error('Sección de báscula no renderizó')
   console.log('✓ Ajustes: báscula granel (Web Serial)')
+
+  // 4f-sexies) Ajustes: Bre-B + programa de puntos
+  ctx = 'breb-puntos'
+  if (!/Bre-B/i.test(txt) || !/llave/i.test(txt)) throw new Error('Sección Bre-B no renderizó')
+  if (!/Programa de puntos/i.test(txt) || !/fidelizaci/i.test(txt)) throw new Error('Sección de puntos no renderizó')
+  console.log('✓ Ajustes: pagos Bre-B + programa de puntos')
 
   // 4g) Precio al por mayor visible en POS
   ctx = 'por-mayor'
@@ -495,6 +502,21 @@ async function main() {
   await sleep(300)
   await page.keyboard.press('Escape')
   await sleep(300)
+
+  // 4j) Tienda online pública (catálogo + pedido por WhatsApp)
+  ctx = 'tienda-online'
+  await page.evaluate(() => { location.hash = '#/tienda' })
+  txt = await waitForText(page, 'Enviar pedido', 4000)
+  if (!/Tienda La Esquina/.test(txt) || !/Agregar/.test(txt)) {
+    // aún sin pedido: verifica catálogo y agrega un producto
+    if (!/Tienda La Esquina/.test(txt)) throw new Error('Catálogo de tienda online no renderizó')
+  }
+  await clickText(page, 'Agregar')
+  txt = await waitForText(page, 'Enviar pedido por WhatsApp', 4000)
+  if (!/Enviar pedido por WhatsApp/.test(txt)) throw new Error('La barra de pedido no apareció')
+  console.log('✓ Tienda online (catálogo público + pedido por WhatsApp)')
+  await page.evaluate(() => { location.hash = '#/' })
+  await sleep(600)
 
   // 5) Cerrar sesión y entrar como Super-Admin
   ctx = 'login-super'
