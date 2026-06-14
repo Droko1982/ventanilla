@@ -539,18 +539,23 @@ function buildRemisiones(products: Product[]): Remision[] {
   const p = (i: number) => products[i] ?? products[0]
   const r1 = [mkItem(p(0), 24), mkItem(p(23), 12)]
   const r2 = [mkItem(p(18), 10), mkItem(p(20), 6)]
-  const mk = (id: string, num: string, items: SaleItem[], name: string, addr: string, ago: number): Remision => {
+  const mk = (id: string, num: string, items: SaleItem[], name: string, addr: string, ago: number, credit?: { dueAgo: number; abonado: number }): Remision => {
     const total = Math.round(sumItems(items))
     return {
       id, tenantId: TENANT_ID, locationId: 'l_centro', userId: 'u_admin', number: num,
       customerName: name, customerAddress: addr, items, subtotal: total, discount: 0, total,
       note: 'Entrega a domicilio', status: 'emitida',
+      onCredit: !!credit,
+      dueDate: credit ? iso(new Date(Date.now() - credit.dueAgo * 86400000)) : undefined,
+      abonado: credit ? credit.abonado : total,
       createdAt: iso(new Date(Date.now() - ago * 86400000)),
     }
   }
   return [
-    mk('rem_1', 'REM-121', r1, 'Tienda Doña Luz', 'Barrio La Patria, Armenia', 2),
-    mk('rem_2', 'REM-122', r2, 'Cafetería La 15', 'Av. Centenario #15-22, Armenia', 0),
+    // A crédito y atrasada (con abono parcial) → aparece en Cartera
+    mk('rem_1', 'REM-121', r1, 'Tienda Doña Luz', 'Barrio La Patria, Armenia', 8, { dueAgo: 3, abonado: 20000 }),
+    // A crédito, por vencer
+    mk('rem_2', 'REM-122', r2, 'Cafetería La 15', 'Av. Centenario #15-22, Armenia', 1, { dueAgo: -10, abonado: 0 }),
   ]
 }
 
@@ -621,7 +626,7 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Al subir una versión nueva del modelo de demo, se recarga automáticamente
 // para que cualquier visitante vea los datos/precios más recientes.
-const SEED_VERSION = '8-compras-costopromedio'
+const SEED_VERSION = '9-informez-cartera'
 const SEED_KEY = 'ventanilla-seed-version'
 
 export async function seedIfEmpty(): Promise<void> {

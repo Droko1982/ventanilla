@@ -253,6 +253,8 @@ function NewRemisionSheet({ products, tenantId, locationId, onClose, onCreated }
   const [idType, setIdType] = useState<'CC' | 'NIT' | 'CE'>('CC')
   const [address, setAddress] = useState('')
   const [note, setNote] = useState('')
+  const [onCredit, setOnCredit] = useState(false)
+  const [dueDate, setDueDate] = useState('')
   const total = itemsTotal(items)
 
   return (
@@ -269,6 +271,7 @@ function NewRemisionSheet({ products, tenantId, locationId, onClose, onCreated }
               customerName: name.trim(), customerDoc: doc.trim() || undefined,
               customerAddress: address.trim() || undefined,
               items, discount: 0, note: note.trim() || undefined,
+              onCredit, dueDate: onCredit ? (dueDate || undefined) : undefined,
             })
             toast('success', 'Remisión emitida · stock despachado')
             onCreated(rem)
@@ -287,12 +290,27 @@ function NewRemisionSheet({ products, tenantId, locationId, onClose, onCreated }
           <p className="mb-2 text-sm font-semibold text-slate-600">Productos a despachar</p>
           <ProductPicker products={products} items={items} onChange={setItems} />
         </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="label">Forma de pago</label>
+            <select className="input" value={onCredit ? 'credito' : 'contado'} onChange={(e) => setOnCredit(e.target.value === 'credito')}>
+              <option value="contado">Contado</option>
+              <option value="credito">A crédito</option>
+            </select>
+          </div>
+          {onCredit && (
+            <div>
+              <label className="label">Vence el</label>
+              <input type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </div>
+          )}
+        </div>
         <div>
           <label className="label">Observaciones</label>
           <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. entrega a domicilio, factura después…" />
         </div>
         <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          La remisión descuenta el stock (despacho) pero NO es factura. Luego puedes convertirla en factura electrónica.
+          La remisión descuenta el stock (despacho) pero NO es factura. A crédito entra a la Cartera con su vencimiento.
         </p>
       </div>
     </Sheet>

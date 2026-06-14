@@ -344,6 +344,28 @@ async function main() {
   if (!/Inventario General/.test(txt) || !/Costo prom/.test(txt)) throw new Error('Reporte de inventario no renderizó')
   console.log('✓ Reporte de Inventario General (costo prom., utilidad %, stock sugerido)')
 
+  // 4h-quater) Informe Z fiscal
+  ctx = 'informe-z'
+  await page.evaluate(() => { location.hash = '#/informe-z' })
+  await sleep(2500)
+  txt = await bodyText(page)
+  if (!/Informe Z/.test(txt) || !/Generar Z/.test(txt)) throw new Error('Informe Z no renderizó')
+  await clickText(page, 'Generar Z (ese día)')
+  await sleep(1300)
+  txt = await bodyText(page)
+  if (!/imprimir z/i.test(txt)) throw new Error('No se generó el informe Z')
+  console.log('✓ Informe Z fiscal (Zetas)')
+  await page.keyboard.press('Escape')
+  await sleep(300)
+
+  // 4h-quinquies) Cartera
+  ctx = 'cartera'
+  await page.evaluate(() => { location.hash = '#/cartera' })
+  await sleep(2500)
+  txt = await bodyText(page)
+  if (!/Cartera/.test(txt) || !/REM-121/.test(txt)) throw new Error('Cartera no renderizó')
+  console.log('✓ Cartera (remisiones a crédito + fiado)')
+
   // 4i) Ventas: devolución parcial (abre la hoja)
   ctx = 'devolucion-parcial'
   await page.evaluate(() => { location.hash = '#/ventas' })

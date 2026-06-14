@@ -206,7 +206,31 @@ export interface Remision {
   note?: string
   status: RemisionStatus
   facturaId?: string // venta (factura) generada al convertir
+  // Crédito / cartera
+  onCredit?: boolean // ¿el cliente la lleva a crédito?
+  dueDate?: string // fecha de vencimiento
+  abonado?: number // total abonado (para la cartera)
   createdAt: string
+}
+
+// --- Informe Z (cierre fiscal diario, como las "Zetas" de SEITEM) -----------
+export interface ZReport {
+  id: string
+  tenantId: string
+  locationId: string
+  number: string // Z-####
+  date: string // YYYY-MM-DD del día fiscal
+  cumulative: boolean // "Z hasta hoy"
+  count: number
+  revenue: number
+  base: number
+  iva: number
+  ivaByRate: { rate: number; base: number; iva: number }[]
+  byMethod: Record<string, number>
+  byDocType: Record<string, number>
+  discounts: number
+  returnsCount: number
+  generatedAt: string
 }
 
 // --- Clientes (CRM + fiado) --------------------------------------------------

@@ -19,6 +19,7 @@ import type {
   CashMovement,
   ChangeOwed,
   Purchase,
+  ZReport,
 } from '@/types'
 
 // ============================================================================
@@ -50,6 +51,7 @@ export class VentanillaDB extends Dexie {
   cashMovements!: Table<CashMovement, string>
   changeOwed!: Table<ChangeOwed, string>
   purchases!: Table<Purchase, string>
+  zReports!: Table<ZReport, string>
 
   constructor() {
     super('ventanilla')
@@ -85,6 +87,10 @@ export class VentanillaDB extends Dexie {
     // v5: facturas de compra (entradas de mercancía con costo)
     this.version(5).stores({
       purchases: 'id, tenantId, locationId, supplierId, createdAt',
+    })
+    // v6: informes Z (cierres fiscales diarios)
+    this.version(6).stores({
+      zReports: 'id, tenantId, locationId, date, createdAt',
     })
   }
 }

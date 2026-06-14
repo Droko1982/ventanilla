@@ -12,7 +12,7 @@ const SYNC_TABLES = [
   'categories', 'locations', 'products', 'stock', 'sales', 'customers',
   'suppliers', 'purchaseOrders', 'stockMovements', 'cashSessions',
   'auditLogs', 'notifications', 'expenses', 'remisiones', 'cashMovements',
-  'changeOwed', 'purchases', 'users', 'tenants',
+  'changeOwed', 'purchases', 'zReports', 'users', 'tenants',
 ]
 const LAST_PULL_KEY = 'ventanilla-last-pull'
 const DIRTY_KEY = 'ventanilla-dirty'

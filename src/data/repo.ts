@@ -18,7 +18,9 @@ import type {
   Expense,
   Purchase,
   PurchaseItem,
+  ZReport,
 } from '@/types'
+import { ivaBreakdown } from '@/lib/documents'
 
 // ============================================================================
 // Lógica de negocio (mutaciones) y consultas reutilizables.
@@ -1013,6 +1015,66 @@ export async function adjustChangeOwed(args: {
   return amount
 }
 
+// ---- Informe Z (cierre fiscal diario) -------------------------------------
+export async function generateZReport(
+  tenantId: string,
+  locationId: string,
+  dateStr: string,
+  cumulative: boolean,
+  userId: string,
+  userName: string,
+): Promise<ZReport> {
+  const day = new Date(`${dateStr}T00:00:00`)
+  const start = cumulative ? 0 : day.getTime()
+  const end = day.getTime() + 86400000
+  const sales = await db.sales.where('locationId').equals(locationId).toArray()
+
+  let count = 0, revenue = 0, base = 0, iva = 0, discounts = 0, returnsCount = 0
+  const byMethod: Record<string, number> = {}
+  const byDocType: Record<string, number> = {}
+  const ivaAgg = new Map<number, { base: number; iva: number }>()
+  for (const s of sales) {
+    const t = new Date(s.createdAt).getTime()
+    if (t < start || t >= end) continue
+    if (s.status === 'anulada' || (s.returns && s.returns.length)) returnsCount++
+    if (s.status !== 'completada') continue
+    count++; revenue += s.total; discounts += s.discount
+    byDocType[s.dianDocType] = (byDocType[s.dianDocType] || 0) + s.total
+    for (const p of s.payments) byMethod[p.method] = (byMethod[p.method] || 0) + p.amount
+    const br = ivaBreakdown(s.items, s.discount)
+    base += br.base; iva += br.iva
+    for (const ln of br.lines) {
+      const cur = ivaAgg.get(ln.rate) ?? { base: 0, iva: 0 }
+      cur.base += ln.base; cur.iva += ln.iva
+      ivaAgg.set(ln.rate, cur)
+    }
+  }
+  const existing = await db.zReports.where('tenantId').equals(tenantId).count()
+  const z: ZReport = {
+    id: uid('z'), tenantId, locationId, number: `Z-${String(existing + 1).padStart(4, '0')}`,
+    date: dateStr, cumulative, count, revenue: Math.round(revenue),
+    base: Math.round(base), iva: Math.round(iva),
+    ivaByRate: [...ivaAgg.entries()].map(([rate, v]) => ({ rate, base: Math.round(v.base), iva: Math.round(v.iva) })).sort((a, b) => a.rate - b.rate),
+    byMethod, byDocType, discounts: Math.round(discounts), returnsCount,
+    generatedAt: new Date().toISOString(),
+  }
+  await db.zReports.put(z)
+  await audit({
+    tenantId, locationId, userId, userName, action: 'generó informe Z',
+    entity: 'caja', entityId: z.id, detail: `${z.number} · ${dateStr} · ${count} ventas · ${Math.round(revenue)}`,
+  })
+  return z
+}
+
+// ---- Cartera: abono a una remisión a crédito ------------------------------
+export async function abonarRemision(remisionId: string, amount: number): Promise<number> {
+  const rem = await db.remisiones.get(remisionId)
+  if (!rem) return 0
+  rem.abonado = Math.min(rem.total, (rem.abonado ?? 0) + amount)
+  await db.remisiones.put(rem)
+  return rem.abonado
+}
+
 // ---- Fiado: registrar abono de un cliente ---------------------------------
 export async function payCredit(customerId: string, amount: number): Promise<Customer | null> {
   const c = await db.customers.get(customerId)
@@ -1046,6 +1108,8 @@ export interface CreateRemisionInput {
   items: SaleItem[]
   discount: number
   note?: string
+  onCredit?: boolean
+  dueDate?: string
 }
 
 export async function createRemision(input: CreateRemisionInput): Promise<Remision> {
@@ -1068,6 +1132,9 @@ export async function createRemision(input: CreateRemisionInput): Promise<Remisi
     total,
     note: input.note,
     status: 'emitida',
+    onCredit: input.onCredit,
+    dueDate: input.dueDate,
+    abonado: input.onCredit ? 0 : total,
     createdAt: now,
   }
   await db.transaction('rw', [db.remisiones, db.stock, db.stockMovements], async () => {
