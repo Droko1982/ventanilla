@@ -26,11 +26,28 @@ async function clickText(page, text) {
   }, text)
   const el = handle.asElement()
   if (!el) throw new Error(`No encontré el botón con texto: "${text}"`)
-  await el.click()
+  try {
+    await el.click()
+  } catch {
+    // Fallback: click programático (evita "not clickable" por animación/overlay)
+    await page.evaluate((e) => e.click(), el)
+  }
 }
 
 async function bodyText(page) {
   return page.evaluate(() => document.body.innerText)
+}
+
+// Espera (sondeando) a que el texto aparezca en pantalla; tolera carga lenta.
+async function waitForText(page, needle, timeoutMs = 7000) {
+  const start = Date.now()
+  let t = ''
+  while (Date.now() - start < timeoutMs) {
+    t = await bodyText(page)
+    if (t.includes(needle)) return t
+    await sleep(250)
+  }
+  return t
 }
 
 async function main() {
@@ -66,8 +83,7 @@ async function main() {
   // 2) Entrar como Dueño
   ctx = 'login-admin'
   await clickText(page, 'Dueño de la tienda')
-  await sleep(1800)
-  txt = await bodyText(page)
+  txt = await waitForText(page, 'Hola,', 9000)
   if (!/Hola,/.test(txt)) throw new Error('Dashboard de admin no renderizó')
   console.log('✓ Dashboard (Dueño) renderiza')
 
@@ -90,8 +106,7 @@ async function main() {
   for (const [hash, expect] of routes) {
     ctx = `ruta ${hash}`
     await page.evaluate((h) => { location.hash = h }, hash)
-    await sleep(900)
-    txt = await bodyText(page)
+    txt = await waitForText(page, expect, 7000)
     if (!txt.includes(expect)) throw new Error(`Ruta ${hash}: no se encontró "${expect}"`)
     console.log(`✓ ${hash}`)
   }
@@ -290,8 +305,7 @@ async function main() {
   // 4g-bis) Modo mostrador (clásico tipo SEITEM) + vueltas ("Cambio")
   ctx = 'modo-mostrador'
   await clickText(page, 'Mostrador')
-  await sleep(500)
-  txt = await bodyText(page)
+  txt = await waitForText(page, 'REALIZAR PAGO', 6000)
   if (!/REALIZAR PAGO/.test(txt) || !/Vendedor/.test(txt)) throw new Error('Modo mostrador no renderizó')
   if (!/Cambio:/.test(txt)) throw new Error('Chip de vueltas (Cambio) no visible')
   await page.evaluate(() => {
@@ -305,7 +319,23 @@ async function main() {
   if (!/Gaseosa/.test(txt)) throw new Error('No se agregó producto por código en el mostrador')
   console.log('✓ POS modo mostrador (clásico) + vueltas')
   await clickText(page, 'Fichas') // volver a fichas para no afectar pasos siguientes
-  await sleep(300)
+  await sleep(500)
+
+  // 4g-ter) Editar un producto existente desde el POS (modificar lo creado)
+  ctx = 'editar-producto'
+  const editOpened = await page.evaluate(() => {
+    const b = document.querySelector('button[aria-label^="Editar "]')
+    if (b) { b.click(); return true }
+    return false
+  })
+  if (!editOpened) throw new Error('No se encontró el botón de editar producto en el POS')
+  txt = await waitForText(page, 'Guardar cambios', 5000)
+  if (!/Editar producto/i.test(txt) || !/Guardar cambios/i.test(txt)) throw new Error('No abrió el formulario de edición del producto')
+  await clickText(page, 'Guardar cambios')
+  await sleep(800)
+  txt = await bodyText(page)
+  if (/Editar producto/i.test(txt)) throw new Error('El formulario de edición no cerró tras guardar')
+  console.log('✓ Editar producto desde el POS (modificar producto creado)')
 
   // 4h) Proveedores: reabastecimiento automático + cuentas por pagar
   ctx = 'reabastecimiento-auto'
@@ -329,8 +359,7 @@ async function main() {
   // 4h-bis) Compras: factura de compra + costo promedio
   ctx = 'compras'
   await page.evaluate(() => { location.hash = '#/compras' })
-  await sleep(2500)
-  txt = await bodyText(page)
+  txt = await waitForText(page, 'Nueva factura de compra', 9000)
   if (!/Nueva factura de compra/.test(txt)) throw new Error('Compras no renderizó')
   if (!/FC-401/.test(txt)) throw new Error('Compra de ejemplo no visible')
   await clickText(page, 'Nueva factura de compra')
@@ -367,16 +396,14 @@ async function main() {
   // 4h-ter) Reporte de Inventario General
   ctx = 'reporte-inventario'
   await page.evaluate(() => { location.hash = '#/reporte-inventario' })
-  await sleep(2500)
-  txt = await bodyText(page)
+  txt = await waitForText(page, 'Inventario General', 9000)
   if (!/Inventario General/.test(txt) || !/Costo prom/.test(txt)) throw new Error('Reporte de inventario no renderizó')
   console.log('✓ Reporte de Inventario General (costo prom., utilidad %, stock sugerido)')
 
   // 4h-quater) Informe Z fiscal
   ctx = 'informe-z'
   await page.evaluate(() => { location.hash = '#/informe-z' })
-  await sleep(2500)
-  txt = await bodyText(page)
+  txt = await waitForText(page, 'Generar Z', 9000)
   if (!/Informe Z/.test(txt) || !/Generar Z/.test(txt)) throw new Error('Informe Z no renderizó')
   await clickText(page, 'Generar Z (ese día)')
   await sleep(1300)
@@ -389,16 +416,14 @@ async function main() {
   // 4h-quinquies) Cartera
   ctx = 'cartera'
   await page.evaluate(() => { location.hash = '#/cartera' })
-  await sleep(2500)
-  txt = await bodyText(page)
+  txt = await waitForText(page, 'REM-121', 9000)
   if (!/Cartera/.test(txt) || !/REM-121/.test(txt)) throw new Error('Cartera no renderizó')
   console.log('✓ Cartera (remisiones a crédito + fiado)')
 
   // 4h-sexies) Ajustes de inventario
   ctx = 'ajustes-inventario'
   await page.evaluate(() => { location.hash = '#/ajustes-inventario' })
-  await sleep(2500)
-  txt = await bodyText(page)
+  txt = await waitForText(page, 'Ajustes de inventario', 9000)
   if (!/Ajustes de inventario/.test(txt) || !/Entrada/.test(txt) || !/Salida/.test(txt)) throw new Error('Ajustes de inventario no renderizó')
   await clickText(page, 'Precio')
   await sleep(600)
@@ -413,8 +438,7 @@ async function main() {
   // 4h-septies) Eventos Recepción DIAN
   ctx = 'eventos-recepcion'
   await page.evaluate(() => { location.hash = '#/eventos-recepcion' })
-  await sleep(2500)
-  txt = await bodyText(page)
+  txt = await waitForText(page, 'Eventos Recepción', 9000)
   if (!/Eventos Recepción/.test(txt) || !/FC-401/.test(txt)) throw new Error('Eventos Recepción no renderizó')
   await clickText(page, 'FC-401')
   await sleep(600)
@@ -441,8 +465,7 @@ async function main() {
   // 4h-nonies) Domicilios
   ctx = 'domicilios'
   await page.evaluate(() => { location.hash = '#/domicilios' })
-  await sleep(2500)
-  txt = await bodyText(page)
+  txt = await waitForText(page, 'Doña Rosa', 9000)
   if (!/Domicilios/.test(txt) || !/Doña Rosa/.test(txt)) throw new Error('Domicilios no renderizó')
   await clickText(page, 'Doña Rosa')
   await sleep(600)

@@ -55,6 +55,7 @@ export default function POS() {
   const [manualOpen, setManualOpen] = useState(false)
   const [displayOpen, setDisplayOpen] = useState(false)
   const [receipt, setReceipt] = useState<Sale | null>(null)
+  const [editProduct, setEditProduct] = useState<Product | null>(null)
 
   const canManage = can(user, 'canManageInventory')
   const canDiscount = can(user, 'canDiscount')
@@ -258,28 +259,39 @@ export default function POS() {
           const qty = stockMap.get(p.id) ?? 0
           const out = qty <= 0
           return (
-            <button
-              key={p.id}
-              onClick={() => addToCart(p)}
-              className={`relative flex flex-col rounded-2xl border bg-white p-3 text-left shadow-sm active:scale-[0.98] ${
-                out ? 'border-rose-200 opacity-70' : 'border-slate-100'
-              }`}
-            >
-              <ProductThumb photo={p.photo} emoji={p.imageEmoji} size={44} />
-              <span className="mt-1 line-clamp-2 text-sm font-semibold leading-tight text-slate-700">
-                {p.name}
-              </span>
-              <span className="mt-1 font-bold text-brand-700">
-                {cop(p.price)}
-                {p.unit === 'peso' && <span className="text-xs font-normal text-slate-400">/kg</span>}
-              </span>
-              {p.wholesalePrice && p.wholesaleMinQty ? (
-                <span className="text-[10px] font-medium text-emerald-600">x{p.wholesaleMinQty}+ {cop(p.wholesalePrice)}</span>
-              ) : null}
-              <span className={`mt-0.5 text-[11px] ${out ? 'text-rose-500' : 'text-slate-400'}`}>
-                {out ? 'Agotado' : `${p.unit === 'peso' ? kg(qty) : qty} en stock`}
-              </span>
-            </button>
+            <div key={p.id} className="relative">
+              <button
+                onClick={() => addToCart(p)}
+                className={`flex w-full flex-col rounded-2xl border bg-white p-3 text-left shadow-sm active:scale-[0.98] ${
+                  out ? 'border-rose-200 opacity-70' : 'border-slate-100'
+                }`}
+              >
+                <ProductThumb photo={p.photo} emoji={p.imageEmoji} size={44} />
+                <span className="mt-1 line-clamp-2 text-sm font-semibold leading-tight text-slate-700">
+                  {p.name}
+                </span>
+                <span className="mt-1 font-bold text-brand-700">
+                  {cop(p.price)}
+                  {p.unit === 'peso' && <span className="text-xs font-normal text-slate-400">/kg</span>}
+                </span>
+                {p.wholesalePrice && p.wholesaleMinQty ? (
+                  <span className="text-[10px] font-medium text-emerald-600">x{p.wholesaleMinQty}+ {cop(p.wholesalePrice)}</span>
+                ) : null}
+                <span className={`mt-0.5 text-[11px] ${out ? 'text-rose-500' : 'text-slate-400'}`}>
+                  {out ? 'Agotado' : `${p.unit === 'peso' ? kg(qty) : qty} en stock`}
+                </span>
+              </button>
+              {canManage && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setEditProduct(p) }}
+                  className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-slate-100/90 text-slate-500 shadow-sm backdrop-blur active:scale-95"
+                  aria-label={`Editar ${p.name}`}
+                  title="Editar producto"
+                >
+                  <Icon name="edit" className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           )
         })}
       </div>
@@ -381,6 +393,19 @@ export default function POS() {
           defaultLocationId={locationId}
           initialBarcode={scanCreateCode}
           onSaved={(p) => { addToCart(p); setScanCreateCode(undefined) }}
+        />
+      )}
+
+      {editProduct && products && categories && suppliers && locations && (
+        <ProductForm
+          open
+          onClose={() => setEditProduct(null)}
+          tenantId={tenantId}
+          locations={locations}
+          categories={categories}
+          suppliers={suppliers}
+          product={editProduct}
+          defaultLocationId={locationId}
         />
       )}
 
@@ -986,7 +1011,7 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
     { id: 'efectivo', label: 'Efectivo', emoji: '💵' },
     { id: 'nequi', label: 'Nequi', emoji: '📲' },
     { id: 'tarjeta', label: 'Tarjeta', emoji: '💳' },
-    { id: 'transferencia', label: 'Transfer.', emoji: '🏦' },
+    { id: 'transferencia', label: 'Transferencia', emoji: '🏦' },
     { id: 'fiado', label: 'Fiado', emoji: '📒' },
   ]
 

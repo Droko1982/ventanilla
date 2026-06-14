@@ -21,7 +21,7 @@ const methodColors: Record<string, string> = {
   efectivo: '#10b981', nequi: '#8b5cf6', tarjeta: '#3b82f6', transferencia: '#f59e0b', fiado: '#ef4444',
 }
 const methodLabels: Record<string, string> = {
-  efectivo: 'Efectivo', nequi: 'Nequi', tarjeta: 'Tarjeta', transferencia: 'Transfer.', fiado: 'Fiado',
+  efectivo: 'Efectivo', nequi: 'Nequi', tarjeta: 'Tarjeta', transferencia: 'Transferencia', fiado: 'Fiado',
 }
 
 export default function Dashboard() {
