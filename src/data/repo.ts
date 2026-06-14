@@ -1,4 +1,5 @@
 import { db } from './db'
+import { api, isCloudConfigured } from './api'
 import { uid } from '@/lib/id'
 import { startOfToday } from '@/lib/format'
 import type {
@@ -109,6 +110,7 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
   )
   const total = Math.max(0, Math.round(subtotal - input.discount))
   const now = new Date().toISOString()
+  let crossedThreshold = false // ¿algún producto bajó del umbral en esta venta?
   const docType = input.docType ?? (input.customerDoc ? 'factura' : 'tiquete_pos')
   const docNumber = docType === 'factura' ? nextFacturaNumber() : nextDianNumber()
 
@@ -158,6 +160,7 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
           await db.stock.put(st)
           // Alerta si cruzó el umbral
           if (st.quantity <= st.reorderThreshold) {
+            crossedThreshold = true
             await notify({
               tenantId: input.tenantId,
               locationId: input.locationId,
@@ -215,6 +218,16 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
     entityId: sale.id,
     detail: `Total ${total} · ${input.payments.map((p) => p.method).join(', ')}`,
   })
+
+  // Reabastecimiento automático: si bajó del umbral y está activado, pide solo.
+  if (crossedThreshold) {
+    try {
+      const tenant = await db.tenants.get(input.tenantId)
+      if (tenant?.autoReorder) await runAutoReorder(input.tenantId, input.locationId, input.userId, input.userName)
+    } catch {
+      /* el auto-pedido nunca debe romper la venta */
+    }
+  }
 
   return sale
 }
@@ -477,6 +490,74 @@ export async function createPurchaseOrder(
   }
   await db.purchaseOrders.put(po)
   return po
+}
+
+// Envía un WhatsApp al proveedor. Automático vía backend (WhatsApp Cloud API)
+// si la app está conectada a la nube; si no, no puede enviarse solo.
+export async function sendSupplierWhatsApp(phone: string, message: string): Promise<boolean> {
+  if (!phone || !isCloudConfigured()) return false
+  try {
+    const r = await api<{ sent?: boolean }>('/whatsapp/send', { method: 'POST', body: { to: phone, message } })
+    return !!r.sent
+  } catch {
+    return false
+  }
+}
+
+function autoOrderMessage(supplierName: string | undefined, locName: string | undefined, items: { name: string; qty: number }[]): string {
+  return [
+    `Hola${supplierName ? ' ' + supplierName : ''}, pedido automático para *${locName ?? 'la tienda'}*:`,
+    '',
+    ...items.map((it) => `• ${it.name}: ${it.qty}`),
+    '',
+    'Generado por Ventanilla (reabastecimiento automático).',
+  ].join('\n')
+}
+
+// Reabastecimiento automático: crea y (si se puede) ENVÍA el pedido por WhatsApp
+// a cada proveedor que tenga productos por debajo del umbral. No duplica pedidos.
+export async function runAutoReorder(tenantId: string, locationId: string, userId: string, userName: string): Promise<void> {
+  const suggestions = await suggestReorder(tenantId, locationId)
+  if (!suggestions.length) return
+  const bySupplier = new Map<string, ReorderSuggestion[]>()
+  for (const s of suggestions) {
+    if (!s.supplierId) continue
+    bySupplier.set(s.supplierId, [...(bySupplier.get(s.supplierId) ?? []), s])
+  }
+  const suppliers = await db.suppliers.where('tenantId').equals(tenantId).toArray()
+  const sById = new Map(suppliers.map((s) => [s.id, s]))
+  const location = await db.locations.get(locationId)
+  const recentPOs = await db.purchaseOrders.where('locationId').equals(locationId).toArray()
+  const since = Date.now() - 12 * 3600000 // no repetir pedidos al mismo proveedor en 12 h
+
+  for (const [supplierId, items] of bySupplier) {
+    const supplier = sById.get(supplierId)
+    if (!supplier) continue
+    const recent = recentPOs.find(
+      (po) => po.supplierId === supplierId && po.status !== 'recibido' && po.status !== 'cancelado' && new Date(po.createdAt).getTime() > since,
+    )
+    if (recent) continue // ya hay un pedido reciente: no spamear
+
+    await createPurchaseOrder(
+      tenantId, locationId, supplierId,
+      items.map((it) => ({ productId: it.product.id, name: it.product.name, suggestedQty: it.suggestedQty, cost: it.product.cost })),
+    )
+    const message = autoOrderMessage(supplier.name, location?.name, items.map((it) => ({ name: it.product.name, qty: it.suggestedQty })))
+    const sent = supplier.whatsapp ? await sendSupplierWhatsApp(supplier.whatsapp, message) : false
+
+    await notify({
+      tenantId, locationId, type: 'stock', severity: 'aviso',
+      title: sent ? 'Pedido enviado automáticamente' : 'Pedido automático listo',
+      message: sent
+        ? `Se envió por WhatsApp el pedido a ${supplier.name}.`
+        : `Pedido para ${supplier.name} creado. Conecta la nube + WhatsApp para envío 100% automático.`,
+    })
+    await audit({
+      tenantId, locationId, userId, userName,
+      action: 'reabastecimiento automático', entity: 'pedido', entityId: supplierId,
+      detail: `${items.length} productos a ${supplier.name}${sent ? ' · enviado por WhatsApp' : ' · pendiente de envío'}`,
+    })
+  }
 }
 
 // Marcar un pedido como pagado al proveedor (cuentas por pagar).

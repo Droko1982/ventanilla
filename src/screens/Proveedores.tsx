@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
-import { useActiveLocationId, useSuppliers, useCurrentUser, useLocations } from '@/hooks/data'
-import { suggestReorder, createPurchaseOrder, receivePurchase, markPurchaseOrderPaid, type ReorderSuggestion } from '@/data/repo'
+import { useActiveLocationId, useSuppliers, useCurrentUser, useLocations, useTenant } from '@/hooks/data'
+import { suggestReorder, createPurchaseOrder, receivePurchase, markPurchaseOrderPaid, runAutoReorder, type ReorderSuggestion } from '@/data/repo'
 import { Sheet } from '@/components/Sheet'
 import { Segmented, EmptyState, PageHeader } from '@/components/ui'
 import { Icon } from '@/components/icons'
@@ -20,6 +20,8 @@ export default function Proveedores() {
   const suppliers = useSuppliers()
   const locations = useLocations()
   const user = useCurrentUser()
+  const tenant = useTenant()
+  const [autoBusy, setAutoBusy] = useState(false)
   const [tab, setTab] = useState<'reabastecer' | 'proveedores' | 'pedidos' | 'porpagar'>('reabastecer')
   const [editSupplier, setEditSupplier] = useState<Supplier | null>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -74,6 +76,40 @@ export default function Proveedores() {
 
       {tab === 'reabastecer' && (
         <div className="space-y-4">
+          {/* Reabastecimiento automático por WhatsApp */}
+          <div className="card p-4">
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={tenant?.autoReorder ?? false}
+                onChange={async (e) => { if (tenant) await db.tenants.update(tenant.id, { autoReorder: e.target.checked }) }}
+                className="mt-0.5 h-5 w-5"
+              />
+              <span>
+                <span className="block font-semibold text-slate-700">🤖 Reabastecimiento automático</span>
+                <span className="block text-xs text-slate-500">
+                  Cuando un producto baje del umbral, se crea el pedido y se envía por WhatsApp al proveedor solo.
+                  Para envío 100% automático conecta la nube + WhatsApp; sin eso, deja el pedido listo y te avisa.
+                </span>
+              </span>
+            </label>
+            {tenant?.autoReorder && locationId && (
+              <button
+                className="btn btn-secondary mt-3 w-full text-sm"
+                disabled={autoBusy}
+                onClick={async () => {
+                  setAutoBusy(true)
+                  try {
+                    await runAutoReorder(tenantId, locationId, user!.id, user!.name)
+                    toast('success', 'Pedidos automáticos procesados')
+                  } finally { setAutoBusy(false) }
+                }}
+              >
+                {autoBusy ? 'Procesando…' : '⚡ Pedir y enviar ahora (a los proveedores con stock bajo)'}
+              </button>
+            )}
+          </div>
+
           {bySupplier.length === 0 && (
             <EmptyState emoji="✅" title="Todo abastecido" hint="Ningún producto cruzó su umbral de reorden." />
           )}

@@ -256,10 +256,19 @@ async function main() {
   await clickText(page, 'Fichas') // volver a fichas para no afectar pasos siguientes
   await sleep(300)
 
-  // 4h) Proveedores: cuentas por pagar
-  ctx = 'cuentas-por-pagar'
+  // 4h) Proveedores: reabastecimiento automático + cuentas por pagar
+  ctx = 'reabastecimiento-auto'
   await page.evaluate(() => { location.hash = '#/proveedores' })
   await sleep(1100)
+  txt = await bodyText(page)
+  if (!/Reabastecimiento autom/i.test(txt)) throw new Error('Toggle de reabastecimiento automático no visible')
+  await page.evaluate(() => { const cb = [...document.querySelectorAll('input[type=checkbox]')][0]; if (cb && !cb.checked) cb.click() })
+  await sleep(500)
+  await clickText(page, 'Pedir y enviar ahora')
+  await sleep(1500)
+  console.log('✓ Reabastecimiento automático por WhatsApp (crea pedidos a proveedores)')
+
+  ctx = 'cuentas-por-pagar'
   await clickText(page, 'Por pagar')
   await sleep(900)
   txt = await bodyText(page)

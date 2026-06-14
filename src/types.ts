@@ -41,6 +41,7 @@ export interface Tenant {
   locationCount?: number
   monthlyGoal?: number // meta de ventas del mes (opcional)
   commissionPct?: number // % de comisión por vendedor (para reportes)
+  autoReorder?: boolean // reabastecimiento automático: WhatsApp al proveedor al bajar el stock
 }
 
 export interface DianConfig {
