@@ -18,6 +18,7 @@ export default function Clientes() {
   const customers = useCustomers()
   const [detail, setDetail] = useState<Customer | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   const totalFiado = (customers ?? []).reduce((s, c) => s + c.creditBalance, 0)
   const sorted = [...(customers ?? [])].sort((a, b) => b.creditBalance - a.creditBalance)
@@ -28,9 +29,14 @@ export default function Clientes() {
         title="Clientes"
         subtitle="Fiado, historial y abonos"
         right={
-          <button onClick={() => setAddOpen(true)} className="btn btn-primary px-3 py-2 text-sm">
-            <Icon name="plus" className="h-5 w-5" /> Cliente
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => setImportOpen(true)} className="btn btn-secondary px-3 py-2 text-sm">
+              <Icon name="doc" className="h-5 w-5" /> Importar
+            </button>
+            <button onClick={() => setAddOpen(true)} className="btn btn-primary px-3 py-2 text-sm">
+              <Icon name="plus" className="h-5 w-5" /> Cliente
+            </button>
+          </div>
         }
       />
 
@@ -64,7 +70,74 @@ export default function Clientes() {
 
       {detail && <CustomerDetail customer={detail} onClose={() => setDetail(null)} />}
       {addOpen && <CustomerForm tenantId={tenantId} onClose={() => setAddOpen(false)} />}
+      {importOpen && <ImportClientsSheet tenantId={tenantId} onClose={() => setImportOpen(false)} />}
     </div>
+  )
+}
+
+// --- Importar clientes desde CSV -------------------------------------------
+function ImportClientsSheet({ tenantId, onClose }: { tenantId: string; onClose: () => void }) {
+  const [preview, setPreview] = useState<string[][]>([])
+  const [count, setCount] = useState(0)
+
+  function parseCSV(text: string): string[][] {
+    return text.split(/\r?\n/).filter((l) => l.trim()).map((line) => line.split(/[;,]/).map((c) => c.trim()))
+  }
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => { const rows = parseCSV(reader.result as string); setPreview(rows.slice(0, 6)); setCount(Math.max(0, rows.length - 1)) }
+    reader.readAsText(file)
+  }
+  async function doImport() {
+    const fileInput = document.getElementById('csv-clients') as HTMLInputElement
+    const file = fileInput?.files?.[0]
+    if (!file) return
+    const rows = parseCSV(await file.text())
+    let imported = 0
+    for (const r of rows.slice(1)) {
+      const [name, idNumber, phone, address, barrio, city] = r
+      if (!name) continue
+      await db.customers.put({
+        id: uid('cl'), tenantId, name,
+        idNumber: idNumber || undefined, phone: phone || undefined,
+        address: address || undefined, barrio: barrio || undefined, city: city || undefined,
+        creditBalance: 0, totalSpent: 0, points: 0, createdAt: new Date().toISOString(),
+      })
+      imported++
+    }
+    toast('success', `${imported} clientes importados`)
+    onClose()
+  }
+  const template = 'nombre,identificacion,celular,direccion,barrio,ciudad\nDoña Rosa,41234567,3001112233,Cra 14 #5-20,La Patria,Armenia'
+  const templateUrl = 'data:text/csv;charset=utf-8,' + encodeURIComponent(template)
+
+  return (
+    <Sheet open onClose={onClose} title="Importar clientes"
+      footer={<button className="btn btn-primary btn-lg w-full" disabled={!count} onClick={doImport}>Importar {count} clientes</button>}>
+      <div className="space-y-4">
+        <p className="text-sm text-slate-500">Sube un <b>CSV</b> con columnas: nombre, identificación, celular, dirección, barrio, ciudad.</p>
+        <a href={templateUrl} download="plantilla-clientes.csv" className="btn btn-secondary w-full text-sm">⬇️ Descargar plantilla</a>
+        <label className="btn btn-primary w-full cursor-pointer">
+          📂 Elegir archivo CSV
+          <input id="csv-clients" type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
+        </label>
+        {preview.length > 0 && (
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full text-xs">
+              <tbody>
+                {preview.map((row, i) => (
+                  <tr key={i} className={i === 0 ? 'bg-slate-100 font-semibold' : ''}>
+                    {row.slice(0, 4).map((cell, j) => <td key={j} className="border-b border-slate-100 px-2 py-1">{cell}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </Sheet>
   )
 }
 

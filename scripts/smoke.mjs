@@ -378,6 +378,34 @@ async function main() {
   if (!/Actual/.test(txt)) throw new Error('Cambio de precio no renderizó')
   console.log('✓ Ajustes de inventario (entradas/salidas, precio, sección)')
 
+  // 4h-septies) Eventos Recepción DIAN
+  ctx = 'eventos-recepcion'
+  await page.evaluate(() => { location.hash = '#/eventos-recepcion' })
+  await sleep(2500)
+  txt = await bodyText(page)
+  if (!/Eventos Recepción/.test(txt) || !/FC-401/.test(txt)) throw new Error('Eventos Recepción no renderizó')
+  await clickText(page, 'FC-401')
+  await sleep(600)
+  txt = await bodyText(page)
+  if (!/Acuse de recibo/.test(txt)) throw new Error('Detalle de eventos no abrió')
+  await clickText(page, 'Transmitir')
+  await sleep(600)
+  console.log('✓ Eventos Recepción (DIAN)')
+  await page.keyboard.press('Escape')
+  await sleep(300)
+
+  // 4h-octies) Importar clientes (CSV)
+  ctx = 'importar-clientes'
+  await page.evaluate(() => { location.hash = '#/clientes' })
+  await sleep(900)
+  await clickText(page, 'Importar')
+  await sleep(600)
+  txt = await bodyText(page)
+  if (!/Importar clientes/.test(txt)) throw new Error('Importar clientes no abrió')
+  console.log('✓ Importar clientes (CSV)')
+  await page.keyboard.press('Escape')
+  await sleep(300)
+
   // 4i) Ventas: devolución parcial (abre la hoja)
   ctx = 'devolucion-parcial'
   await page.evaluate(() => { location.hash = '#/ventas' })
@@ -387,6 +415,8 @@ async function main() {
     if (b) b.click()
   })
   await sleep(700)
+  txt = await bodyText(page)
+  if (!/nota débito/i.test(txt)) throw new Error('Botón de nota débito no disponible')
   await clickText(page, 'Devolución parcial')
   await sleep(600)
   txt = await bodyText(page)

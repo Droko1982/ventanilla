@@ -81,6 +81,11 @@ export function nextCreditNoteNumber(): string {
   ncCounter += 1
   return `NC-${ncCounter}`
 }
+let ndCounter = 200
+export function nextDebitNoteNumber(): string {
+  ndCounter += 1
+  return `ND-${ndCounter}`
+}
 
 // ---- Registrar una venta ---------------------------------------------------
 export interface RecordSaleInput {
@@ -816,6 +821,45 @@ export async function transferStock(args: {
     entityId: args.productId,
     detail: `Movió ${args.qty} unidades a otro local.`,
   })
+}
+
+// ---- Eventos Recepción (DIAN) sobre facturas de compra recibidas ----------
+export async function registerReceptionEvent(
+  purchaseId: string,
+  event: 'acuse' | 'reciboBien' | 'aceptacion',
+  userId: string,
+  userName: string,
+): Promise<void> {
+  const pur = await db.purchases.get(purchaseId)
+  if (!pur) return
+  const now = new Date().toISOString()
+  pur.dianEvents = { ...(pur.dianEvents ?? {}), [event]: now }
+  await db.purchases.put(pur)
+  const labels: Record<string, string> = { acuse: 'acuse de recibo', reciboBien: 'recibo del bien', aceptacion: 'aceptación expresa' }
+  await audit({
+    tenantId: pur.tenantId, locationId: pur.locationId, userId, userName,
+    action: `transmitió ${labels[event]} (DIAN)`, entity: 'compra', entityId: pur.id, detail: `${pur.number}`,
+  })
+}
+
+// ---- Nota débito (cargo adicional sobre una venta) ------------------------
+export async function generateDebitNote(saleId: string, amount: number, reason: string, userId: string, userName: string): Promise<string | null> {
+  const sale = await db.sales.get(saleId)
+  if (!sale) return null
+  const number = nextDebitNoteNumber()
+  sale.debitNoteNumber = number
+  sale.debitNoteAmount = amount
+  sale.note = sale.note ? `${sale.note} · ND: ${reason}` : `ND: ${reason}`
+  await db.sales.put(sale)
+  if (sale.customerId) {
+    const c = await db.customers.get(sale.customerId)
+    if (c) { c.creditBalance += amount; await db.customers.put(c) }
+  }
+  await audit({
+    tenantId: sale.tenantId, locationId: sale.locationId, userId, userName,
+    action: 'generó nota débito', entity: 'venta', entityId: sale.id, detail: `${number} · ${amount} · ${reason}`,
+  })
+  return number
 }
 
 // ---- Traspaso con conversión de presentación (caja → unidades) ------------

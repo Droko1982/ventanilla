@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useScopeSales, useLocations, useCurrentUser, useTenant } from '@/hooks/data'
-import { transmitDian, voidSale, returnSaleItems } from '@/data/repo'
+import { transmitDian, voidSale, returnSaleItems, generateDebitNote } from '@/data/repo'
 import { Sheet } from '@/components/Sheet'
 import { Segmented, EmptyState, PageHeader, DianChip, Money } from '@/components/ui'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
-import { cop, kg } from '@/lib/money'
+import { cop, kg, parseCop } from '@/lib/money'
 import { fmtDateTime, fmtTime, timeAgo } from '@/lib/format'
 import type { Sale } from '@/types'
 
@@ -100,6 +100,7 @@ function SaleDetail({
 }) {
   const user = useCurrentUser()
   const [returnOpen, setReturnOpen] = useState(false)
+  const [ndOpen, setNdOpen] = useState(false)
   return (
     <Sheet open onClose={onClose} title={`Venta · ${fmtTime(sale.createdAt)}`}>
       <div className="space-y-4">
@@ -174,8 +175,29 @@ function SaleDetail({
             <Icon name="trash" className="h-5 w-5" /> Anular venta completa (nota crédito)
           </button>
         )}
+        {sale.status === 'completada' && (
+          <button onClick={() => setNdOpen(true)} className="btn btn-secondary w-full text-blue-600">
+            <Icon name="doc" className="h-5 w-5" /> Generar nota débito (cargo adicional)
+          </button>
+        )}
         {sale.creditNoteNumber && (
           <p className="rounded-xl bg-amber-50 p-2 text-center text-xs text-amber-700">Nota crédito: {sale.creditNoteNumber}</p>
+        )}
+        {sale.debitNoteNumber && (
+          <p className="rounded-xl bg-blue-50 p-2 text-center text-xs text-blue-700">Nota débito {sale.debitNoteNumber}: +{cop(sale.debitNoteAmount ?? 0)}</p>
+        )}
+
+        {ndOpen && (
+          <Sheet open onClose={() => setNdOpen(false)} title="Nota débito">
+            <DebitNoteForm
+              onApply={async (amount, reason) => {
+                const n = await generateDebitNote(sale.id, amount, reason, user!.id, user!.name)
+                toast('success', `Nota débito ${n} generada`)
+                setNdOpen(false)
+                onClose()
+              }}
+            />
+          </Sheet>
         )}
         {sale.status === 'anulada' && (
           <p className="rounded-xl bg-rose-50 p-3 text-center text-sm text-rose-600">Venta anulada. El stock fue devuelto.</p>
@@ -247,5 +269,20 @@ function ReturnSheet({
         })}
       </div>
     </Sheet>
+  )
+}
+
+function DebitNoteForm({ onApply }: { onApply: (amount: number, reason: string) => void }) {
+  const [amount, setAmount] = useState('')
+  const [reason, setReason] = useState('')
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">Cargo adicional sobre esta venta (ej. interés por mora, recargo). Si tiene cliente, suma a su saldo.</p>
+      <input autoFocus className="input text-center text-xl font-bold" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="$ 0" />
+      <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Motivo" />
+      <button className="btn btn-primary w-full" disabled={parseCop(amount) <= 0} onClick={() => onApply(parseCop(amount), reason.trim() || 'Cargo adicional')}>
+        Generar nota débito
+      </button>
+    </div>
   )
 }

@@ -183,6 +183,8 @@ export interface Sale {
   remisionId?: string // si la factura se generó a partir de una remisión
   returns?: { productId: string; qty: number; at: string }[] // devoluciones parciales
   creditNoteNumber?: string // nota crédito por devolución
+  debitNoteNumber?: string // nota débito (cargo adicional)
+  debitNoteAmount?: number
   createdAt: string
   syncedAt?: string // null mientras está sólo en local (offline)
 }
@@ -290,6 +292,8 @@ export interface Purchase {
   paymentMethod: 'contado' | 'credito'
   dueDate?: string
   paid: boolean
+  // Eventos de recepción ante la DIAN (acuse, recibo del bien, aceptación)
+  dianEvents?: { acuse?: string; reciboBien?: string; aceptacion?: string }
   createdAt: string
 }
 
