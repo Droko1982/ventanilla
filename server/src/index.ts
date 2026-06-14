@@ -21,6 +21,15 @@ app.get('/health', (_req, res) =>
   res.json({ ok: true, service: 'ventanilla-api', time: new Date().toISOString() }),
 )
 
+app.get('/', (_req, res) =>
+  res.json({
+    service: 'Ventanilla API',
+    status: 'ok',
+    docs: 'POST /auth/register · POST /auth/login · GET/POST /sync',
+    app: 'https://droko1982.github.io/ventanilla/',
+  }),
+)
+
 app.use('/auth', authRouter)
 app.use('/sync', syncRouter)
 app.use('/billing', billingRouter)

@@ -16,6 +16,7 @@ Todo el sistema puede quedar en línea sin pagar nada:
 1. Entra a **https://neon.tech** → *Sign up* (con tu cuenta de GitHub).
 2. *Create project* → nombre `ventanilla` → región la más cercana (us-east).
 3. Copia la **Connection string** (empieza con `postgresql://…`). Esa es tu `DATABASE_URL`.
+   - Asegúrate de que termine en **`?sslmode=require`** (Neon ya la da así). Marca *Pooled connection* si la ofrece.
 
 ## 2) Crear las tablas y el negocio demo (una vez, desde tu PC)
 En la carpeta `server/`:
