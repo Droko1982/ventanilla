@@ -12,6 +12,7 @@ export default function Mas() {
     { to: '/proveedores', icon: 'truck', label: 'Proveedores', desc: 'Reabastecer, pedidos, directorio, deuda', color: 'bg-amber-100 text-amber-700' },
     { to: '/compras', icon: 'box', label: 'Compras', desc: 'Facturas de compra, costo promedio, entradas', color: 'bg-purple-100 text-purple-700' },
     { to: '/reporte-inventario', icon: 'chart', label: 'Inventario General', desc: 'Reporte: costo prom., utilidad %, stock sugerido', color: 'bg-teal-100 text-teal-700' },
+    { to: '/ajustes-inventario', icon: 'box', label: 'Ajustes de inventario', desc: 'Entradas/salidas con motivo, precio, sección', color: 'bg-teal-100 text-teal-700' },
     { to: '/clientes', icon: 'users', label: 'Clientes / Fiado', desc: 'Crédito, historial, abonos', color: 'bg-rose-100 text-rose-700' },
     { to: '/cartera', icon: 'doc', label: 'Cartera', desc: 'Cuentas por cobrar: crédito y fiado, abonos', color: 'bg-rose-100 text-rose-700' },
     { to: '/informe-z', icon: 'doc', label: 'Informe Z (fiscal)', desc: 'Cierre fiscal diario · Zetas', color: 'bg-blue-100 text-blue-700' },

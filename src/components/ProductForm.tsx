@@ -55,6 +55,7 @@ export function ProductForm({
   const [promoValue, setPromoValue] = useState(product?.promoValue ? String(product.promoValue) : '')
   const [section, setSection] = useState(product?.section ?? '')
   const [avgCost, setAvgCost] = useState(product?.avgCost ? String(product.avgCost) : '')
+  const [blockNegative, setBlockNegative] = useState(product?.allowNegative === false)
   const [uploading, setUploading] = useState(false)
   const [initialQty, setInitialQty] = useState('')
   const [saving, setSaving] = useState(false)
@@ -101,6 +102,7 @@ export function ProductForm({
       promoValue: promoType === 'percent' ? parseInt(promoValue || '0', 10) || undefined : undefined,
       section: section.trim() || undefined,
       avgCost: parseCop(avgCost) || undefined,
+      allowNegative: !blockNegative,
       active: product?.active ?? true,
       createdAt: product?.createdAt ?? new Date().toISOString(),
     }
@@ -318,6 +320,11 @@ export function ProductForm({
         <label className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
           <input type="checkbox" checked={perishable} onChange={(e) => setPerishable(e.target.checked)} className="h-5 w-5" />
           <span className="text-sm text-slate-600">Es perecedero (controlar vencimiento)</span>
+        </label>
+
+        <label className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
+          <input type="checkbox" checked={blockNegative} onChange={(e) => setBlockNegative(e.target.checked)} className="h-5 w-5" />
+          <span className="text-sm text-slate-600">No permitir vender sin existencias (bloquear negativo)</span>
         </label>
 
         {!barcode.trim() && !editing && (

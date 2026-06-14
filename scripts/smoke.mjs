@@ -204,7 +204,7 @@ async function main() {
 
   // 4e-bis) Toma física de inventario
   ctx = 'toma-fisica'
-  await clickText(page, 'Toma física')
+  await clickText(page, 'Conteo')
   await sleep(700)
   txt = await bodyText(page)
   if (!/Aplicar/.test(txt)) throw new Error('Toma física no abrió')
@@ -365,6 +365,18 @@ async function main() {
   txt = await bodyText(page)
   if (!/Cartera/.test(txt) || !/REM-121/.test(txt)) throw new Error('Cartera no renderizó')
   console.log('✓ Cartera (remisiones a crédito + fiado)')
+
+  // 4h-sexies) Ajustes de inventario
+  ctx = 'ajustes-inventario'
+  await page.evaluate(() => { location.hash = '#/ajustes-inventario' })
+  await sleep(2500)
+  txt = await bodyText(page)
+  if (!/Ajustes de inventario/.test(txt) || !/Entrada/.test(txt) || !/Salida/.test(txt)) throw new Error('Ajustes de inventario no renderizó')
+  await clickText(page, 'Precio')
+  await sleep(600)
+  txt = await bodyText(page)
+  if (!/Actual/.test(txt)) throw new Error('Cambio de precio no renderizó')
+  console.log('✓ Ajustes de inventario (entradas/salidas, precio, sección)')
 
   // 4i) Ventas: devolución parcial (abre la hoja)
   ctx = 'devolucion-parcial'

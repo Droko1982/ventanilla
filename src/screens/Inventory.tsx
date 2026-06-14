@@ -122,11 +122,14 @@ export default function Inventory() {
 
       {role === 'admin' && (
         <div className="mb-3 flex gap-2">
-          <button onClick={() => setCountOpen(true)} className="btn btn-secondary flex-1 py-2 text-sm">
-            <Icon name="box" className="h-5 w-5" /> Toma física
+          <button onClick={() => setCountOpen(true)} className="btn btn-secondary flex-1 py-2 text-xs">
+            <Icon name="box" className="h-4 w-4" /> Conteo
           </button>
-          <button onClick={() => navigate('/reporte-inventario')} className="btn btn-secondary flex-1 py-2 text-sm">
-            <Icon name="chart" className="h-5 w-5" /> Inventario General
+          <button onClick={() => navigate('/ajustes-inventario')} className="btn btn-secondary flex-1 py-2 text-xs">
+            <Icon name="edit" className="h-4 w-4" /> Ajustes
+          </button>
+          <button onClick={() => navigate('/reporte-inventario')} className="btn btn-secondary flex-1 py-2 text-xs">
+            <Icon name="chart" className="h-4 w-4" /> Reporte
           </button>
         </div>
       )}

@@ -97,6 +97,10 @@ export default function POS() {
 
   const addToCart = useCallback(
     (p: Product) => {
+      if ((stockMap.get(p.id) ?? 0) <= 0 && p.allowNegative === false) {
+        toast('error', `${p.name} sin existencias`)
+        return
+      }
       if (p.unit === 'peso') {
         setWeightProduct(p)
       } else {
@@ -104,7 +108,7 @@ export default function POS() {
         toast('success', `${p.name} agregado`)
       }
     },
-    [cart],
+    [cart, stockMap],
   )
 
   const handleScan = useCallback(
@@ -139,10 +143,14 @@ export default function POS() {
         else toast('error', `"${q}" no está registrado`)
         return
       }
+      if ((stockMap.get(found.id) ?? 0) <= 0 && found.allowNegative === false) {
+        toast('error', `${found.name} sin existencias`)
+        return
+      }
       if (found.unit === 'peso') setWeightProduct(found)
       else { cart.addProduct(found, qty); toast('success', `${found.name} agregado`) }
     },
-    [products, canManage, cart],
+    [products, canManage, cart, stockMap],
   )
 
   // Lector físico USB/Bluetooth siempre activo en el POS

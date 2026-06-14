@@ -403,6 +403,41 @@ export async function adjustStock(args: {
   })
 }
 
+// ---- Entrada / Salida de inventario con motivo ----------------------------
+export async function stockMove(args: {
+  tenantId: string
+  locationId: string
+  productId: string
+  delta: number // + entrada, − salida
+  reason: string
+  userId: string
+  userName: string
+}): Promise<void> {
+  const now = new Date().toISOString()
+  const stockId = `${args.locationId}:${args.productId}`
+  const st = await db.stock.get(stockId)
+  if (st) {
+    st.quantity = Number((st.quantity + args.delta).toFixed(3))
+    st.updatedAt = now
+    await db.stock.put(st)
+  } else if (args.delta > 0) {
+    await db.stock.put({
+      id: stockId, tenantId: args.tenantId, locationId: args.locationId, productId: args.productId,
+      quantity: args.delta, reorderThreshold: 4, reorderTarget: 12, updatedAt: now,
+    })
+  }
+  await db.stockMovements.put({
+    id: uid('mv'), tenantId: args.tenantId, locationId: args.locationId, productId: args.productId,
+    type: args.delta >= 0 ? 'entrada' : 'ajuste', qty: args.delta, userId: args.userId, createdAt: now,
+  })
+  await audit({
+    tenantId: args.tenantId, locationId: args.locationId, userId: args.userId, userName: args.userName,
+    action: args.delta >= 0 ? 'entrada de inventario' : 'salida de inventario',
+    entity: 'producto', entityId: args.productId,
+    detail: `${args.delta >= 0 ? '+' : ''}${args.delta} · ${args.reason}`,
+  })
+}
+
 // ---- Reabastecimiento: umbral dinámico por velocidad de venta -------------
 export interface ReorderSuggestion {
   product: Product

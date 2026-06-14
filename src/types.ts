@@ -117,6 +117,7 @@ export interface Product {
   wholesaleMinQty?: number // cantidad mínima para el precio al por mayor
   promoType?: '2x1' | 'percent' // promoción automática (opcional)
   promoValue?: number // % de descuento cuando promoType = 'percent'
+  allowNegative?: boolean // permitir vender por debajo de 0 (false = bloquear)
   active: boolean
   createdAt: string
 }

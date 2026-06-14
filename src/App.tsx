@@ -22,6 +22,7 @@ const Compras = lazy(() => import('@/screens/Compras'))
 const ReporteInventario = lazy(() => import('@/screens/ReporteInventario'))
 const InformeZ = lazy(() => import('@/screens/InformeZ'))
 const Cartera = lazy(() => import('@/screens/Cartera'))
+const AjustesInventario = lazy(() => import('@/screens/AjustesInventario'))
 const Reportes = lazy(() => import('@/screens/Reportes'))
 const Notificaciones = lazy(() => import('@/screens/Notificaciones'))
 const Ajustes = lazy(() => import('@/screens/Ajustes'))
@@ -55,6 +56,7 @@ export default function App() {
             <Route path="/reporte-inventario" element={<ReporteInventario />} />
             <Route path="/informe-z" element={<InformeZ />} />
             <Route path="/cartera" element={<Cartera />} />
+            <Route path="/ajustes-inventario" element={<AjustesInventario />} />
               <Route path="/reportes" element={<Reportes />} />
               <Route path="/notificaciones" element={<Notificaciones />} />
               <Route path="/ajustes" element={<Ajustes />} />
