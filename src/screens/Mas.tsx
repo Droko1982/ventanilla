@@ -11,6 +11,7 @@ export default function Mas() {
     { to: '/reportes', icon: 'chart', label: 'Reportes', desc: 'Márgenes, más/menos vendidos, stock muerto', color: 'bg-emerald-100 text-emerald-700' },
     { to: '/proveedores', icon: 'truck', label: 'Proveedores', desc: 'Reabastecer, pedidos, directorio, deuda', color: 'bg-amber-100 text-amber-700' },
     { to: '/compras', icon: 'box', label: 'Compras', desc: 'Facturas de compra, costo promedio, entradas', color: 'bg-purple-100 text-purple-700' },
+    { to: '/reporte-inventario', icon: 'chart', label: 'Inventario General', desc: 'Reporte: costo prom., utilidad %, stock sugerido', color: 'bg-teal-100 text-teal-700' },
     { to: '/clientes', icon: 'users', label: 'Clientes / Fiado', desc: 'Crédito, historial, abonos', color: 'bg-rose-100 text-rose-700' },
     { to: '/notificaciones', icon: 'bell', label: 'Notificaciones', desc: 'Alertas de stock, vencimientos, caja', color: 'bg-purple-100 text-purple-700' },
     { to: '/auditoria', icon: 'shield', label: 'Auditoría', desc: 'Quién hizo o cambió cada cosa', color: 'bg-slate-200 text-slate-700' },

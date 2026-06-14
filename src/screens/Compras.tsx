@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { useActiveLocationId, useProducts, useSuppliers, useCurrentUser, useScopeLocationIds } from '@/hooks/data'
-import { recordPurchase } from '@/data/repo'
+import { recordPurchase, recordSupplierReturn } from '@/data/repo'
 import { Sheet } from '@/components/Sheet'
 import { EmptyState, PageHeader } from '@/components/ui'
 import { Icon } from '@/components/icons'
@@ -19,6 +19,7 @@ export default function Compras() {
   const suppliers = useSuppliers()
   const scopeIds = useScopeLocationIds()
   const [newOpen, setNewOpen] = useState(false)
+  const [returnOpen, setReturnOpen] = useState(false)
 
   const purchases = useLiveQuery(
     () => (scopeIds.length ? db.purchases.where('locationId').anyOf(scopeIds).reverse().toArray() : []),
@@ -31,9 +32,14 @@ export default function Compras() {
     <div>
       <PageHeader title="Compras" subtitle="Facturas de compra / entradas de mercancía" />
 
-      <button onClick={() => setNewOpen(true)} className="btn btn-primary mb-3 w-full">
-        <Icon name="plus" className="h-5 w-5" /> Nueva factura de compra
-      </button>
+      <div className="mb-3 flex gap-2">
+        <button onClick={() => setNewOpen(true)} className="btn btn-primary flex-1">
+          <Icon name="plus" className="h-5 w-5" /> Nueva factura de compra
+        </button>
+        <button onClick={() => setReturnOpen(true)} className="btn btn-secondary px-3" title="Devolución a proveedor">
+          <Icon name="arrow-left" className="h-5 w-5" /> Devolución
+        </button>
+      </div>
 
       <div className="space-y-2">
         {purchases?.map((c) => (
@@ -65,7 +71,100 @@ export default function Compras() {
           onClose={() => setNewOpen(false)}
         />
       )}
+
+      {returnOpen && products && suppliers && (
+        <ReturnToSupplierSheet
+          products={products}
+          suppliers={suppliers}
+          tenantId={tenantId}
+          locationId={locationId}
+          onClose={() => setReturnOpen(false)}
+        />
+      )}
     </div>
+  )
+}
+
+// --- Devolución a proveedor (sale del inventario, baja la deuda) ------------
+function ReturnToSupplierSheet({ products, suppliers, tenantId, locationId, onClose }: {
+  products: Product[]; suppliers: Supplier[]; tenantId: string; locationId: string; onClose: () => void
+}) {
+  const user = useCurrentUser()
+  const [supplierId, setSupplierId] = useState('')
+  const [reduceDebt, setReduceDebt] = useState(true)
+  const [items, setItems] = useState<PurchaseItem[]>([])
+  const [code, setCode] = useState('')
+  const [qty, setQty] = useState('1')
+  const total = items.reduce((s, it) => s + it.unitCost * it.qty, 0)
+  const supplier = suppliers.find((s) => s.id === supplierId)
+
+  function addByCode() {
+    const q = code.trim().toLowerCase()
+    if (!q) return
+    const p = products.find((x) => x.barcode === code.trim() || x.internalCode === code.trim()) ?? products.find((x) => x.name.toLowerCase().includes(q))
+    if (!p) return toast('error', `"${code}" no encontrado`)
+    const n = parseFloat(qty.replace(',', '.')) || 1
+    setItems((prev) => {
+      const ex = prev.find((i) => i.productId === p.id)
+      if (ex) return prev.map((i) => (i.productId === p.id ? { ...i, qty: i.qty + n } : i))
+      return [...prev, { productId: p.id, name: p.name, qty: n, unitCost: p.avgCost ?? p.cost }]
+    })
+    setCode(''); setQty('1')
+  }
+
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title="Devolución a proveedor"
+      footer={
+        <button
+          className="btn btn-danger btn-lg w-full"
+          disabled={!supplierId || !items.length}
+          onClick={async () => {
+            await recordSupplierReturn({
+              tenantId, locationId, supplierId, supplierName: supplier?.name ?? 'Proveedor',
+              items, reduceDebt, userId: user!.id, userName: user!.name,
+            })
+            toast('success', 'Devolución registrada · stock actualizado')
+            onClose()
+          }}
+        >
+          Registrar devolución · {cop(total)}
+        </button>
+      }
+    >
+      <div className="space-y-3">
+        <div>
+          <label className="label">Proveedor</label>
+          <select className="input" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+            <option value="">Seleccione…</option>
+            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}{(s.debt ?? 0) > 0 ? ` (debe ${cop(s.debt)})` : ''}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Producto a devolver</label>
+          <div className="flex gap-2">
+            <input className="input flex-1" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addByCode() }} placeholder="Cód. barras / interno o nombre" />
+            <input className="input w-14 text-center" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
+            <button onClick={addByCode} className="btn btn-primary px-3">AGREGAR</button>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          {items.map((it) => (
+            <div key={it.productId} className="flex items-center justify-between rounded-lg border border-slate-100 p-2 text-sm">
+              <span className="flex-1 truncate">{it.qty} × {it.name}</span>
+              <span className="font-semibold">{cop(it.unitCost * it.qty)}</span>
+              <button onClick={() => setItems(items.filter((x) => x.productId !== it.productId))} className="ml-2 text-rose-400">✕</button>
+            </div>
+          ))}
+        </div>
+        <label className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
+          <input type="checkbox" checked={reduceDebt} onChange={(e) => setReduceDebt(e.target.checked)} className="h-5 w-5" />
+          <span className="text-sm text-slate-600">Descontar de la deuda con el proveedor</span>
+        </label>
+      </div>
+    </Sheet>
   )
 }
 

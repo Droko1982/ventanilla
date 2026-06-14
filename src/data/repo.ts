@@ -778,6 +778,87 @@ export async function transferStock(args: {
   })
 }
 
+// ---- Traspaso con conversión de presentación (caja → unidades) ------------
+export async function convertStock(args: {
+  tenantId: string
+  locationId: string
+  fromProductId: string
+  fromQty: number
+  toProductId: string
+  toQty: number
+  userId: string
+  userName: string
+}): Promise<void> {
+  const now = new Date().toISOString()
+  await db.transaction('rw', [db.stock, db.stockMovements], async () => {
+    const fromSt = await db.stock.get(`${args.locationId}:${args.fromProductId}`)
+    if (fromSt) {
+      fromSt.quantity = Number((fromSt.quantity - args.fromQty).toFixed(3))
+      fromSt.updatedAt = now
+      await db.stock.put(fromSt)
+    }
+    const toId = `${args.locationId}:${args.toProductId}`
+    const toSt = await db.stock.get(toId)
+    if (toSt) {
+      toSt.quantity = Number((toSt.quantity + args.toQty).toFixed(3))
+      toSt.updatedAt = now
+      await db.stock.put(toSt)
+    } else {
+      await db.stock.put({
+        id: toId, tenantId: args.tenantId, locationId: args.locationId, productId: args.toProductId,
+        quantity: args.toQty, reorderThreshold: 4, reorderTarget: 12, updatedAt: now,
+      })
+    }
+    await db.stockMovements.bulkPut([
+      { id: uid('mv'), tenantId: args.tenantId, locationId: args.locationId, productId: args.fromProductId, type: 'traslado_salida', qty: -args.fromQty, userId: args.userId, createdAt: now },
+      { id: uid('mv'), tenantId: args.tenantId, locationId: args.locationId, productId: args.toProductId, type: 'traslado_entrada', qty: args.toQty, userId: args.userId, createdAt: now },
+    ])
+  })
+  await audit({
+    tenantId: args.tenantId, locationId: args.locationId, userId: args.userId, userName: args.userName,
+    action: 'convirtió presentación', entity: 'producto', entityId: args.fromProductId,
+    detail: `${args.fromQty} → ${args.toQty} unidades`,
+  })
+}
+
+// ---- Devolución a proveedor (sale del inventario, baja la deuda) -----------
+export async function recordSupplierReturn(args: {
+  tenantId: string
+  locationId: string
+  supplierId: string
+  supplierName: string
+  items: { productId: string; name: string; qty: number; unitCost: number }[]
+  reduceDebt: boolean
+  userId: string
+  userName: string
+}): Promise<void> {
+  const now = new Date().toISOString()
+  const total = args.items.reduce((s, it) => s + it.unitCost * it.qty, 0)
+  await db.transaction('rw', [db.stock, db.stockMovements, db.suppliers], async () => {
+    for (const it of args.items) {
+      const st = await db.stock.get(`${args.locationId}:${it.productId}`)
+      if (st) {
+        st.quantity = Number((st.quantity - it.qty).toFixed(3))
+        st.updatedAt = now
+        await db.stock.put(st)
+      }
+      await db.stockMovements.put({
+        id: uid('mv'), tenantId: args.tenantId, locationId: args.locationId, productId: it.productId,
+        type: 'ajuste', qty: -it.qty, userId: args.userId, createdAt: now,
+      })
+    }
+    if (args.reduceDebt) {
+      const sup = await db.suppliers.get(args.supplierId)
+      if (sup) { sup.debt = Math.max(0, (sup.debt ?? 0) - Math.round(total)); await db.suppliers.put(sup) }
+    }
+  })
+  await audit({
+    tenantId: args.tenantId, locationId: args.locationId, userId: args.userId, userName: args.userName,
+    action: 'devolución a proveedor', entity: 'proveedor', entityId: args.supplierId,
+    detail: `${args.items.length} productos a ${args.supplierName}${args.reduceDebt ? ` · −${Math.round(total)} deuda` : ''}`,
+  })
+}
+
 // ---- Caja: abrir y cerrar (arqueo) ----------------------------------------
 export async function openCashSession(args: {
   tenantId: string

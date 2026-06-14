@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   useActiveLocationId, useProducts, useCategories, useSuppliers,
   useStockForLocation, useLocations, useCurrentUser, useTenant,
 } from '@/hooks/data'
 import { db } from '@/data/db'
-import { adjustStock, recalcThresholds, transferStock } from '@/data/repo'
+import { adjustStock, recalcThresholds, transferStock, convertStock } from '@/data/repo'
 import { printLabel } from '@/lib/label'
 import { ProductForm } from '@/components/ProductForm'
 import { Sheet } from '@/components/Sheet'
@@ -28,6 +29,7 @@ export default function Inventory() {
   const locations = useLocations()
   const stock = useStockForLocation(locationId)
   const user = useCurrentUser()
+  const navigate = useNavigate()
 
   const [search, setSearch] = useState('')
   const [view, setView] = useState<'todos' | 'bajo' | 'vencer'>('todos')
@@ -119,9 +121,14 @@ export default function Inventory() {
       )}
 
       {role === 'admin' && (
-        <button onClick={() => setCountOpen(true)} className="btn btn-secondary mb-3 w-full py-2 text-sm">
-          <Icon name="box" className="h-5 w-5" /> Toma física de inventario
-        </button>
+        <div className="mb-3 flex gap-2">
+          <button onClick={() => setCountOpen(true)} className="btn btn-secondary flex-1 py-2 text-sm">
+            <Icon name="box" className="h-5 w-5" /> Toma física
+          </button>
+          <button onClick={() => navigate('/reporte-inventario')} className="btn btn-secondary flex-1 py-2 text-sm">
+            <Icon name="chart" className="h-5 w-5" /> Inventario General
+          </button>
+        </div>
       )}
 
       <div className="space-y-2">
@@ -289,7 +296,9 @@ function ProductDetailSheet({
   const locations = useLocations()
   const tenant = useTenant()
   const suppliers = useSuppliers()
+  const allProducts = useProducts()
   const supplierName = suppliers?.find((s) => s.id === product.supplierId)?.name
+  const [convertOpen, setConvertOpen] = useState(false)
   const [newQty, setNewQty] = useState(String(stock.quantity))
   const allStock = useLiveQuery(() => db.stock.where('productId').equals(product.id).toArray(), [product.id])
   const movements = useLiveQuery(
@@ -432,6 +441,23 @@ function ProductDetailSheet({
           </div>
         )}
 
+        <button onClick={() => setConvertOpen(true)} className="btn btn-secondary w-full text-sm">
+          📦 Desempacar / convertir presentación (caja → unidades)
+        </button>
+        {convertOpen && allProducts && (
+          <ConvertSheet
+            fromProduct={product}
+            products={allProducts.filter((p) => p.active && p.id !== product.id)}
+            onClose={() => setConvertOpen(false)}
+            onConvert={async (toProductId, fromQty, toQty) => {
+              await convertStock({ tenantId, locationId, fromProductId: product.id, fromQty, toProductId, toQty, userId, userName })
+              toast('success', 'Conversión registrada')
+              setConvertOpen(false)
+              onClose()
+            }}
+          />
+        )}
+
         {/* Kardex: historial de movimientos del producto en este local */}
         <div>
           <p className="mb-2 text-sm font-semibold text-slate-600">Movimientos (kardex)</p>
@@ -459,6 +485,58 @@ function ProductDetailSheet({
 const MOV_LABEL: Record<string, string> = {
   venta: 'Venta', entrada: 'Entrada', traslado_salida: 'Traslado (salida)',
   traslado_entrada: 'Traslado (entrada)', ajuste: 'Ajuste', devolucion: 'Devolución', remision: 'Remisión',
+}
+
+// --- Desempacar / convertir presentación (caja → unidades) -----------------
+function ConvertSheet({
+  fromProduct, products, onClose, onConvert,
+}: {
+  fromProduct: Product
+  products: Product[]
+  onClose: () => void
+  onConvert: (toProductId: string, fromQty: number, toQty: number) => void
+}) {
+  const [toId, setToId] = useState('')
+  const [fromQty, setFromQty] = useState('1')
+  const [toQty, setToQty] = useState('')
+  const toProduct = products.find((p) => p.id === toId)
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title="Desempacar / convertir"
+      footer={
+        <button
+          className="btn btn-primary btn-lg w-full"
+          disabled={!toId || !(parseInt(toQty, 10) || 0)}
+          onClick={() => onConvert(toId, parseFloat(fromQty.replace(',', '.')) || 1, parseInt(toQty, 10) || 0)}
+        >
+          Convertir
+        </button>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-slate-500">
+          Consume <b>{fromProduct.name}</b> y genera otra presentación. Ej.: 1 caja → 20 unidades.
+        </p>
+        <div>
+          <label className="label">Cantidad a consumir de “{fromProduct.name}”</label>
+          <input className="input" inputMode="decimal" value={fromQty} onChange={(e) => setFromQty(e.target.value)} />
+        </div>
+        <div>
+          <label className="label">Producto resultante</label>
+          <select className="input" value={toId} onChange={(e) => setToId(e.target.value)}>
+            <option value="">Seleccione…</option>
+            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Unidades que genera{toProduct ? ` de “${toProduct.name}”` : ''}</label>
+          <input className="input" inputMode="numeric" value={toQty} onChange={(e) => setToQty(e.target.value)} placeholder="Ej. 20" />
+        </div>
+      </div>
+    </Sheet>
+  )
 }
 
 // --- Carga masiva CSV / Excel ----------------------------------------------

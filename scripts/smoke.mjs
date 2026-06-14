@@ -175,13 +175,14 @@ async function main() {
   txt = await bodyText(page)
   if (!/Movimientos \(kardex\)/.test(txt)) throw new Error('Kardex no renderizó en la ficha de producto')
   if (!/Imprimir etiqueta/.test(txt)) throw new Error('Botón de etiqueta no disponible')
-  console.log('✓ Kardex + etiqueta imprimible en ficha de producto')
+  if (!/Desempacar/.test(txt)) throw new Error('Conversión (desempacar) no disponible')
+  console.log('✓ Kardex + etiqueta + desempacar en ficha de producto')
   await page.keyboard.press('Escape')
   await sleep(400)
 
   // 4e-bis) Toma física de inventario
   ctx = 'toma-fisica'
-  await clickText(page, 'Toma física de inventario')
+  await clickText(page, 'Toma física')
   await sleep(700)
   txt = await bodyText(page)
   if (!/Aplicar/.test(txt)) throw new Error('Toma física no abrió')
@@ -303,6 +304,23 @@ async function main() {
   await clickText(page, 'GUARDAR')
   await sleep(900)
   console.log('✓ Compras: factura de compra (stock + costo promedio + deuda)')
+
+  // devolución a proveedor
+  await clickText(page, 'Devolución')
+  await sleep(700)
+  txt = await bodyText(page)
+  if (!/Devolución a proveedor/.test(txt)) throw new Error('Devolución a proveedor no abrió')
+  await page.keyboard.press('Escape')
+  await sleep(300)
+  console.log('✓ Compras: devolución a proveedor')
+
+  // 4h-ter) Reporte de Inventario General
+  ctx = 'reporte-inventario'
+  await page.evaluate(() => { location.hash = '#/reporte-inventario' })
+  await sleep(2500)
+  txt = await bodyText(page)
+  if (!/Inventario General/.test(txt) || !/Costo prom/.test(txt)) throw new Error('Reporte de inventario no renderizó')
+  console.log('✓ Reporte de Inventario General (costo prom., utilidad %, stock sugerido)')
 
   // 4i) Ventas: devolución parcial (abre la hoja)
   ctx = 'devolucion-parcial'
