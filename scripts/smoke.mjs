@@ -50,6 +50,19 @@ async function main() {
   if (!txt.includes('Ventanilla')) throw new Error('No renderizó la pantalla de inicio')
   console.log('✓ Pantalla de login renderiza')
 
+  // 1b) Encoder Code 128 real (sólo en dev: importa el módulo fuente de Vite)
+  if (!process.env.SMOKE_URL) {
+    ctx = 'barcode'
+    const svg = await page.evaluate(async () => {
+      const m = await import('/src/lib/barcode.ts')
+      return m.code128SVG('770201100000')
+    })
+    // Code 128 de 12 dígitos: start+12+check+stop = 15 símbolos → muchas barras
+    const rects = (svg.match(/<rect/g) || []).length
+    if (!svg.includes('<svg') || rects < 30) throw new Error(`Code 128 inválido (rects=${rects})`)
+    console.log(`✓ Código de barras Code 128 escaneable (${rects} barras)`)
+  }
+
   // 2) Entrar como Dueño
   ctx = 'login-admin'
   await clickText(page, 'Dueño de la tienda')
@@ -184,6 +197,11 @@ async function main() {
   txt = await bodyText(page)
   if (!/Pago proveedor/.test(txt)) throw new Error('El egreso de caja no se registró')
   console.log('✓ Caja: egreso de efectivo (movimiento) registrado')
+
+  // 4d-bis) Caja: resumen del día al WhatsApp + botón abrir cajón
+  if (!/Enviar resumen del día/i.test(txt)) throw new Error('Botón de resumen del día no renderizó')
+  if (!/Abrir cajón monedero/i.test(txt)) throw new Error('Botón de abrir cajón no renderizó')
+  console.log('✓ Caja: resumen del día a WhatsApp + abrir cajón monedero')
 
   // 4e) Kardex en la ficha de producto
   ctx = 'kardex'

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
-import { useActiveLocationId, useLocations, useCurrentUser } from '@/hooks/data'
+import { useActiveLocationId, useLocations, useCurrentUser, useTenant } from '@/hooks/data'
 import { openCashSession, closeCashSession, addCashMovement, audit } from '@/data/repo'
 import { openCashDrawer, drawerMessage } from '@/lib/cashDrawer'
 import { summarize, todayRange } from '@/lib/analytics'
@@ -10,7 +10,8 @@ import { StatCard, Money, EmptyState, PageHeader } from '@/components/ui'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
 import { cop, parseCop } from '@/lib/money'
-import { fmtDateTime, fmtTime } from '@/lib/format'
+import { fmtDateTime, fmtTime, fmtDate } from '@/lib/format'
+import { waLink } from '@/lib/whatsapp'
 import { useSession } from '@/store/session'
 import { can } from '@/lib/permissions'
 
@@ -18,11 +19,39 @@ const methodLabels: Record<string, string> = {
   efectivo: 'Efectivo', nequi: 'Nequi', tarjeta: 'Tarjeta', transferencia: 'Transferencia', fiado: 'Fiado',
 }
 
+// Arma el resumen del día para enviar al dueño por WhatsApp.
+function dailySummaryText(o: {
+  businessName: string; locName: string; revenue: number; count: number
+  byMethod: Record<string, number>; openingFloat: number; expectedCash: number
+  movNet?: number; counted?: number; diff?: number
+}): string {
+  const L: string[] = []
+  L.push(`*Resumen del día · ${o.businessName}*`)
+  L.push(`${o.locName} · ${fmtDate(new Date().toISOString())}`)
+  L.push('')
+  L.push(`🧾 Ventas: ${o.count} por ${cop(o.revenue)}`)
+  L.push(`💵 Efectivo: ${cop(o.byMethod.efectivo ?? 0)}`)
+  L.push(`📱 Nequi: ${cop(o.byMethod.nequi ?? 0)}`)
+  L.push(`💳 Tarjeta: ${cop(o.byMethod.tarjeta ?? 0)}`)
+  L.push(`🏦 Transferencia: ${cop(o.byMethod.transferencia ?? 0)}`)
+  L.push(`📒 Fiado: ${cop(o.byMethod.fiado ?? 0)}`)
+  if (o.movNet) L.push(`↕️ Ingresos/egresos: ${o.movNet >= 0 ? '+' : '−'}${cop(Math.abs(o.movNet))}`)
+  L.push('')
+  L.push(`Base: ${cop(o.openingFloat)}`)
+  L.push(`Efectivo esperado: ${cop(o.expectedCash)}`)
+  if (o.counted !== undefined) {
+    L.push(`Efectivo contado: ${cop(o.counted)}`)
+    L.push(`Diferencia: ${o.diff === 0 ? 'cuadrada ✓' : (o.diff! < 0 ? `faltó ${cop(Math.abs(o.diff!))}` : `sobró ${cop(o.diff!)}`)}`)
+  }
+  return L.join('\n')
+}
+
 export default function Caja() {
   const tenantId = useSession((s) => s.tenantId)!
   const locationId = useActiveLocationId()
   const locations = useLocations()
   const user = useCurrentUser()
+  const tenant = useTenant()
   const [openSheet, setOpenSheet] = useState(false)
   const [closeSheet, setCloseSheet] = useState(false)
   const [movSheet, setMovSheet] = useState<null | 'ingreso' | 'egreso'>(null)
@@ -74,6 +103,20 @@ export default function Caja() {
   const countedNum = parseCop(counted)
   const diff = countedNum - expectedCash
 
+  // Resumen del día al WhatsApp del dueño (o el número del negocio).
+  function sendSummary(arqueo?: { counted: number; diff: number }) {
+    const phone = tenant?.phone || ''
+    if (!phone) return toast('error', 'Configura el teléfono del negocio en Ajustes')
+    const msg = dailySummaryText({
+      businessName: tenant?.businessName ?? 'Mi tienda',
+      locName: activeLoc?.name ?? '',
+      revenue: summary.revenue, count: summary.count, byMethod: summary.byMethod,
+      openingFloat: session?.openingFloat ?? 0, expectedCash, movNet,
+      counted: arqueo?.counted, diff: arqueo?.diff,
+    })
+    window.open(waLink(phone, msg), '_blank')
+  }
+
   if (!locationId) return <EmptyState emoji="🏪" title="Sin local" hint="Selecciona un local arriba." />
 
   return (
@@ -100,6 +143,9 @@ export default function Caja() {
             <span className="text-brand-700">{cop(summary.revenue)}</span>
           </div>
         </div>
+        <button onClick={() => sendSummary()} className="btn btn-success mt-3 w-full text-sm">
+          <Icon name="whatsapp" className="h-4 w-4" /> Enviar resumen del día al dueño
+        </button>
       </div>
 
       {/* Estado de la caja */}
@@ -233,6 +279,8 @@ export default function Caja() {
               const cs = await closeCashSession({ sessionId: session.id, countedCash: countedNum, userId: user!.id, userName: user!.name })
               if (cs)
                 toast(cs.difference === 0 ? 'success' : 'info', cs.difference === 0 ? 'Caja cuadrada ✓' : `Diferencia: ${cop(cs.difference!)}`)
+              // Envía el resumen del cierre al dueño por WhatsApp (gesto del usuario → no se bloquea)
+              if (cs && tenant?.phone) sendSummary({ counted: countedNum, diff: cs.difference ?? diff })
               setCounted('')
               setCloseSheet(false)
             }}
