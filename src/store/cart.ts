@@ -34,21 +34,31 @@ function promoSaving(l: Pick<CartLine, 'promoType' | 'promoValue'>, qty: number,
   return 0
 }
 
+export interface SaleMeta {
+  vendedorId?: string
+  vendedorName?: string
+  customerId?: string
+  discountReason?: string
+}
+
 interface CartState {
   lines: CartLine[]
   globalDiscount: number
+  meta: SaleMeta
   addProduct: (p: Product, qty?: number) => void
   addLine: (line: CartLine) => void
   setQty: (productId: string, qty: number) => void
   setLineDiscount: (productId: string, discount: number) => void
   remove: (productId: string) => void
   setGlobalDiscount: (d: number) => void
+  setMeta: (m: Partial<SaleMeta>) => void
   clear: () => void
 }
 
 export const useCart = create<CartState>((set) => ({
   lines: [],
   globalDiscount: 0,
+  meta: {},
 
   addProduct: (p, qty) =>
     set((s) => {
@@ -109,7 +119,8 @@ export const useCart = create<CartState>((set) => ({
 
   remove: (productId) => set((s) => ({ lines: s.lines.filter((l) => l.productId !== productId) })),
   setGlobalDiscount: (d) => set({ globalDiscount: Math.max(0, d) }),
-  clear: () => set({ lines: [], globalDiscount: 0 }),
+  setMeta: (m) => set((s) => ({ meta: { ...s.meta, ...m } })),
+  clear: () => set({ lines: [], globalDiscount: 0, meta: {} }),
 }))
 
 // Cálculos derivados del carrito

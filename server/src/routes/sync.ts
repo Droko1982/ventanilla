@@ -10,6 +10,7 @@ const SYNC_TABLES = new Set([
   'categories', 'locations', 'products', 'stock', 'sales', 'customers',
   'suppliers', 'purchaseOrders', 'stockMovements', 'cashSessions',
   'auditLogs', 'notifications', 'expenses', 'remisiones', 'cashMovements',
+  'changeOwed',
 ])
 
 interface SyncIn {

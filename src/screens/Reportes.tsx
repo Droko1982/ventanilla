@@ -30,17 +30,17 @@ export default function Reportes() {
 
   // Ventas por vendedor (para comisiones)
   const sellerStats = useMemo(() => {
-    const map = new Map<string, { revenue: number; count: number }>()
+    const map = new Map<string, { revenue: number; count: number; name: string }>()
     for (const s of ranged) {
       if (s.status !== 'completada') continue
-      const cur = map.get(s.userId) ?? { revenue: 0, count: 0 }
+      const key = s.vendedorId ?? s.userId
+      const name = s.vendedorName ?? userName.get(s.userId) ?? 'Empleado'
+      const cur = map.get(key) ?? { revenue: 0, count: 0, name }
       cur.revenue += s.total
       cur.count++
-      map.set(s.userId, cur)
+      map.set(key, cur)
     }
-    return [...map.entries()]
-      .map(([uid, v]) => ({ name: userName.get(uid) ?? 'Empleado', ...v }))
-      .sort((a, b) => b.revenue - a.revenue)
+    return [...map.values()].sort((a, b) => b.revenue - a.revenue)
   }, [ranged, userName])
 
   function exportContable() {

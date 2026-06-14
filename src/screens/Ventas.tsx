@@ -107,6 +107,7 @@ function SaleDetail({
           <div>
             <p className="text-xs text-slate-400">{tenantName} · {locName}</p>
             <p className="text-xs text-slate-400">{fmtDateTime(sale.createdAt)}</p>
+            {sale.vendedorName && <p className="text-xs text-slate-400">Vendedor: {sale.vendedorName}</p>}
           </div>
           <DianChip status={sale.dianStatus} />
         </div>
@@ -122,7 +123,7 @@ function SaleDetail({
           ))}
           {sale.discount > 0 && (
             <div className="flex justify-between text-sm text-emerald-600">
-              <span>Descuento</span><span>-{cop(sale.discount)}</span>
+              <span>Descuento{sale.discountReason ? ` (${sale.discountReason})` : ''}</span><span>-{cop(sale.discount)}</span>
             </div>
           )}
           <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-bold">

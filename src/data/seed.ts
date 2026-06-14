@@ -16,6 +16,7 @@ import type {
   Expense,
   Remision,
   PurchaseOrder,
+  ChangeOwed,
 } from '@/types'
 import { daysUntil } from '@/lib/format'
 
@@ -613,7 +614,7 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Al subir una versión nueva del modelo de demo, se recarga automáticamente
 // para que cualquier visitante vea los datos/precios más recientes.
-const SEED_VERSION = '6-promos-respaldo'
+const SEED_VERSION = '7-mostrador-vueltas'
 const SEED_KEY = 'ventanilla-seed-version'
 
 export async function seedIfEmpty(): Promise<void> {
@@ -644,13 +645,16 @@ export async function seedNow(): Promise<void> {
   const notifications = buildNotifications(stock)
   const remisiones = buildRemisiones(products)
   const purchaseOrders = buildPurchaseOrders(products)
+  const changeOwed: ChangeOwed[] = [
+    { id: 'l_centro', tenantId: TENANT_ID, locationId: 'l_centro', amount: 1500, updatedAt: iso(new Date()) },
+  ]
 
   await db.transaction(
     'rw',
     [
       db.tenants, db.locations, db.users, db.categories, db.products, db.stock,
       db.sales, db.customers, db.suppliers, db.expenses, db.notifications, db.remisiones,
-      db.purchaseOrders,
+      db.purchaseOrders, db.changeOwed,
     ],
     async () => {
       await db.tenants.bulkPut([tenant, ...otherTenants])
@@ -666,6 +670,7 @@ export async function seedNow(): Promise<void> {
       await db.notifications.bulkPut(notifications)
       await db.remisiones.bulkPut(remisiones)
       await db.purchaseOrders.bulkPut(purchaseOrders)
+      await db.changeOwed.bulkPut(changeOwed)
     },
   )
 }

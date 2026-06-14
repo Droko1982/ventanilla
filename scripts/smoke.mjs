@@ -236,6 +236,26 @@ async function main() {
   await sleep(300)
   console.log('✓ POS: pantalla a cliente')
 
+  // 4g-bis) Modo mostrador (clásico tipo SEITEM) + vueltas ("Cambio")
+  ctx = 'modo-mostrador'
+  await clickText(page, 'Mostrador')
+  await sleep(500)
+  txt = await bodyText(page)
+  if (!/REALIZAR PAGO/.test(txt) || !/Vendedor/.test(txt)) throw new Error('Modo mostrador no renderizó')
+  if (!/Cambio:/.test(txt)) throw new Error('Chip de vueltas (Cambio) no visible')
+  await page.evaluate(() => {
+    const i = [...document.querySelectorAll('input')].find((x) => (x.placeholder || '').includes('Cód. barras'))
+    if (i) { const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; s.call(i, '770201100000'); i.dispatchEvent(new Event('input', { bubbles: true })) }
+  })
+  await sleep(300)
+  await clickText(page, 'AGREGAR')
+  await sleep(500)
+  txt = await bodyText(page)
+  if (!/Gaseosa/.test(txt)) throw new Error('No se agregó producto por código en el mostrador')
+  console.log('✓ POS modo mostrador (clásico) + vueltas')
+  await clickText(page, 'Fichas') // volver a fichas para no afectar pasos siguientes
+  await sleep(300)
+
   // 4h) Proveedores: cuentas por pagar
   ctx = 'cuentas-por-pagar'
   await page.evaluate(() => { location.hash = '#/proveedores' })

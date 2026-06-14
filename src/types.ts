@@ -172,6 +172,9 @@ export interface Sale {
   dianDocType: 'tiquete_pos' | 'factura' | 'nota_credito'
   dianDocNumber?: string
   note?: string
+  vendedorId?: string // vendedor de la venta (puede diferir del cajero)
+  vendedorName?: string
+  discountReason?: string // motivo del descuento
   editedFromId?: string // si es una edición de otra venta (auditoría)
   remisionId?: string // si la factura se generó a partir de una remisión
   returns?: { productId: string; qty: number; at: string }[] // devoluciones parciales
@@ -331,6 +334,15 @@ export interface CashMovement {
   isExpense: boolean // egreso que además es gasto del negocio (afecta utilidad)
   userId: string
   createdAt: string
+}
+
+// --- Vueltas que el negocio quedó debiendo a clientes (el "Cambio Anterior") -
+export interface ChangeOwed {
+  id: string // = locationId (una fila por local)
+  tenantId: string
+  locationId: string
+  amount: number
+  updatedAt: string
 }
 
 // --- Gastos (para utilidad neta real) ---------------------------------------

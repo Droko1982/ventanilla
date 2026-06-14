@@ -20,12 +20,14 @@ import { toast } from '@/components/Toast'
 import { EmptyState, ProductThumb } from '@/components/ui'
 import { cop, kg, parseCop } from '@/lib/money'
 import { uid } from '@/lib/id'
-import { recordSale } from '@/data/repo'
+import { recordSale, adjustChangeOwed } from '@/data/repo'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from '@/data/db'
 import { receiptText, printReceipt } from '@/lib/receipt'
 import { waLink, mailtoLink } from '@/lib/whatsapp'
 import { useSession } from '@/store/session'
 import { can } from '@/lib/permissions'
-import type { Payment, PaymentMethod, Product, Sale } from '@/types'
+import type { Payment, PaymentMethod, Product, Sale, Customer, User } from '@/types'
 
 export default function POS() {
   const tenantId = useSession((s) => s.tenantId)!
@@ -52,6 +54,18 @@ export default function POS() {
 
   const canManage = can(user, 'canManageInventory')
   const canDiscount = can(user, 'canDiscount')
+
+  const customers = useCustomers()
+  const vendedores = useLiveQuery(
+    () => (tenantId ? db.users.where('tenantId').equals(tenantId).and((u) => u.active).toArray() : []),
+    [tenantId],
+  )
+  const changeOwed = useLiveQuery(() => (locationId ? db.changeOwed.get(locationId) : undefined), [locationId])
+  const [mode, setModeState] = useState<'tiles' | 'counter'>(
+    () => (localStorage.getItem('ventanilla-sales-mode') as 'tiles' | 'counter') || 'tiles',
+  )
+  const setMode = (m: 'tiles' | 'counter') => { localStorage.setItem('ventanilla-sales-mode', m); setModeState(m) }
+  const [vueltasOpen, setVueltasOpen] = useState(false)
 
   const stockMap = useMemo(() => {
     const m = new Map<string, number>()
@@ -110,6 +124,26 @@ export default function POS() {
     [products, addToCart, canManage],
   )
 
+  // Resuelve un código/nombre escrito en el modo mostrador y lo agrega.
+  const addByCode = useCallback(
+    (code: string, qty: number) => {
+      const q = code.trim()
+      if (!q) return
+      const ql = q.toLowerCase()
+      const found =
+        (products ?? []).find((p) => p.barcode === q || p.internalCode === q || p.internalCode?.toLowerCase() === ql) ??
+        (products ?? []).find((p) => p.name.toLowerCase().includes(ql))
+      if (!found) {
+        if (canManage) { setScanCreateCode(q); setQuickAdd(true) }
+        else toast('error', `"${q}" no está registrado`)
+        return
+      }
+      if (found.unit === 'peso') setWeightProduct(found)
+      else { cart.addProduct(found, qty); toast('success', `${found.name} agregado`) }
+    },
+    [products, canManage, cart],
+  )
+
   // Lector físico USB/Bluetooth siempre activo en el POS
   useBarcodeWedge(handleScan, !!locationId)
 
@@ -122,6 +156,36 @@ export default function POS() {
 
   return (
     <div className="pb-24">
+      {/* Modo de venta + vueltas que el negocio debe ("Cambio Anterior") */}
+      <div className="mb-3 flex items-center gap-2">
+        <div className="flex rounded-xl bg-slate-100 p-0.5 text-xs font-semibold">
+          <button onClick={() => setMode('tiles')} className={`rounded-lg px-3 py-1.5 ${mode === 'tiles' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500'}`}>🟩 Fichas</button>
+          <button onClick={() => setMode('counter')} className={`rounded-lg px-3 py-1.5 ${mode === 'counter' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500'}`}>⌨️ Mostrador</button>
+        </div>
+        <div className="flex-1" />
+        <button
+          onClick={() => setVueltasOpen(true)}
+          className={`chip ${(changeOwed?.amount ?? 0) > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}
+          title="Vueltas que el negocio debe (Cambio Anterior)"
+        >
+          💱 Cambio: {cop(changeOwed?.amount ?? 0)}
+        </button>
+      </div>
+
+      {mode === 'counter' ? (
+        <CounterEntry
+          products={visibleProducts}
+          allProducts={products ?? []}
+          customers={customers ?? []}
+          vendedores={vendedores ?? []}
+          canDiscount={canDiscount}
+          onAddCode={(code, qty) => addByCode(code, qty)}
+          onAddProduct={(p, qty) => (p.unit === 'peso' ? setWeightProduct(p) : cart.addProduct(p, qty))}
+          onPay={() => setPayOpen(true)}
+          onScan={() => setScanOpen(true)}
+        />
+      ) : (
+        <>
       {/* Buscador + escaneo */}
       <div className="mb-3 flex gap-2">
         <div className="relative flex-1">
@@ -220,6 +284,8 @@ export default function POS() {
           </span>
         </button>
       )}
+        </>
+      )}
 
       <Scanner open={scanOpen} onClose={() => setScanOpen(false)} onDetected={handleScan} />
 
@@ -240,6 +306,7 @@ export default function POS() {
       {payOpen && (
         <PaymentSheet
           total={total}
+          defaultCustomerId={cart.meta.customerId}
           onClose={() => setPayOpen(false)}
           onConfirm={async (payments, opts) => {
             const items = cart.lines.map((l) => ({
@@ -260,9 +327,12 @@ export default function POS() {
               items,
               discount: cart.globalDiscount,
               payments,
-              customerId: opts.customerId,
+              customerId: opts.customerId ?? cart.meta.customerId,
               customerDoc: opts.customerDoc,
               transmitDian: opts.transmitDian,
+              vendedorId: cart.meta.vendedorId,
+              vendedorName: cart.meta.vendedorName,
+              discountReason: cart.meta.discountReason,
             })
             cart.clear()
             setPayOpen(false)
@@ -300,7 +370,50 @@ export default function POS() {
       )}
 
       {displayOpen && <CustomerDisplay onClose={() => setDisplayOpen(false)} />}
+
+      {vueltasOpen && locationId && (
+        <VueltasSheet
+          current={changeOwed?.amount ?? 0}
+          onClose={() => setVueltasOpen(false)}
+          onApply={async (delta, reason) => {
+            await adjustChangeOwed({ tenantId, locationId, delta, userId: user!.id, userName: user!.name, reason })
+            toast('success', delta >= 0 ? 'Vueltas registradas' : 'Vueltas pagadas')
+            setVueltasOpen(false)
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+// --- Vueltas que el negocio debe ("Cambio Anterior") ------------------------
+function VueltasSheet({ current, onClose, onApply }: { current: number; onClose: () => void; onApply: (delta: number, reason: string) => void }) {
+  const [tab, setTab] = useState<'deber' | 'pagar'>('deber')
+  const [amount, setAmount] = useState('')
+  const [reason, setReason] = useState('')
+  const amt = parseCop(amount)
+  return (
+    <Sheet open onClose={onClose} title="Vueltas (Cambio)">
+      <div className="space-y-4">
+        <div className="rounded-2xl bg-amber-50 p-4 text-center">
+          <p className="text-sm text-amber-600">El negocio debe en vueltas</p>
+          <p className="text-3xl font-extrabold text-amber-700">{cop(current)}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 text-sm font-semibold">
+          <button onClick={() => setTab('deber')} className={`rounded-lg py-1.5 ${tab === 'deber' ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-500'}`}>Quedé debiendo</button>
+          <button onClick={() => setTab('pagar')} className={`rounded-lg py-1.5 ${tab === 'pagar' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500'}`}>Pagar vueltas</button>
+        </div>
+        <input autoFocus className="input text-center text-2xl font-bold" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="$ 0" />
+        <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Nota (cliente, motivo…)" />
+        <button
+          className={`btn btn-lg w-full ${tab === 'deber' ? 'btn-primary' : 'btn-success'}`}
+          disabled={amt <= 0}
+          onClick={() => onApply(tab === 'deber' ? amt : -amt, reason.trim() || (tab === 'deber' ? 'Quedó debiendo vueltas' : 'Pago de vueltas'))}
+        >
+          {tab === 'deber' ? `Registrar que debo ${cop(amt)}` : `Pagar ${cop(amt)}`}
+        </button>
+      </div>
+    </Sheet>
   )
 }
 
@@ -419,6 +532,139 @@ function ServiceSheet({ onClose, onAdd }: { onClose: () => void; onAdd: (line: C
         </p>
       </div>
     </Sheet>
+  )
+}
+
+// --- Modo mostrador (formulario clásico tipo SEITEM) -----------------------
+function CounterEntry({
+  products, allProducts, customers, vendedores, canDiscount, onAddCode, onAddProduct, onPay, onScan,
+}: {
+  products: Product[]
+  allProducts: Product[]
+  customers: Customer[]
+  vendedores: User[]
+  canDiscount: boolean
+  onAddCode: (code: string, qty: number) => void
+  onAddProduct: (p: Product, qty: number) => void
+  onPay: () => void
+  onScan: () => void
+}) {
+  const cart = useCart()
+  const subtotal = cartSubtotal(cart.lines)
+  const total = cartTotal(cart.lines, cart.globalDiscount)
+  const [code, setCode] = useState('')
+  const [qty, setQty] = useState('1')
+  const [results, setResults] = useState<Product[]>([])
+
+  function submit() {
+    if (!code.trim()) return
+    onAddCode(code, parseFloat(qty.replace(',', '.')) || 1)
+    setCode(''); setQty('1'); setResults([])
+  }
+  function onCodeChange(v: string) {
+    setCode(v)
+    const q = v.trim().toLowerCase()
+    if (q.length < 2) { setResults([]); return }
+    setResults(
+      allProducts
+        .filter((p) => p.active && (p.name.toLowerCase().includes(q) || p.barcode?.includes(v) || p.internalCode?.toLowerCase().includes(q)))
+        .slice(0, 5),
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="label">Cliente</label>
+          <select className="input" value={cart.meta.customerId ?? ''} onChange={(e) => cart.setMeta({ customerId: e.target.value || undefined })}>
+            <option value="">Consumidor Final</option>
+            {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label">Vendedor</label>
+          <select className="input" value={cart.meta.vendedorId ?? ''} onChange={(e) => { const v = vendedores.find((x) => x.id === e.target.value); cart.setMeta({ vendedorId: v?.id, vendedorName: v?.name }) }}>
+            <option value="">Seleccione…</option>
+            {vendedores.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="relative">
+        <div className="flex gap-2">
+          <input className="input flex-1" value={code} autoFocus onChange={(e) => onCodeChange(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submit() }} placeholder="Cód. barras / interno o nombre" />
+          <input className="input w-16 text-center" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
+          <button onClick={submit} className="btn btn-primary px-4">AGREGAR</button>
+          <button onClick={onScan} className="btn btn-secondary px-3" aria-label="Escanear"><Icon name="scan" className="h-5 w-5" /></button>
+        </div>
+        {results.length > 0 && (
+          <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+            {results.map((p) => (
+              <button key={p.id} onClick={() => { onAddProduct(p, parseFloat(qty.replace(',', '.')) || 1); setCode(''); setQty('1'); setResults([]) }} className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50">
+                <span className="truncate">{p.imageEmoji} {p.name}</span>
+                <span className="font-semibold text-brand-700">{cop(p.price)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-slate-200">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-xs text-slate-500">
+            <tr>
+              <th className="px-2 py-1.5 text-left">Cant.</th>
+              <th className="px-2 py-1.5 text-left">Producto</th>
+              <th className="px-2 py-1.5 text-right">Vr. Unidad</th>
+              <th className="px-2 py-1.5 text-right">Vr. Total</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {cart.lines.length === 0 && (
+              <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-400">Escanea o escribe el código y pulsa AGREGAR.</td></tr>
+            )}
+            {cart.lines.map((l) => (
+              <tr key={l.productId} className="border-t border-slate-100">
+                <td className="px-2 py-1.5">
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => cart.setQty(l.productId, l.qty - 1)} className="flex h-6 w-6 items-center justify-center rounded bg-slate-100"><Icon name="minus" className="h-3 w-3" /></button>
+                    <span className="w-9 text-center font-semibold">{l.unit === 'peso' ? kg(l.qty) : l.qty}</span>
+                    <button onClick={() => cart.setQty(l.productId, l.qty + 1)} className="flex h-6 w-6 items-center justify-center rounded bg-brand-100 text-brand-700"><Icon name="plus" className="h-3 w-3" /></button>
+                  </div>
+                </td>
+                <td className="px-2 py-1.5"><span className="line-clamp-1">{l.name}</span></td>
+                <td className="px-2 py-1.5 text-right text-slate-500">{cop(l.unitPrice)}</td>
+                <td className="px-2 py-1.5 text-right font-semibold">{cop(l.unitPrice * l.qty - l.lineDiscount - (l.promoSaving ?? 0))}</td>
+                <td className="px-1"><button onClick={() => cart.remove(l.productId)} className="text-slate-300 hover:text-rose-500"><Icon name="trash" className="h-4 w-4" /></button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {canDiscount && (
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="label">Descuento $</label>
+            <input className="input" inputMode="numeric" value={cart.globalDiscount || ''} onChange={(e) => cart.setGlobalDiscount(parseCop(e.target.value))} placeholder="$ 0" />
+          </div>
+          <div>
+            <label className="label">Motivo del descuento</label>
+            <input className="input" value={cart.meta.discountReason ?? ''} onChange={(e) => cart.setMeta({ discountReason: e.target.value })} placeholder="Opcional" />
+          </div>
+        </div>
+      )}
+
+      <div className="card sticky bottom-[64px] flex items-center justify-between p-3">
+        <div>
+          <p className="text-xs text-slate-400">Subtotal {cop(subtotal)}</p>
+          <p className="text-2xl font-extrabold text-brand-700">{cop(total)}</p>
+        </div>
+        <button onClick={onPay} disabled={!cart.lines.length} className="btn btn-success btn-lg">REALIZAR PAGO</button>
+      </div>
+    </div>
   )
 }
 
@@ -610,13 +856,13 @@ interface PayOpts {
   transmitDian: boolean
 }
 
-function PaymentSheet({ total, onClose, onConfirm }: { total: number; onClose: () => void; onConfirm: (p: Payment[], o: PayOpts) => void }) {
+function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total: number; defaultCustomerId?: string; onClose: () => void; onConfirm: (p: Payment[], o: PayOpts) => void }) {
   const tenant = useTenant()
   const customers = useCustomers()
   const [method, setMethod] = useState<PaymentMethod | 'mixto'>('efectivo')
   const [received, setReceived] = useState('')
   const [proof, setProof] = useState<string | undefined>()
-  const [customerId, setCustomerId] = useState('')
+  const [customerId, setCustomerId] = useState(defaultCustomerId ?? '')
   const [wantInvoice, setWantInvoice] = useState(false)
   const [customerDoc, setCustomerDoc] = useState('')
   const [transmitDian, setTransmitDian] = useState(tenant?.dian.enabled ?? true)

@@ -89,6 +89,9 @@ export interface RecordSaleInput {
   customerId?: string
   customerDoc?: string
   transmitDian: boolean // ¿generar/transmitir el DEE ya?
+  vendedorId?: string
+  vendedorName?: string
+  discountReason?: string
   // Factura electrónica: tipo de documento y datos fiscales del adquiriente
   docType?: 'tiquete_pos' | 'factura'
   customerName?: string
@@ -125,6 +128,9 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
     customerIdType: input.customerIdType,
     customerAddress: input.customerAddress,
     customerEmail: input.customerEmail,
+    vendedorId: input.vendedorId,
+    vendedorName: input.vendedorName,
+    discountReason: input.discountReason,
     status: 'completada',
     dianStatus: input.transmitDian ? 'enviado' : 'pendiente',
     dianDocType: docType,
@@ -718,6 +724,30 @@ export async function addCashMovement(args: {
     entityId: mov.id,
     detail: `${args.type === 'ingreso' ? '+' : '-'}${args.amount} · ${args.reason}`,
   })
+}
+
+// ---- Vueltas que el negocio quedó debiendo ("Cambio Anterior") ------------
+export async function adjustChangeOwed(args: {
+  tenantId: string
+  locationId: string
+  delta: number // + queda debiendo más, − paga/abona
+  userId: string
+  userName: string
+  reason: string
+}): Promise<number> {
+  const now = new Date().toISOString()
+  const existing = await db.changeOwed.get(args.locationId)
+  const amount = Math.max(0, (existing?.amount ?? 0) + args.delta)
+  await db.changeOwed.put({
+    id: args.locationId, tenantId: args.tenantId, locationId: args.locationId, amount, updatedAt: now,
+  })
+  await audit({
+    tenantId: args.tenantId, locationId: args.locationId, userId: args.userId, userName: args.userName,
+    action: args.delta >= 0 ? 'dejó vueltas debiendo' : 'pagó vueltas',
+    entity: 'caja', entityId: args.locationId,
+    detail: `${args.delta >= 0 ? '+' : ''}${args.delta} · ${args.reason}. Saldo: ${amount}`,
+  })
+  return amount
 }
 
 // ---- Fiado: registrar abono de un cliente ---------------------------------
