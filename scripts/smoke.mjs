@@ -278,7 +278,7 @@ async function main() {
   // 4h-bis) Compras: factura de compra + costo promedio
   ctx = 'compras'
   await page.evaluate(() => { location.hash = '#/compras' })
-  await sleep(1000)
+  await sleep(2500)
   txt = await bodyText(page)
   if (!/Nueva factura de compra/.test(txt)) throw new Error('Compras no renderizó')
   if (!/FC-401/.test(txt)) throw new Error('Compra de ejemplo no visible')
