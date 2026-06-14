@@ -6,6 +6,7 @@ import type {
   Sale,
   SaleItem,
   Payment,
+  PaymentMethod,
   Product,
   Stock,
   AuditLog,
@@ -19,6 +20,8 @@ import type {
   Purchase,
   PurchaseItem,
   ZReport,
+  Domicilio,
+  DomicilioStatus,
 } from '@/types'
 import { ivaBreakdown } from '@/lib/documents'
 
@@ -312,7 +315,7 @@ export async function voidSale(saleId: string, userId: string, userName: string)
 // ---- Devolución parcial: devolver algunos ítems de una venta --------------
 export async function returnSaleItems(
   saleId: string,
-  returns: { productId: string; qty: number }[],
+  returns: { index: number; qty: number }[],
   userId: string,
   userName: string,
 ): Promise<number> {
@@ -324,7 +327,7 @@ export async function returnSaleItems(
   let refund = 0
   await db.transaction('rw', [db.sales, db.stock, db.stockMovements], async () => {
     for (const r of filtered) {
-      const item = sale.items.find((it) => it.productId === r.productId)
+      const item = sale.items[r.index]
       if (!item) continue
       const qty = Math.min(r.qty, item.qty)
       if (qty <= 0) continue
@@ -346,7 +349,7 @@ export async function returnSaleItems(
           productId: item.productId, type: 'devolucion', qty, refId: sale.id, userId, createdAt: now,
         })
       }
-      sale.returns = [...(sale.returns ?? []), { productId: r.productId, qty, at: now }]
+      sale.returns = [...(sale.returns ?? []), { productId: item.productId, qty, at: now }]
     }
     sale.items = sale.items.filter((it) => it.qty > 0)
     const subtotal = sale.items.reduce((s, it) => s + it.unitPrice * it.qty - it.lineDiscount, 0)
@@ -1327,6 +1330,64 @@ export async function voidRemision(remisionId: string, userId: string, userName:
     entity: 'remision',
     entityId: rem.id,
     detail: `${rem.number} anulada · stock devuelto`,
+  })
+}
+
+// ---- Domicilios (entregas) ------------------------------------------------
+export interface CreateDomicilioInput {
+  tenantId: string
+  locationId: string
+  userId: string
+  userName: string
+  customerName: string
+  phone?: string
+  address: string
+  barrio?: string
+  city?: string
+  items: SaleItem[]
+  paymentMethod: PaymentMethod
+  repartidor?: string
+  note?: string
+}
+
+export async function createDomicilio(input: CreateDomicilioInput): Promise<Domicilio> {
+  const total = Math.round(input.items.reduce((s, it) => s + it.unitPrice * it.qty - it.lineDiscount, 0))
+  const sale = await recordSale({
+    tenantId: input.tenantId, locationId: input.locationId, userId: input.userId, userName: input.userName,
+    items: input.items, discount: 0,
+    payments: [{ method: input.paymentMethod, amount: total, confirmed: input.paymentMethod !== 'fiado' }],
+    customerName: input.customerName, customerAddress: input.address,
+    note: input.note, transmitDian: true,
+  })
+  const dom: Domicilio = {
+    id: uid('dom'), tenantId: input.tenantId, locationId: input.locationId,
+    customerName: input.customerName, phone: input.phone, address: input.address,
+    barrio: input.barrio, city: input.city, items: input.items, total,
+    paymentMethod: input.paymentMethod, repartidor: input.repartidor, status: 'pendiente',
+    saleId: sale.id, note: input.note, createdAt: new Date().toISOString(),
+  }
+  await db.domicilios.put(dom)
+  await audit({
+    tenantId: input.tenantId, locationId: input.locationId, userId: input.userId, userName: input.userName,
+    action: 'creó domicilio', entity: 'domicilio', entityId: dom.id, detail: `${input.customerName} · ${input.address} · ${total}`,
+  })
+  return dom
+}
+
+export async function updateDomicilioStatus(
+  id: string, status: DomicilioStatus, repartidor: string | undefined, userId: string, userName: string,
+): Promise<void> {
+  const dom = await db.domicilios.get(id)
+  if (!dom) return
+  const now = new Date().toISOString()
+  if (status === 'cancelado' && dom.saleId) await voidSale(dom.saleId, userId, userName)
+  dom.status = status
+  if (repartidor !== undefined) dom.repartidor = repartidor
+  if (status === 'entregado') dom.deliveredAt = now
+  await db.domicilios.put(dom)
+  await audit({
+    tenantId: dom.tenantId, locationId: dom.locationId, userId, userName,
+    action: `domicilio: ${status.replace('_', ' ')}`, entity: 'domicilio', entityId: dom.id, detail: dom.customerName,
   })
 }
 

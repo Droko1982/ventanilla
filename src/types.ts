@@ -216,6 +216,29 @@ export interface Remision {
   createdAt: string
 }
 
+// --- Domicilios (entregas a domicilio) --------------------------------------
+export type DomicilioStatus = 'pendiente' | 'en_camino' | 'entregado' | 'cancelado'
+
+export interface Domicilio {
+  id: string
+  tenantId: string
+  locationId: string
+  customerName: string
+  phone?: string
+  address: string
+  barrio?: string
+  city?: string
+  items: SaleItem[]
+  total: number
+  paymentMethod: PaymentMethod
+  repartidor?: string
+  status: DomicilioStatus
+  saleId?: string // venta generada
+  note?: string
+  createdAt: string
+  deliveredAt?: string
+}
+
 // --- Informe Z (cierre fiscal diario, como las "Zetas" de SEITEM) -----------
 export interface ZReport {
   id: string

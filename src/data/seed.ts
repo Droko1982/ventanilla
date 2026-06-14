@@ -18,6 +18,7 @@ import type {
   PurchaseOrder,
   ChangeOwed,
   Purchase,
+  Domicilio,
 } from '@/types'
 import { daysUntil } from '@/lib/format'
 
@@ -626,7 +627,7 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Al subir una versión nueva del modelo de demo, se recarga automáticamente
 // para que cualquier visitante vea los datos/precios más recientes.
-const SEED_VERSION = '9-informez-cartera'
+const SEED_VERSION = '10-domicilios'
 const SEED_KEY = 'ventanilla-seed-version'
 
 export async function seedIfEmpty(): Promise<void> {
@@ -675,13 +676,24 @@ export async function seedNow(): Promise<void> {
       paymentMethod: 'credito', paid: false, createdAt: iso(new Date(Date.now() - 2 * 86400000)),
     },
   ]
+  const domItems = [mkItem(p(0), 3), mkItem(p(8), 2)]
+  const domicilios: Domicilio[] = [
+    {
+      id: 'dom_1', tenantId: TENANT_ID, locationId: 'l_centro',
+      customerName: 'Doña Rosa', phone: '573201112233',
+      address: 'Calle 20 #14-30', barrio: 'La Patria', city: 'Armenia',
+      items: domItems, total: Math.round(sumItems(domItems)),
+      paymentMethod: 'efectivo', repartidor: 'Andrés', status: 'pendiente',
+      createdAt: iso(new Date(Date.now() - 25 * 60000)),
+    },
+  ]
 
   await db.transaction(
     'rw',
     [
       db.tenants, db.locations, db.users, db.categories, db.products, db.stock,
       db.sales, db.customers, db.suppliers, db.expenses, db.notifications, db.remisiones,
-      db.purchaseOrders, db.changeOwed, db.purchases,
+      db.purchaseOrders, db.changeOwed, db.purchases, db.domicilios,
     ],
     async () => {
       await db.tenants.bulkPut([tenant, ...otherTenants])
@@ -699,6 +711,7 @@ export async function seedNow(): Promise<void> {
       await db.purchaseOrders.bulkPut(purchaseOrders)
       await db.changeOwed.bulkPut(changeOwed)
       await db.purchases.bulkPut(purchases)
+      await db.domicilios.bulkPut(domicilios)
     },
   )
 }

@@ -225,10 +225,10 @@ function ReturnSheet({
 }: {
   sale: Sale
   onClose: () => void
-  onDone: (returns: { productId: string; qty: number }[]) => void
+  onDone: (returns: { index: number; qty: number }[]) => void
 }) {
-  const [qtys, setQtys] = useState<Record<string, number>>({})
-  const total = sale.items.reduce((s, it) => s + it.unitPrice * (qtys[it.productId] ?? 0), 0)
+  const [qtys, setQtys] = useState<Record<number, number>>({})
+  const total = sale.items.reduce((s, it, i) => s + it.unitPrice * (qtys[i] ?? 0), 0)
   return (
     <Sheet
       open
@@ -238,7 +238,7 @@ function ReturnSheet({
         <button
           className="btn btn-danger btn-lg w-full"
           disabled={total <= 0}
-          onClick={() => onDone(sale.items.map((it) => ({ productId: it.productId, qty: qtys[it.productId] ?? 0 })))}
+          onClick={() => onDone(sale.items.map((_, i) => ({ index: i, qty: qtys[i] ?? 0 })))}
         >
           Devolver · {cop(total)}
         </button>
@@ -246,21 +246,21 @@ function ReturnSheet({
     >
       <p className="mb-3 text-sm text-slate-500">Elige cuántas unidades de cada ítem devuelve el cliente. Se reintegra el stock y se genera nota crédito.</p>
       <div className="space-y-2">
-        {sale.items.map((it) => {
+        {sale.items.map((it, i) => {
           const max = it.unit === 'peso' ? it.qty : Math.floor(it.qty)
-          const val = qtys[it.productId] ?? 0
+          const val = qtys[i] ?? 0
           return (
-            <div key={it.productId} className="flex items-center gap-2 rounded-xl border border-slate-100 p-2.5">
+            <div key={i} className="flex items-center gap-2 rounded-xl border border-slate-100 p-2.5">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-slate-700">{it.name}</p>
                 <p className="text-xs text-slate-400">Vendido: {it.unit === 'peso' ? kg(it.qty) : it.qty} · {cop(it.unitPrice)}</p>
               </div>
               <div className="flex items-center gap-1.5">
-                <button onClick={() => setQtys({ ...qtys, [it.productId]: Math.max(0, val - 1) })} className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100">
+                <button onClick={() => setQtys({ ...qtys, [i]: Math.max(0, val - 1) })} className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100">
                   <Icon name="minus" className="h-4 w-4" />
                 </button>
                 <span className="w-8 text-center font-bold">{val}</span>
-                <button onClick={() => setQtys({ ...qtys, [it.productId]: Math.min(max, val + 1) })} className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                <button onClick={() => setQtys({ ...qtys, [i]: Math.min(max, val + 1) })} className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700">
                   <Icon name="plus" className="h-4 w-4" />
                 </button>
               </div>

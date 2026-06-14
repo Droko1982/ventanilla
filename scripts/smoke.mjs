@@ -406,6 +406,20 @@ async function main() {
   await page.keyboard.press('Escape')
   await sleep(300)
 
+  // 4h-nonies) Domicilios
+  ctx = 'domicilios'
+  await page.evaluate(() => { location.hash = '#/domicilios' })
+  await sleep(2500)
+  txt = await bodyText(page)
+  if (!/Domicilios/.test(txt) || !/Doña Rosa/.test(txt)) throw new Error('Domicilios no renderizó')
+  await clickText(page, 'Doña Rosa')
+  await sleep(600)
+  txt = await bodyText(page)
+  if (!/En camino|Entregado/.test(txt)) throw new Error('Detalle de domicilio no abrió')
+  console.log('✓ Domicilios (entregas: estado, repartidor, mapa)')
+  await page.keyboard.press('Escape')
+  await sleep(300)
+
   // 4i) Ventas: devolución parcial (abre la hoja)
   ctx = 'devolucion-parcial'
   await page.evaluate(() => { location.hash = '#/ventas' })
