@@ -24,6 +24,10 @@ export const env = {
     token: process.env.WHATSAPP_TOKEN ?? '',
     phoneId: process.env.WHATSAPP_PHONE_ID ?? '',
   },
+  email: {
+    apiKey: process.env.EMAIL_API_KEY ?? '', // Resend (https://resend.com), tramo gratis
+    from: process.env.EMAIL_FROM ?? 'Ventanilla <pedidos@ventanilla.co>',
+  },
   dian: {
     provider: process.env.DIAN_PROVIDER ?? '',
     apiKey: process.env.DIAN_API_KEY ?? '',

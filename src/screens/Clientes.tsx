@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { useCustomers } from '@/hooks/data'
 import { db } from '@/data/db'
 import { payCredit } from '@/data/repo'
@@ -7,6 +8,7 @@ import { EmptyState, PageHeader, Money } from '@/components/ui'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
 import { cop, parseCop } from '@/lib/money'
+import { fmtDate } from '@/lib/format'
 import { waLink } from '@/lib/whatsapp'
 import { uid } from '@/lib/id'
 import { useSession } from '@/store/session'
@@ -144,6 +146,21 @@ function ImportClientsSheet({ tenantId, onClose }: { tenantId: string; onClose: 
 function CustomerDetail({ customer, onClose }: { customer: Customer; onClose: () => void }) {
   const [abono, setAbono] = useState('')
   const reminder = `Hola ${customer.name}, te recordamos tu saldo pendiente de ${cop(customer.creditBalance)}. ¡Gracias!`
+
+  // Analítica del cliente: nº de compras, ticket promedio y última compra
+  const sales = useLiveQuery(
+    () => db.sales.filter((s) => s.customerId === customer.id).toArray(),
+    [customer.id],
+  )
+  const stats = useMemo(() => {
+    const done = (sales ?? []).filter((s) => s.status === 'completada')
+    const n = done.length
+    const sum = done.reduce((s, x) => s + x.total, 0)
+    const last = done.reduce<string | undefined>((acc, s) => (!acc || s.createdAt > acc ? s.createdAt : acc), undefined)
+    const avg = n > 0 ? Math.round(sum / n) : 0
+    return { n, avg, last }
+  }, [sales])
+
   return (
     <Sheet open onClose={onClose} title={customer.name}>
       <div className="space-y-4">
@@ -151,10 +168,27 @@ function CustomerDetail({ customer, onClose }: { customer: Customer; onClose: ()
           <p className="text-sm text-rose-600">Saldo en fiado</p>
           <p className="text-3xl font-extrabold text-rose-700">{cop(customer.creditBalance)}</p>
         </div>
+
+        {/* Cuánto compra este cliente */}
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-xl bg-slate-50 p-2.5">
+            <p className="text-lg font-bold text-slate-700">{cop(customer.totalSpent)}</p>
+            <p className="text-[11px] text-slate-400">Total comprado</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-2.5">
+            <p className="text-lg font-bold text-slate-700">{stats.n}</p>
+            <p className="text-[11px] text-slate-400">Compras</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-2.5">
+            <p className="text-lg font-bold text-slate-700">{cop(stats.avg)}</p>
+            <p className="text-[11px] text-slate-400">Promedio/compra</p>
+          </div>
+        </div>
         <div className="space-y-1 text-sm text-slate-500">
           {customer.phone && <p>📲 {customer.phone}</p>}
           {customer.idNumber && <p>🪪 {customer.idNumber}</p>}
-          <p>🛒 Total comprado: {cop(customer.totalSpent)}</p>
+          {(customer.points ?? 0) > 0 && <p>⭐ Puntos de fidelización: {customer.points}</p>}
+          {stats.last && <p>🕒 Última compra: {fmtDate(stats.last)}</p>}
         </div>
 
         {customer.creditBalance > 0 && (

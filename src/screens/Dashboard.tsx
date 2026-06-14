@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell,
@@ -9,6 +9,7 @@ import {
 import { summarize, topProducts, filterByRange } from '@/lib/analytics'
 import { makePeriod, salesInPeriod, periodSeries, type Granularity } from '@/lib/period'
 import { buildInsights } from '@/lib/insights'
+import { maybeRecalcThresholds } from '@/data/repo'
 import { daysUntil } from '@/lib/format'
 import { cop, parseCop } from '@/lib/money'
 import { db } from '@/data/db'
@@ -79,6 +80,12 @@ export default function Dashboard() {
     () => buildInsights({ sales: sales ?? [], topName: top[0]?.name, delta, lowStock, expiring, deadStock }),
     [sales, top, delta, lowStock, expiring, deadStock],
   )
+
+  // Mantén al día los umbrales de reorden por velocidad (auto, 1×/día por local)
+  useEffect(() => {
+    if (!tenant || !locations) return
+    for (const l of locations) maybeRecalcThresholds(tenant.id, l.id)
+  }, [tenant, locations])
 
   return (
     <div>

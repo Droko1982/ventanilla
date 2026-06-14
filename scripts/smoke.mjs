@@ -50,6 +50,17 @@ async function waitForText(page, needle, timeoutMs = 7000) {
   return t
 }
 
+// Espera a que un texto DESAPAREZCA (p. ej. al cerrarse una hoja).
+async function waitForGone(page, needle, timeoutMs = 5000) {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    const t = await bodyText(page)
+    if (!t.includes(needle)) return true
+    await sleep(200)
+  }
+  return false
+}
+
 async function main() {
   const browser = await puppeteer.launch({
     headless: 'new',
@@ -358,9 +369,7 @@ async function main() {
   txt = await waitForText(page, 'Guardar cambios', 5000)
   if (!/Editar producto/i.test(txt) || !/Guardar cambios/i.test(txt)) throw new Error('No abrió el formulario de edición del producto')
   await clickText(page, 'Guardar cambios')
-  await sleep(800)
-  txt = await bodyText(page)
-  if (/Editar producto/i.test(txt)) throw new Error('El formulario de edición no cerró tras guardar')
+  if (!(await waitForGone(page, 'Editar producto', 5000))) throw new Error('El formulario de edición no cerró tras guardar')
   console.log('✓ Editar producto desde el POS (modificar producto creado)')
 
   // 4h) Proveedores: reabastecimiento automático + cuentas por pagar
@@ -385,7 +394,7 @@ async function main() {
   // 4h-bis) Compras: factura de compra + costo promedio
   ctx = 'compras'
   await page.evaluate(() => { location.hash = '#/compras' })
-  txt = await waitForText(page, 'Nueva factura de compra', 9000)
+  txt = await waitForText(page, 'FC-401', 9000)
   if (!/Nueva factura de compra/.test(txt)) throw new Error('Compras no renderizó')
   if (!/FC-401/.test(txt)) throw new Error('Compra de ejemplo no visible')
   await clickText(page, 'Nueva factura de compra')
@@ -488,6 +497,20 @@ async function main() {
   await page.keyboard.press('Escape')
   await sleep(300)
 
+  // 4h-octies2) Analítica de cliente: total, # compras y promedio por compra
+  ctx = 'cliente-analitica'
+  const openedCust = await page.evaluate(() => {
+    const b = [...document.querySelectorAll('button')].find((x) => /Compras:/.test(x.textContent || ''))
+    if (b) { b.click(); return true }
+    return false
+  })
+  if (!openedCust) throw new Error('No se encontró un cliente para abrir')
+  txt = await waitForText(page, 'Promedio/compra', 4000)
+  if (!/Total comprado/.test(txt) || !/Promedio\/compra/.test(txt)) throw new Error('Analítica de cliente no renderizó')
+  console.log('✓ Clientes: analítica (total, # compras, promedio por compra)')
+  await page.keyboard.press('Escape')
+  await sleep(300)
+
   // 4h-nonies) Domicilios
   ctx = 'domicilios'
   await page.evaluate(() => { location.hash = '#/domicilios' })
@@ -562,8 +585,7 @@ async function main() {
     }, d)
     await sleep(150)
   }
-  await sleep(1500)
-  txt = await bodyText(page)
+  txt = await waitForText(page, 'Producto nuevo', 6000)
   if (!/Producto nuevo/.test(txt)) throw new Error('POS del cajero no renderizó tras el PIN')
   console.log('✓ Login cajero por PIN → POS renderiza')
 

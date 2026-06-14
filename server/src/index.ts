@@ -5,6 +5,7 @@ import { authRouter } from './routes/auth.js'
 import { syncRouter } from './routes/sync.js'
 import { billingRouter } from './routes/billing.js'
 import { whatsappRouter } from './routes/whatsapp.js'
+import { emailRouter } from './routes/email.js'
 import { dianRouter } from './routes/dian.js'
 import { adminRouter } from './routes/admin.js'
 
@@ -34,6 +35,7 @@ app.use('/auth', authRouter)
 app.use('/sync', syncRouter)
 app.use('/billing', billingRouter)
 app.use('/whatsapp', whatsappRouter)
+app.use('/email', emailRouter)
 app.use('/dian', dianRouter)
 app.use('/admin', adminRouter)
 

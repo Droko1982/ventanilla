@@ -551,6 +551,19 @@ export async function recalcThresholds(tenantId: string, locationId: string): Pr
   return updated
 }
 
+// Recalcula los umbrales dinámicos automáticamente, a lo sumo 1 vez al día por
+// local (los productos que más se venden quedan con un colchón de stock mayor).
+export async function maybeRecalcThresholds(tenantId: string, locationId: string): Promise<void> {
+  if (!locationId) return
+  const key = `ventanilla-recalc-${locationId}`
+  try {
+    const last = Number(localStorage.getItem(key) || 0)
+    if (Date.now() - last < 24 * 3600000) return
+    localStorage.setItem(key, String(Date.now()))
+  } catch { /* sin almacenamiento: corre igual */ }
+  try { await recalcThresholds(tenantId, locationId) } catch { /* nunca debe romper */ }
+}
+
 // ---- Crear orden de compra a partir de sugerencias ------------------------
 export async function createPurchaseOrder(
   tenantId: string,
@@ -578,6 +591,18 @@ export async function sendSupplierWhatsApp(phone: string, message: string): Prom
   if (!phone || !isCloudConfigured()) return false
   try {
     const r = await api<{ sent?: boolean }>('/whatsapp/send', { method: 'POST', body: { to: phone, message } })
+    return !!r.sent
+  } catch {
+    return false
+  }
+}
+
+// Envía un correo al proveedor (pedido automático). Automático vía backend si la
+// app está conectada a la nube; si no, no puede enviarse solo.
+export async function sendSupplierEmail(to: string, subject: string, message: string): Promise<boolean> {
+  if (!to || !isCloudConfigured()) return false
+  try {
+    const r = await api<{ sent?: boolean }>('/email/send', { method: 'POST', body: { to, subject, message } })
     return !!r.sent
   } catch {
     return false
@@ -623,19 +648,22 @@ export async function runAutoReorder(tenantId: string, locationId: string, userI
       items.map((it) => ({ productId: it.product.id, name: it.product.name, suggestedQty: it.suggestedQty, cost: it.product.cost })),
     )
     const message = autoOrderMessage(supplier.name, location?.name, items.map((it) => ({ name: it.product.name, qty: it.suggestedQty })))
-    const sent = supplier.whatsapp ? await sendSupplierWhatsApp(supplier.whatsapp, message) : false
+    const waSent = supplier.whatsapp ? await sendSupplierWhatsApp(supplier.whatsapp, message) : false
+    const mailSent = supplier.email ? await sendSupplierEmail(supplier.email, `Pedido automático · ${location?.name ?? 'tienda'}`, message) : false
+    const channels = [waSent && 'WhatsApp', mailSent && 'correo'].filter(Boolean).join(' y ')
+    const sent = waSent || mailSent
 
     await notify({
       tenantId, locationId, type: 'stock', severity: 'aviso',
       title: sent ? 'Pedido enviado automáticamente' : 'Pedido automático listo',
       message: sent
-        ? `Se envió por WhatsApp el pedido a ${supplier.name}.`
-        : `Pedido para ${supplier.name} creado. Conecta la nube + WhatsApp para envío 100% automático.`,
+        ? `Se envió por ${channels} el pedido a ${supplier.name}.`
+        : `Pedido para ${supplier.name} creado. Conecta la nube (WhatsApp/correo) para envío 100% automático.`,
     })
     await audit({
       tenantId, locationId, userId, userName,
       action: 'reabastecimiento automático', entity: 'pedido', entityId: supplierId,
-      detail: `${items.length} productos a ${supplier.name}${sent ? ' · enviado por WhatsApp' : ' · pendiente de envío'}`,
+      detail: `${items.length} productos a ${supplier.name}${sent ? ` · enviado por ${channels}` : ' · pendiente de envío'}`,
     })
   }
 }

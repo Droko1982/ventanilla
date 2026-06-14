@@ -427,11 +427,14 @@ function buildHistory(products: Product[]): Sale[] {
         const method = pick(PAYMENT_WEIGHTS)
         const payments: Payment[] = [{ method, amount: total, confirmed: method !== 'fiado' }]
         const dianStatus = Math.random() < 0.04 ? 'pendiente' : 'enviado'
+        // ~1 de cada 4 ventas queda asociada a un cliente conocido (analítica)
+        const cust = method === 'fiado' || Math.random() < 0.22 ? pick(customers) : undefined
         sales.push({
           id: `sh_${loc.id}_${dayOffset}_${i}`,
           tenantId: TENANT_ID,
           locationId: loc.id,
           userId: emp.id,
+          customerId: cust?.id,
           items,
           subtotal: Math.round(subtotal),
           discount,
@@ -632,7 +635,7 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Al subir una versión nueva del modelo de demo, se recarga automáticamente
 // para que cualquier visitante vea los datos/precios más recientes.
-const SEED_VERSION = '11-breb-puntos'
+const SEED_VERSION = '12-clientes-analitica'
 const SEED_KEY = 'ventanilla-seed-version'
 
 export async function seedIfEmpty(): Promise<void> {
