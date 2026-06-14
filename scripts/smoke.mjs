@@ -174,7 +174,18 @@ async function main() {
   await sleep(700)
   txt = await bodyText(page)
   if (!/Movimientos \(kardex\)/.test(txt)) throw new Error('Kardex no renderizó en la ficha de producto')
-  console.log('✓ Kardex (historial de movimientos) en ficha de producto')
+  if (!/Imprimir etiqueta/.test(txt)) throw new Error('Botón de etiqueta no disponible')
+  console.log('✓ Kardex + etiqueta imprimible en ficha de producto')
+  await page.keyboard.press('Escape')
+  await sleep(400)
+
+  // 4e-bis) Toma física de inventario
+  ctx = 'toma-fisica'
+  await clickText(page, 'Toma física de inventario')
+  await sleep(700)
+  txt = await bodyText(page)
+  if (!/Aplicar/.test(txt)) throw new Error('Toma física no abrió')
+  console.log('✓ Toma física de inventario')
   await page.keyboard.press('Escape')
   await sleep(400)
 
@@ -188,7 +199,25 @@ async function main() {
   await sleep(500)
   await clickText(page, 'Día')
   await sleep(500)
-  console.log('✓ Dashboard: históricos día/semana/mes/año')
+  txt = await bodyText(page)
+  if (!/Meta del mes/.test(txt)) throw new Error('Meta del mes no renderizó')
+  console.log('✓ Dashboard: históricos día/semana/mes/año + meta')
+
+  // 4f-bis) Reportes: comisiones por vendedor + export contable
+  ctx = 'reportes-comisiones'
+  await page.evaluate(() => { location.hash = '#/reportes' })
+  await sleep(900)
+  txt = await bodyText(page)
+  if (!/Ventas por vendedor/.test(txt) || !/reporte contable/i.test(txt)) throw new Error('Comisiones/export contable no renderizó')
+  console.log('✓ Reportes: comisiones por vendedor + export contable')
+
+  // 4f-ter) Ajustes: respaldo exportar/importar
+  ctx = 'respaldo'
+  await page.evaluate(() => { location.hash = '#/ajustes' })
+  await sleep(900)
+  txt = await bodyText(page)
+  if (!/Exportar respaldo/.test(txt)) throw new Error('Respaldo no renderizó en Ajustes')
+  console.log('✓ Ajustes: respaldo exportar/importar')
 
   // 4g) Precio al por mayor visible en POS
   ctx = 'por-mayor'
@@ -197,6 +226,15 @@ async function main() {
   txt = await bodyText(page)
   if (!/x6\+/.test(txt)) console.log('· (aviso) no se vio la pista de precio por mayor')
   else console.log('✓ Precio al por mayor visible en POS')
+
+  // Pantalla a cliente
+  await clickText(page, '📺')
+  await sleep(500)
+  txt = await bodyText(page)
+  if (!/total a pagar/i.test(txt)) throw new Error('Pantalla a cliente no abrió')
+  await clickText(page, 'Cerrar')
+  await sleep(300)
+  console.log('✓ POS: pantalla a cliente')
 
   // 4h) Proveedores: cuentas por pagar
   ctx = 'cuentas-por-pagar'

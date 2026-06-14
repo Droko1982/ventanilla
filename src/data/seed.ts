@@ -55,6 +55,8 @@ const tenant: Tenant = {
     testMode: true,
   },
   locationCount: 3,
+  monthlyGoal: 18000000,
+  commissionPct: 1,
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +280,9 @@ function buildProducts(): Product[] {
       // Precio al por mayor en bebidas y licores (desde 6 unidades)
       wholesalePrice: categoryId === 'c_beb' || categoryId === 'c_lic' ? Math.round(price * 0.9) : undefined,
       wholesaleMinQty: categoryId === 'c_beb' || categoryId === 'c_lic' ? 6 : undefined,
+      // Promociones de ejemplo
+      promoType: name.includes('Doritos') ? '2x1' : name.includes('Chocorramo') ? 'percent' : undefined,
+      promoValue: name.includes('Chocorramo') ? 15 : undefined,
       active: true,
       createdAt: tenant.createdAt,
     }
@@ -333,6 +338,7 @@ const customers: Customer[] = [
     idNumber: '41.234.567',
     creditBalance: 23500,
     totalSpent: 540000,
+    points: 540,
     createdAt: tenant.createdAt,
   },
   {
@@ -343,6 +349,7 @@ const customers: Customer[] = [
     idNumber: '7.890.123',
     creditBalance: 12000,
     totalSpent: 310000,
+    points: 310,
     createdAt: tenant.createdAt,
   },
   {
@@ -353,6 +360,7 @@ const customers: Customer[] = [
     idNumber: '901.222.333-1',
     creditBalance: 0,
     totalSpent: 1820000,
+    points: 1820,
     createdAt: tenant.createdAt,
   },
 ]
@@ -605,7 +613,7 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Al subir una versión nueva del modelo de demo, se recarga automáticamente
 // para que cualquier visitante vea los datos/precios más recientes.
-const SEED_VERSION = '5-mayor-permisos'
+const SEED_VERSION = '6-promos-respaldo'
 const SEED_KEY = 'ventanilla-seed-version'
 
 export async function seedIfEmpty(): Promise<void> {

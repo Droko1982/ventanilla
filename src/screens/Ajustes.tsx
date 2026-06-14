@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTenant, useLocations } from '@/hooks/data'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
+import { exportAllData, importAllData } from '@/data/repo'
 import { Sheet } from '@/components/Sheet'
 import { PageHeader } from '@/components/ui'
 import { Icon } from '@/components/icons'
@@ -26,6 +27,31 @@ export default function Ajustes() {
   const [empEdit, setEmpEdit] = useState<User | null>(null)
   const [empAdd, setEmpAdd] = useState(false)
   const [dianOpen, setDianOpen] = useState(false)
+
+  async function doExport() {
+    const json = await exportAllData()
+    const url = 'data:application/json;charset=utf-8,' + encodeURIComponent(json)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'ventanilla-respaldo.json'
+    a.click()
+    toast('success', 'Respaldo descargado')
+  }
+  function doImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = async () => {
+      try {
+        await importAllData(reader.result as string)
+        toast('success', 'Respaldo restaurado')
+        setTimeout(() => location.reload(), 800)
+      } catch {
+        toast('error', 'Archivo de respaldo inválido')
+      }
+    }
+    reader.readAsText(file)
+  }
 
   if (!tenant) return null
   const billing = billingBreakdown(locations?.length ?? 0, tenant.monthlyFeePerLocation)
@@ -102,6 +128,22 @@ export default function Ajustes() {
             <p className="mt-2 text-xs font-semibold text-emerald-600">Ahorras {cop(billing.savings)}/mes por paquete</p>
           )}
           <p className="mt-2 text-xs text-slate-400">Pagado hasta {fmtDate(tenant.paidUntil)}</p>
+        </div>
+      </Section>
+
+      {/* Datos y respaldo */}
+      <Section title="Datos y respaldo">
+        <div className="space-y-2">
+          <button onClick={doExport} className="btn btn-secondary w-full">
+            ⬇️ Exportar respaldo (.json)
+          </button>
+          <label className="btn btn-secondary w-full cursor-pointer">
+            ⬆️ Importar respaldo
+            <input type="file" accept="application/json,.json" className="hidden" onChange={doImport} />
+          </label>
+          <p className="text-xs text-slate-400">
+            Guarda o restaura todos los datos del dispositivo (productos, ventas, clientes, caja…).
+          </p>
         </div>
       </Section>
 

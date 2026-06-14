@@ -11,6 +11,9 @@ export interface CartLine {
   basePrice?: number // precio al detal
   wholesalePrice?: number // precio al por mayor
   wholesaleMinQty?: number // cantidad mínima para el por mayor
+  promoType?: '2x1' | 'percent'
+  promoValue?: number
+  promoSaving?: number // ahorro por promoción (calculado según la cantidad)
   lineDiscount: number
   ivaRate: number
   cost: number
@@ -22,6 +25,13 @@ function effPrice(l: Pick<CartLine, 'basePrice' | 'unitPrice' | 'wholesalePrice'
   const base = l.basePrice ?? l.unitPrice
   if (l.wholesalePrice && l.wholesaleMinQty && qty >= l.wholesaleMinQty) return l.wholesalePrice
   return base
+}
+
+// Ahorro por promoción automática (2x1 o % de descuento).
+function promoSaving(l: Pick<CartLine, 'promoType' | 'promoValue'>, qty: number, unitPrice: number): number {
+  if (l.promoType === '2x1') return Math.floor(qty / 2) * unitPrice
+  if (l.promoType === 'percent' && l.promoValue) return Math.round(unitPrice * qty * (l.promoValue / 100))
+  return 0
 }
 
 interface CartState {
@@ -49,7 +59,8 @@ export const useCart = create<CartState>((set) => ({
           lines: s.lines.map((l) => {
             if (l.productId !== p.id) return l
             const newQty = p.unit === 'peso' ? (qty ?? l.qty) : l.qty + (qty ?? 1)
-            return { ...l, qty: newQty, unitPrice: effPrice(l, newQty) }
+            const up = effPrice(l, newQty)
+            return { ...l, qty: newQty, unitPrice: up, promoSaving: promoSaving(l, newQty, up) }
           }),
         }
       }
@@ -62,6 +73,8 @@ export const useCart = create<CartState>((set) => ({
         basePrice: p.price,
         wholesalePrice: p.wholesalePrice,
         wholesaleMinQty: p.wholesaleMinQty,
+        promoType: p.promoType,
+        promoValue: p.promoValue,
         unitPrice: p.price,
         lineDiscount: 0,
         ivaRate: p.ivaRate,
@@ -69,6 +82,7 @@ export const useCart = create<CartState>((set) => ({
         emoji: p.imageEmoji,
       }
       line.unitPrice = effPrice(line, newQty)
+      line.promoSaving = promoSaving(line, newQty, line.unitPrice)
       return { lines: [...s.lines, line] }
     }),
 
@@ -79,7 +93,11 @@ export const useCart = create<CartState>((set) => ({
       lines:
         qty <= 0
           ? s.lines.filter((l) => l.productId !== productId)
-          : s.lines.map((l) => (l.productId === productId ? { ...l, qty, unitPrice: effPrice(l, qty) } : l)),
+          : s.lines.map((l) => {
+              if (l.productId !== productId) return l
+              const up = effPrice(l, qty)
+              return { ...l, qty, unitPrice: up, promoSaving: promoSaving(l, qty, up) }
+            }),
     })),
 
   setLineDiscount: (productId, discount) =>
@@ -96,7 +114,7 @@ export const useCart = create<CartState>((set) => ({
 
 // Cálculos derivados del carrito
 export function cartSubtotal(lines: CartLine[]): number {
-  return lines.reduce((s, l) => s + l.unitPrice * l.qty - l.lineDiscount, 0)
+  return lines.reduce((s, l) => s + l.unitPrice * l.qty - l.lineDiscount - (l.promoSaving ?? 0), 0)
 }
 export function cartTotal(lines: CartLine[], globalDiscount: number): number {
   return Math.max(0, Math.round(cartSubtotal(lines) - globalDiscount))

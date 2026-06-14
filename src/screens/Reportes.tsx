@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
-import { useScopeSales, useScopeStock, useProducts, useLocations } from '@/hooks/data'
+import { useScopeSales, useScopeStock, useProducts, useLocations, useTenant } from '@/hooks/data'
 import { useScopeLocationIds } from '@/hooks/data'
 import { summarize, topProducts, bottomProducts, productStats, filterByRange } from '@/lib/analytics'
+import { ivaBreakdown } from '@/lib/documents'
 import { StatCard, Money, Segmented, PageHeader, EmptyState } from '@/components/ui'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
 import { cop } from '@/lib/money'
+import { useSession } from '@/store/session'
 
 export default function Reportes() {
   const sales = useScopeSales()
@@ -15,10 +17,49 @@ export default function Reportes() {
   const products = useProducts()
   const locations = useLocations()
   const scopeIds = useScopeLocationIds()
+  const tenant = useTenant()
+  const tenantId = useSession((s) => s.tenantId)
+  const users = useLiveQuery(() => (tenantId ? db.users.where('tenantId').equals(tenantId).toArray() : []), [tenantId])
   const [range, setRange] = useState<'7' | '30' | '90'>('30')
+  const [commPct, setCommPct] = useState('')
 
   const days = range === '7' ? 7 : range === '30' ? 30 : 90
   const ranged = useMemo(() => filterByRange(sales ?? [], days), [sales, days])
+  const userName = useMemo(() => new Map((users ?? []).map((u) => [u.id, u.name])), [users])
+  const commission = commPct !== '' ? Number(commPct) : (tenant?.commissionPct ?? 1)
+
+  // Ventas por vendedor (para comisiones)
+  const sellerStats = useMemo(() => {
+    const map = new Map<string, { revenue: number; count: number }>()
+    for (const s of ranged) {
+      if (s.status !== 'completada') continue
+      const cur = map.get(s.userId) ?? { revenue: 0, count: 0 }
+      cur.revenue += s.total
+      cur.count++
+      map.set(s.userId, cur)
+    }
+    return [...map.entries()]
+      .map(([uid, v]) => ({ name: userName.get(uid) ?? 'Empleado', ...v }))
+      .sort((a, b) => b.revenue - a.revenue)
+  }, [ranged, userName])
+
+  function exportContable() {
+    const header = 'fecha,documento,tipo,cliente,base,iva,total,metodo'
+    const rows = ranged
+      .filter((s) => s.status !== 'anulada')
+      .map((s) => {
+        const t = ivaBreakdown(s.items, s.discount)
+        const metodo = s.payments.map((p) => p.method).join('|')
+        const fecha = new Date(s.createdAt).toISOString().slice(0, 10)
+        return `${fecha},${s.dianDocNumber ?? ''},${s.dianDocType},"${s.customerName ?? ''}",${t.base},${t.iva},${s.total},${metodo}`
+      })
+    const csv = [header, ...rows].join('\n')
+    const a = document.createElement('a')
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv)
+    a.download = `contable-ventanilla-${days}d.csv`
+    a.click()
+    toast('success', 'Reporte contable exportado')
+  }
   const summary = useMemo(() => summarize(ranged), [ranged])
   const top = useMemo(() => topProducts(ranged, 8), [ranged])
   const bottom = useMemo(() => bottomProducts(ranged, 8), [ranged])
@@ -131,6 +172,31 @@ export default function Reportes() {
       <div className="mb-4 grid gap-4 sm:grid-cols-2">
         <RankCard title="Más vendidos" emoji="🔥" items={top} />
         <RankCard title="Menos vendidos" emoji="🐌" items={bottom} />
+      </div>
+
+      {/* Ventas por vendedor (comisiones) */}
+      <div className="card mb-4 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-semibold text-slate-600">Ventas por vendedor</p>
+          <div className="flex items-center gap-1 text-xs text-slate-400">
+            comisión
+            <input className="w-12 rounded border border-slate-200 px-1 py-0.5 text-right" inputMode="decimal" value={commPct} onChange={(e) => setCommPct(e.target.value)} placeholder={String(tenant?.commissionPct ?? 1)} />%
+          </div>
+        </div>
+        <div className="space-y-2">
+          {sellerStats.map((s) => (
+            <div key={s.name} className="flex items-center gap-2 text-sm">
+              <span className="flex-1 truncate text-slate-600">{s.name}</span>
+              <span className="text-xs text-slate-400">{s.count}</span>
+              <span className="w-24 text-right font-semibold text-slate-700">{cop(s.revenue)}</span>
+              <span className="w-20 text-right text-emerald-600">{cop(Math.round((s.revenue * commission) / 100))}</span>
+            </div>
+          ))}
+          {sellerStats.length === 0 && <p className="py-2 text-center text-sm text-slate-400">Sin ventas en el período.</p>}
+        </div>
+        <button onClick={exportContable} className="btn btn-secondary mt-3 w-full text-sm">
+          <Icon name="doc" className="h-5 w-5" /> Exportar reporte contable (CSV)
+        </button>
       </div>
 
       {/* Stock muerto */}

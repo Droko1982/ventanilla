@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { Icon } from './icons'
 import { Sheet } from './Sheet'
 import { useOnline } from '@/hooks/useOnline'
+import { useInstallPrompt } from '@/hooks/useInstall'
 import { useSession } from '@/store/session'
 import {
   useCurrentUser,
@@ -26,6 +27,7 @@ function TopBar() {
   const notifs = useUnreadNotifications()
   const unread = (notifs ?? []).filter((n) => !n.read).length
   const navigate = useNavigate()
+  const { canInstall, promptInstall } = useInstallPrompt()
   const [menu, setMenu] = useState(false)
   const [resetting, setResetting] = useState(false)
 
@@ -109,6 +111,16 @@ function TopBar() {
           <p className="text-sm text-slate-500">{tenant?.businessName}</p>
         </div>
         <div className="mt-5 space-y-2">
+          <button
+            className="btn btn-secondary w-full"
+            onClick={async () => {
+              if (canInstall) await promptInstall()
+              else toast('info', 'En el navegador: menú ⋮ → "Instalar app" o "Agregar a pantalla de inicio"')
+              setMenu(false)
+            }}
+          >
+            📲 Instalar app en el celular
+          </button>
           <a
             href="https://wa.me/573147555896?text=Hola%2C%20necesito%20soporte%20de%20Ventanilla"
             target="_blank"

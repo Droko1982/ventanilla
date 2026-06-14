@@ -47,6 +47,7 @@ export default function POS() {
   const [quickAdd, setQuickAdd] = useState(false)
   const [scanCreateCode, setScanCreateCode] = useState<string | undefined>()
   const [serviceOpen, setServiceOpen] = useState(false)
+  const [displayOpen, setDisplayOpen] = useState(false)
   const [receipt, setReceipt] = useState<Sale | null>(null)
 
   const canManage = can(user, 'canManageInventory')
@@ -134,6 +135,9 @@ export default function POS() {
         </div>
         <button onClick={() => setScanOpen(true)} className="btn btn-primary px-4" aria-label="Escanear">
           <Icon name="scan" className="h-6 w-6" />
+        </button>
+        <button onClick={() => setDisplayOpen(true)} className="btn btn-secondary px-3" aria-label="Pantalla cliente" title="Mostrar al cliente">
+          📺
         </button>
       </div>
 
@@ -244,7 +248,7 @@ export default function POS() {
               unit: l.unit,
               qty: l.qty,
               unitPrice: l.unitPrice,
-              lineDiscount: l.lineDiscount,
+              lineDiscount: l.lineDiscount + (l.promoSaving ?? 0), // incluye promoción
               ivaRate: l.ivaRate,
               cost: l.cost,
             }))
@@ -294,6 +298,40 @@ export default function POS() {
           }}
         />
       )}
+
+      {displayOpen && <CustomerDisplay onClose={() => setDisplayOpen(false)} />}
+    </div>
+  )
+}
+
+// --- Pantalla para el cliente (segunda pantalla / mostrar la compra) --------
+function CustomerDisplay({ onClose }: { onClose: () => void }) {
+  const cart = useCart()
+  const total = cartTotal(cart.lines, cart.globalDiscount)
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col bg-slate-900 text-white">
+      <div className="flex items-center justify-between p-4">
+        <span className="text-lg font-bold">🛒 Tu compra</span>
+        <button onClick={onClose} className="rounded-full bg-white/10 px-4 py-2 text-sm">Cerrar</button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-6">
+        {cart.lines.length === 0 ? (
+          <p className="mt-24 text-center text-2xl text-white/40">Esperando productos…</p>
+        ) : (
+          <div className="space-y-3">
+            {cart.lines.map((l) => (
+              <div key={l.productId} className="flex items-center justify-between border-b border-white/10 pb-3 text-xl">
+                <span>{l.emoji} {l.name} <span className="text-white/50">{l.unit === 'peso' ? kg(l.qty) : `x${l.qty}`}</span></span>
+                <span className="font-bold">{cop(l.unitPrice * l.qty - l.lineDiscount - (l.promoSaving ?? 0))}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="bg-brand-600 p-6 text-center">
+        <p className="text-sm uppercase tracking-widest text-brand-100">Total a pagar</p>
+        <p className="text-6xl font-extrabold">{cop(total)}</p>
+      </div>
     </div>
   )
 }
@@ -504,6 +542,7 @@ function CartSheet({ open, canDiscount, onClose, onCheckout }: { open: boolean; 
                   {cop(l.unitPrice)}
                   {l.unit === 'peso' ? '/kg' : ' c/u'}
                   {l.lineDiscount > 0 && <span className="text-emerald-600"> · -{cop(l.lineDiscount)}</span>}
+                  {l.promoSaving ? <span className="text-emerald-600"> · {l.promoType === '2x1' ? '2x1' : 'promo'} -{cop(l.promoSaving)}</span> : null}
                 </p>
                 {canDiscount && (
                   <button onClick={() => setDiscProduct(l)} className="mt-0.5 text-[11px] font-medium text-brand-600">
@@ -525,7 +564,7 @@ function CartSheet({ open, canDiscount, onClose, onCheckout }: { open: boolean; 
                 </div>
               )}
               <div className="w-20 text-right text-sm font-bold text-slate-700">
-                {cop(l.unitPrice * l.qty - l.lineDiscount)}
+                {cop(l.unitPrice * l.qty - l.lineDiscount - (l.promoSaving ?? 0))}
               </div>
               <button onClick={() => cart.remove(l.productId)} className="text-slate-300 hover:text-rose-500">
                 <Icon name="trash" className="h-4 w-4" />

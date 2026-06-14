@@ -4,12 +4,15 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell,
 } from 'recharts'
 import {
-  useScopeSales, useScopeStock, useProducts, useLocations, useCurrentUser,
+  useScopeSales, useScopeStock, useProducts, useLocations, useCurrentUser, useTenant,
 } from '@/hooks/data'
 import { summarize, topProducts, filterByRange } from '@/lib/analytics'
 import { makePeriod, salesInPeriod, periodSeries, type Granularity } from '@/lib/period'
 import { daysUntil } from '@/lib/format'
-import { cop } from '@/lib/money'
+import { cop, parseCop } from '@/lib/money'
+import { db } from '@/data/db'
+import { Sheet } from '@/components/Sheet'
+import { toast } from '@/components/Toast'
 import { StatCard, Segmented, Money } from '@/components/ui'
 import { Icon } from '@/components/icons'
 import { useSession } from '@/store/session'
@@ -27,16 +30,28 @@ export default function Dashboard() {
   const products = useProducts()
   const locations = useLocations()
   const user = useCurrentUser()
+  const tenant = useTenant()
   const filter = useSession((s) => s.locationFilter)
   const navigate = useNavigate()
   const [gran, setGran] = useState<Granularity>('semana')
   const [offset, setOffset] = useState(0)
+  const [goalOpen, setGoalOpen] = useState(false)
+  const [goalInput, setGoalInput] = useState('')
 
   const period = useMemo(() => makePeriod(gran, offset), [gran, offset])
   const rangedSales = useMemo(() => salesInPeriod(sales ?? [], period), [sales, period])
   const summary = useMemo(() => summarize(rangedSales), [rangedSales])
   const series = useMemo(() => periodSeries(sales ?? [], period), [sales, period])
   const top = useMemo(() => topProducts(rangedSales, 5), [rangedSales])
+
+  // Comparativo vs el período anterior
+  const prevSummary = useMemo(() => summarize(salesInPeriod(sales ?? [], makePeriod(gran, offset + 1))), [sales, gran, offset])
+  const delta = prevSummary.revenue > 0 ? Math.round(((summary.revenue - prevSummary.revenue) / prevSummary.revenue) * 100) : null
+
+  // Meta del mes (independiente del período seleccionado)
+  const monthRevenue = useMemo(() => summarize(salesInPeriod(sales ?? [], makePeriod('mes', 0))).revenue, [sales])
+  const goal = tenant?.monthlyGoal ?? 0
+  const goalPct = goal > 0 ? Math.min(100, Math.round((monthRevenue / goal) * 100)) : 0
 
   const byLocation = useMemo(() => {
     if (!locations) return []
@@ -98,8 +113,31 @@ export default function Dashboard() {
         </button>
       </div>
 
+      {/* Meta del mes */}
+      <div className="card mb-4 p-4">
+        <div className="mb-1 flex items-center justify-between">
+          <p className="text-sm font-semibold text-slate-600">🎯 Meta del mes</p>
+          <button onClick={() => { setGoalInput(goal ? String(goal) : ''); setGoalOpen(true) }} className="text-xs font-medium text-brand-600">
+            {goal ? 'Editar' : 'Definir'}
+          </button>
+        </div>
+        {goal > 0 ? (
+          <>
+            <div className="mb-1 flex items-baseline justify-between">
+              <span className="text-lg font-bold text-brand-700">{cop(monthRevenue)}</span>
+              <span className="text-xs text-slate-400">de {cop(goal)} · {goalPct}%</span>
+            </div>
+            <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-brand-500" style={{ width: `${goalPct}%` }} />
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-slate-400">Define una meta para ver tu progreso del mes.</p>
+        )}
+      </div>
+
       <div className="mb-4 grid grid-cols-2 gap-2.5">
-        <StatCard label="Ventas" value={<Money value={summary.revenue} />} sub={`${summary.count} ventas`} accent="text-brand-700" icon={<Icon name="cash" className="h-5 w-5" />} />
+        <StatCard label="Ventas" value={<Money value={summary.revenue} />} sub={`${summary.count} ventas${delta !== null ? ` · ${delta >= 0 ? '↑' : '↓'}${Math.abs(delta)}% vs anterior` : ''}`} accent="text-brand-700" icon={<Icon name="cash" className="h-5 w-5" />} />
         <StatCard label="Utilidad bruta" value={<Money value={summary.profit} />} sub={`Margen ${summary.revenue ? Math.round((summary.profit / summary.revenue) * 100) : 0}%`} accent="text-emerald-600" icon={<Icon name="chart" className="h-5 w-5" />} />
         <StatCard label="Ticket promedio" value={<Money value={summary.ticketAvg} />} icon={<Icon name="tag" className="h-5 w-5" />} />
         <StatCard label="Costo mercancía" value={<Money value={summary.cost} />} icon={<Icon name="box" className="h-5 w-5" />} />
@@ -199,6 +237,27 @@ export default function Dashboard() {
           {top.length === 0 && <p className="py-4 text-center text-sm text-slate-400">Sin ventas en este período.</p>}
         </div>
       </div>
+
+      <Sheet
+        open={goalOpen}
+        onClose={() => setGoalOpen(false)}
+        title="Meta de ventas del mes"
+        footer={
+          <button
+            className="btn btn-primary btn-lg w-full"
+            onClick={async () => {
+              if (tenant) await db.tenants.update(tenant.id, { monthlyGoal: parseCop(goalInput) })
+              toast('success', 'Meta actualizada')
+              setGoalOpen(false)
+            }}
+          >
+            Guardar meta
+          </button>
+        }
+      >
+        <label className="label">¿Cuánto quieres vender este mes?</label>
+        <input autoFocus className="input text-center text-2xl font-bold" inputMode="numeric" value={goalInput} onChange={(e) => setGoalInput(e.target.value)} placeholder="$ 0" />
+      </Sheet>
     </div>
   )
 }

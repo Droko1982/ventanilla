@@ -182,12 +182,14 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
         if (c) {
           c.creditBalance += fiado.amount
           c.totalSpent += total
+          c.points = (c.points ?? 0) + Math.round(total / 1000) // 1 punto por cada $1.000
           await db.customers.put(c)
         }
       } else if (input.customerId) {
         const c = await db.customers.get(input.customerId)
         if (c) {
           c.totalSpent += total
+          c.points = (c.points ?? 0) + Math.round(total / 1000) // 1 punto por cada $1.000
           await db.customers.put(c)
         }
       }
@@ -886,6 +888,30 @@ export async function voidRemision(remisionId: string, userId: string, userName:
     entity: 'remision',
     entityId: rem.id,
     detail: `${rem.number} anulada · stock devuelto`,
+  })
+}
+
+// ---- Respaldo: exportar / importar TODA la base local ---------------------
+export async function exportAllData(): Promise<string> {
+  const out: Record<string, unknown> = {
+    app: 'ventanilla',
+    schema: 3,
+    exportedAt: new Date().toISOString(),
+  }
+  for (const t of db.tables) out[t.name] = await t.toArray()
+  return JSON.stringify(out)
+}
+
+export async function importAllData(json: string): Promise<void> {
+  const data = JSON.parse(json) as Record<string, unknown>
+  await db.transaction('rw', db.tables, async () => {
+    for (const t of db.tables) {
+      const rows = data[t.name]
+      if (Array.isArray(rows)) {
+        await t.clear()
+        await t.bulkPut(rows)
+      }
+    }
   })
 }
 

@@ -130,7 +130,7 @@ function CustomerForm({ tenantId, onClose }: { tenantId: string; onClose: () => 
             if (!name.trim()) return toast('error', 'Ponle nombre al cliente')
             await db.customers.put({
               id: uid('cl'), tenantId, name: name.trim(), phone, idNumber,
-              creditBalance: 0, totalSpent: 0, createdAt: new Date().toISOString(),
+              creditBalance: 0, totalSpent: 0, points: 0, createdAt: new Date().toISOString(),
             })
             toast('success', 'Cliente creado')
             onClose()

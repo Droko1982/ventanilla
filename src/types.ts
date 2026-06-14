@@ -39,6 +39,8 @@ export interface Tenant {
   dian: DianConfig
   // Conteo de locales (lo usa el panel del Super-Admin para el cobro escalonado)
   locationCount?: number
+  monthlyGoal?: number // meta de ventas del mes (opcional)
+  commissionPct?: number // % de comisión por vendedor (para reportes)
 }
 
 export interface DianConfig {
@@ -110,6 +112,8 @@ export interface Product {
   description?: string // detalles / descripción (opcional)
   wholesalePrice?: number // precio al por mayor (opcional)
   wholesaleMinQty?: number // cantidad mínima para el precio al por mayor
+  promoType?: '2x1' | 'percent' // promoción automática (opcional)
+  promoValue?: number // % de descuento cuando promoType = 'percent'
   active: boolean
   createdAt: string
 }
@@ -208,6 +212,7 @@ export interface Customer {
   idNumber?: string // CC / NIT
   creditBalance: number // saldo de fiado pendiente
   totalSpent: number
+  points: number // puntos de fidelización acumulados
   createdAt: string
 }
 

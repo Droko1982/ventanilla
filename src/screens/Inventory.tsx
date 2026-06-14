@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   useActiveLocationId, useProducts, useCategories, useSuppliers,
-  useStockForLocation, useLocations, useCurrentUser,
+  useStockForLocation, useLocations, useCurrentUser, useTenant,
 } from '@/hooks/data'
 import { db } from '@/data/db'
 import { adjustStock, recalcThresholds, transferStock } from '@/data/repo'
+import { printLabel } from '@/lib/label'
 import { ProductForm } from '@/components/ProductForm'
 import { Sheet } from '@/components/Sheet'
 import { Segmented, EmptyState, PageHeader, ProductThumb } from '@/components/ui'
@@ -34,6 +35,7 @@ export default function Inventory() {
   const [editProduct, setEditProduct] = useState<Product | null>(null)
   const [detail, setDetail] = useState<{ product: Product; stock: Stock } | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [countOpen, setCountOpen] = useState(false)
 
   const stockMap = useMemo(() => {
     const m = new Map<string, Stock>()
@@ -116,6 +118,12 @@ export default function Inventory() {
         </div>
       )}
 
+      {role === 'admin' && (
+        <button onClick={() => setCountOpen(true)} className="btn btn-secondary mb-3 w-full py-2 text-sm">
+          <Icon name="box" className="h-5 w-5" /> Toma física de inventario
+        </button>
+      )}
+
       <div className="space-y-2">
         {rows.map(({ product, stock }) => {
           const low = stock.quantity <= stock.reorderThreshold
@@ -177,7 +185,97 @@ export default function Inventory() {
       )}
 
       {importOpen && <ImportSheet tenantId={tenantId} locationId={locationId} categories={categories ?? []} locations={locations ?? []} onClose={() => setImportOpen(false)} />}
+
+      {countOpen && (
+        <CountSheet
+          products={(products ?? []).filter((p) => p.active && p.unit === 'unidad')}
+          stockMap={stockMap}
+          tenantId={tenantId}
+          locationId={locationId}
+          userId={user!.id}
+          userName={user!.name}
+          onClose={() => setCountOpen(false)}
+        />
+      )}
     </div>
+  )
+}
+
+// --- Toma física: contar y ajustar el inventario ---------------------------
+function CountSheet({
+  products, stockMap, tenantId, locationId, userId, userName, onClose,
+}: {
+  products: Product[]
+  stockMap: Map<string, Stock>
+  tenantId: string
+  locationId: string
+  userId: string
+  userName: string
+  onClose: () => void
+}) {
+  const [counts, setCounts] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+
+  const diffs = products
+    .map((p) => {
+      const st = stockMap.get(p.id)
+      const sys = st?.quantity ?? 0
+      const raw = counts[p.id]
+      const counted = raw === undefined || raw === '' ? null : parseInt(raw, 10) || 0
+      return { product: p, sys, counted, diff: counted === null ? 0 : counted - sys }
+    })
+    .filter((d) => d.counted !== null && d.diff !== 0)
+
+  async function apply() {
+    setSaving(true)
+    for (const d of diffs) {
+      await adjustStock({
+        tenantId, locationId, productId: d.product.id,
+        newQty: d.counted!, userId, userName, reason: 'Toma física',
+      })
+    }
+    toast('success', `Ajustados ${diffs.length} productos`)
+    setSaving(false)
+    onClose()
+  }
+
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title="Toma física de inventario"
+      footer={
+        <button className="btn btn-primary btn-lg w-full" disabled={!diffs.length || saving} onClick={apply}>
+          {saving ? 'Aplicando…' : `Aplicar ${diffs.length} ajustes`}
+        </button>
+      }
+    >
+      <p className="mb-3 text-sm text-slate-500">Escribe lo que cuentas físicamente. El sistema marca las diferencias y ajusta el stock.</p>
+      <div className="space-y-1.5">
+        {products.map((p) => {
+          const sys = stockMap.get(p.id)?.quantity ?? 0
+          const raw = counts[p.id]
+          const counted = raw === undefined || raw === '' ? null : parseInt(raw, 10) || 0
+          const diff = counted === null ? null : counted - sys
+          return (
+            <div key={p.id} className="flex items-center gap-2 rounded-lg border border-slate-100 p-2">
+              <span className="min-w-0 flex-1 truncate text-sm text-slate-700">{p.name}</span>
+              <span className="w-12 text-right text-xs text-slate-400">sis {sys}</span>
+              <input
+                className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-right text-sm"
+                inputMode="numeric"
+                value={raw ?? ''}
+                onChange={(e) => setCounts({ ...counts, [p.id]: e.target.value })}
+                placeholder="—"
+              />
+              <span className={`w-10 text-right text-xs font-semibold ${diff === null ? 'text-slate-300' : diff === 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-amber-600'}`}>
+                {diff === null ? '' : `${diff > 0 ? '+' : ''}${diff}`}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </Sheet>
   )
 }
 
@@ -189,6 +287,7 @@ function ProductDetailSheet({
   userId: string; userName: string; tenantId: string; locationId: string
 }) {
   const locations = useLocations()
+  const tenant = useTenant()
   const [newQty, setNewQty] = useState(String(stock.quantity))
   const allStock = useLiveQuery(() => db.stock.where('productId').equals(product.id).toArray(), [product.id])
   const movements = useLiveQuery(
@@ -232,6 +331,10 @@ function ProductDetailSheet({
         {product.description && (
           <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{product.description}</p>
         )}
+
+        <button onClick={() => printLabel(product, tenant?.businessName ?? 'Ventanilla')} className="btn btn-secondary w-full text-sm">
+          <Icon name="print" className="h-5 w-5" /> Imprimir etiqueta de precio
+        </button>
 
         {dExp !== null && dExp <= 30 && (
           <div className="flex items-center justify-between rounded-xl bg-rose-50 p-3">
