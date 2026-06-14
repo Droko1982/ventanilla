@@ -242,6 +242,11 @@ async function main() {
   if (!/Exportar respaldo/.test(txt)) throw new Error('Respaldo no renderizó en Ajustes')
   console.log('✓ Ajustes: respaldo exportar/importar')
 
+  // 4f-quater) Ajustes: cajón monedero (no disparamos requestPort en headless)
+  ctx = 'cajon-monedero'
+  if (!/Cajón monedero/i.test(txt) || !/Probar apertura/i.test(txt) || !/efectivo/i.test(txt)) throw new Error('Sección de cajón monedero no renderizó')
+  console.log('✓ Ajustes: cajón monedero (Web Serial + apertura automática)')
+
   // 4g) Precio al por mayor visible en POS
   ctx = 'por-mayor'
   await page.evaluate(() => { location.hash = '#/pos' })

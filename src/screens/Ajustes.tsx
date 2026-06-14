@@ -14,7 +14,8 @@ import { fmtDate } from '@/lib/format'
 import { billingBreakdown } from '@/lib/billing'
 import { uid } from '@/lib/id'
 import { useSession } from '@/store/session'
-import type { Location, User, DianConfig } from '@/types'
+import { drawerSupported, drawerLinked, connectDrawer, unlinkDrawer, openCashDrawer, drawerMessage } from '@/lib/cashDrawer'
+import type { Location, User, DianConfig, Tenant } from '@/types'
 
 export default function Ajustes() {
   const tenantId = useSession((s) => s.tenantId)!
@@ -133,6 +134,11 @@ export default function Ajustes() {
         </div>
       </Section>
 
+      {/* Cajón monedero */}
+      <Section title="Cajón monedero">
+        <CashDrawerSection tenant={tenant} tenantId={tenantId} />
+      </Section>
+
       {/* Nube / multi-dispositivo */}
       <Section title="Nube (multi-dispositivo)">
         <CloudSection />
@@ -162,6 +168,68 @@ export default function Ajustes() {
         <EmployeeForm employee={empEdit ?? undefined} tenantId={tenantId} locations={locations ?? []} onClose={() => { setEmpEdit(null); setEmpAdd(false) }} />
       )}
       {dianOpen && <DianForm tenantId={tenantId} dian={tenant.dian} onClose={() => setDianOpen(false)} />}
+    </div>
+  )
+}
+
+function CashDrawerSection({ tenant, tenantId }: { tenant: Tenant; tenantId: string }) {
+  const [linked, setLinked] = useState(drawerLinked())
+  const supported = drawerSupported()
+  const auto = tenant.autoOpenDrawer ?? false
+
+  async function link() {
+    const ok = await connectDrawer()
+    setLinked(ok)
+    toast(ok ? 'success' : 'info', ok ? 'Impresora/cajón vinculado ✓' : 'No se pudo vincular. Conecta la impresora por USB.')
+  }
+
+  async function test() {
+    const r = await openCashDrawer(true)
+    setLinked(drawerLinked())
+    const m = drawerMessage(r)
+    toast(m.tone, m.text)
+  }
+
+  async function toggleAuto(v: boolean) {
+    await db.tenants.update(tenantId, { autoOpenDrawer: v })
+    toast('success', v ? 'Se abrirá solo en ventas en efectivo' : 'Apertura automática desactivada')
+  }
+
+  return (
+    <div className="space-y-3">
+      {!supported && (
+        <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          Este dispositivo no soporta cajón monedero por navegador. Úsalo en el PC de la tienda con Chrome o Edge.
+        </p>
+      )}
+      <div className="rounded-xl bg-slate-50 p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-sm text-slate-500">Estado</span>
+          <span className={`chip ${linked ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
+            {linked ? 'Vinculado' : 'Sin vincular'}
+          </span>
+        </div>
+        <p className="text-xs text-slate-500">
+          El cajón se abre con la impresora de tickets (comando ESC/POS). Vincula la impresora una vez por dispositivo.
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button onClick={link} disabled={!supported} className="btn btn-secondary text-sm disabled:opacity-50">
+            {linked ? 'Re-vincular' : 'Vincular impresora'}
+          </button>
+          <button onClick={test} disabled={!supported} className="btn btn-secondary text-sm disabled:opacity-50">
+            💵 Probar apertura
+          </button>
+        </div>
+        {linked && (
+          <button onClick={() => { unlinkDrawer(); setLinked(false); toast('info', 'Cajón desvinculado') }} className="mt-2 w-full text-xs text-rose-500">
+            Desvincular
+          </button>
+        )}
+      </div>
+      <label className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
+        <input type="checkbox" checked={auto} onChange={(e) => toggleAuto(e.target.checked)} className="h-5 w-5" />
+        <span className="text-sm text-slate-600">Abrir el cajón automáticamente en cada venta en efectivo</span>
+      </label>
     </div>
   )
 }

@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { useActiveLocationId, useLocations, useCurrentUser } from '@/hooks/data'
-import { openCashSession, closeCashSession, addCashMovement } from '@/data/repo'
+import { openCashSession, closeCashSession, addCashMovement, audit } from '@/data/repo'
+import { openCashDrawer, drawerMessage } from '@/lib/cashDrawer'
 import { summarize, todayRange } from '@/lib/analytics'
 import { Sheet } from '@/components/Sheet'
 import { StatCard, Money, EmptyState, PageHeader } from '@/components/ui'
@@ -133,9 +134,24 @@ export default function Caja() {
           </div>
 
           {can(user, 'canCashMovement') && (
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button onClick={() => setMovSheet('ingreso')} className="btn btn-secondary py-2 text-sm">+ Ingreso</button>
-              <button onClick={() => setMovSheet('egreso')} className="btn btn-secondary py-2 text-sm">− Egreso / gasto</button>
+            <div className="mt-3 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setMovSheet('ingreso')} className="btn btn-secondary py-2 text-sm">+ Ingreso</button>
+                <button onClick={() => setMovSheet('egreso')} className="btn btn-secondary py-2 text-sm">− Egreso / gasto</button>
+              </div>
+              <button
+                onClick={async () => {
+                  const r = await openCashDrawer(true)
+                  const m = drawerMessage(r)
+                  toast(m.tone, m.text)
+                  if (r === 'ok') {
+                    await audit({ tenantId, locationId, userId: user!.id, userName: user!.name, action: 'abrió cajón (sin venta)', entity: 'caja', entityId: locationId, detail: 'Apertura manual del cajón monedero' })
+                  }
+                }}
+                className="btn btn-secondary w-full py-2 text-sm"
+              >
+                💵 Abrir cajón monedero
+              </button>
             </div>
           )}
 

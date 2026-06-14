@@ -24,6 +24,7 @@ import { recordSale, adjustChangeOwed } from '@/data/repo'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { receiptText, printReceipt } from '@/lib/receipt'
+import { openCashDrawer } from '@/lib/cashDrawer'
 import { waLink, mailtoLink } from '@/lib/whatsapp'
 import { useSession } from '@/store/session'
 import { can } from '@/lib/permissions'
@@ -38,6 +39,7 @@ export default function POS() {
   const stock = useStockForLocation(locationId)
   const locations = useLocations()
   const user = useCurrentUser()
+  const tenant = useTenant()
   const cart = useCart()
 
   const [search, setSearch] = useState('')
@@ -357,6 +359,10 @@ export default function POS() {
             setPayOpen(false)
             setReceipt(sale)
             toast('success', 'Venta registrada ✓')
+            // Abre el cajón monedero en ventas con efectivo (si está activado)
+            if (tenant?.autoOpenDrawer && payments.some((p) => p.method === 'efectivo')) {
+              openCashDrawer().catch(() => { /* sin cajón en este dispositivo */ })
+            }
           }}
         />
       )}
