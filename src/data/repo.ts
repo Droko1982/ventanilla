@@ -13,6 +13,8 @@ import type {
   CashSession,
   Customer,
   Remision,
+  CashMovement,
+  Expense,
 } from '@/types'
 
 // ============================================================================
@@ -134,7 +136,9 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
       await db.sales.put(sale)
 
       // Descontar stock + movimiento por cada ítem (salvo que ya se descontó)
+      // Los servicios/recargas (productId "srv:") no afectan inventario.
       if (!input.skipStock) for (const it of input.items) {
+        if (it.productId.startsWith('srv:')) continue
         const stockId = `${input.locationId}:${it.productId}`
         const st = await db.stock.get(stockId)
         if (st) {
@@ -555,7 +559,11 @@ export async function closeCashSession(args: {
     if (new Date(s.createdAt).getTime() < since || s.status !== 'completada') continue
     for (const p of s.payments) if (p.method === 'efectivo') cashSales += p.amount
   }
-  const expected = cs.openingFloat + cashSales
+  // Ingresos/egresos de efectivo registrados durante la sesión
+  const movements = await db.cashMovements.where('sessionId').equals(cs.id).toArray()
+  let movNet = 0
+  for (const m of movements) movNet += m.type === 'ingreso' ? m.amount : -m.amount
+  const expected = cs.openingFloat + cashSales + movNet
   cs.closedAt = new Date().toISOString()
   cs.countedCash = args.countedCash
   cs.expectedCash = expected
@@ -583,6 +591,57 @@ export async function closeCashSession(args: {
     detail: `Contado ${args.countedCash} · esperado ${expected} · dif ${cs.difference}.`,
   })
   return cs
+}
+
+// ---- Movimientos de efectivo en caja (ingreso/egreso/sangría) -------------
+export async function addCashMovement(args: {
+  tenantId: string
+  locationId: string
+  sessionId: string
+  type: 'ingreso' | 'egreso'
+  amount: number
+  reason: string
+  isExpense: boolean
+  userId: string
+  userName: string
+}): Promise<void> {
+  const now = new Date().toISOString()
+  const mov: CashMovement = {
+    id: uid('cm'),
+    tenantId: args.tenantId,
+    locationId: args.locationId,
+    sessionId: args.sessionId,
+    type: args.type,
+    amount: args.amount,
+    reason: args.reason,
+    isExpense: args.isExpense,
+    userId: args.userId,
+    createdAt: now,
+  }
+  await db.cashMovements.put(mov)
+  // Si es un egreso marcado como gasto del negocio, también afecta la utilidad
+  if (args.type === 'egreso' && args.isExpense) {
+    const exp: Expense = {
+      id: uid('e'),
+      tenantId: args.tenantId,
+      locationId: args.locationId,
+      category: args.reason || 'Gasto de caja',
+      amount: args.amount,
+      note: 'Pagado en efectivo desde caja',
+      date: now,
+    }
+    await db.expenses.put(exp)
+  }
+  await audit({
+    tenantId: args.tenantId,
+    locationId: args.locationId,
+    userId: args.userId,
+    userName: args.userName,
+    action: args.type === 'ingreso' ? 'registró ingreso de caja' : 'registró egreso de caja',
+    entity: 'caja',
+    entityId: mov.id,
+    detail: `${args.type === 'ingreso' ? '+' : '-'}${args.amount} · ${args.reason}`,
+  })
 }
 
 // ---- Fiado: registrar abono de un cliente ---------------------------------

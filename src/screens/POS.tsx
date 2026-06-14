@@ -19,6 +19,7 @@ import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
 import { EmptyState, ProductThumb } from '@/components/ui'
 import { cop, kg, parseCop } from '@/lib/money'
+import { uid } from '@/lib/id'
 import { recordSale } from '@/data/repo'
 import { receiptText, printReceipt } from '@/lib/receipt'
 import { waLink, mailtoLink } from '@/lib/whatsapp'
@@ -43,6 +44,7 @@ export default function POS() {
   const [cartOpen, setCartOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
   const [quickAdd, setQuickAdd] = useState(false)
+  const [serviceOpen, setServiceOpen] = useState(false)
   const [receipt, setReceipt] = useState<Sale | null>(null)
 
   const stockMap = useMemo(() => {
@@ -141,6 +143,14 @@ export default function POS() {
         >
           <Icon name="plus" className="h-7 w-7" />
           <span className="text-xs font-semibold">Producto nuevo</span>
+        </button>
+
+        <button
+          onClick={() => setServiceOpen(true)}
+          className="flex flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-brand-300 bg-brand-50/40 p-3 text-brand-600 active:scale-[0.98]"
+        >
+          <span className="text-2xl">📱</span>
+          <span className="text-xs font-semibold">Recarga / Servicio</span>
         </button>
 
         {visibleProducts.map((p) => {
@@ -257,7 +267,104 @@ export default function POS() {
           onSaved={(p) => addToCart(p)}
         />
       )}
+
+      {serviceOpen && (
+        <ServiceSheet
+          onClose={() => setServiceOpen(false)}
+          onAdd={(line) => {
+            cart.addLine(line)
+            setServiceOpen(false)
+            toast('success', `${line.name} agregado`)
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+// --- Recargas y servicios (no afectan inventario) ---------------------------
+function ServiceSheet({ onClose, onAdd }: { onClose: () => void; onAdd: (line: CartLine) => void }) {
+  const tipos = [
+    { id: 'recarga', label: 'Recarga celular', emoji: '📱', commissionPct: 4 },
+    { id: 'datos', label: 'Paquete de datos', emoji: '🌐', commissionPct: 4 },
+    { id: 'servicio', label: 'Pago de servicio', emoji: '🧾', commissionPct: 0 },
+    { id: 'giro', label: 'Giro / Baloto', emoji: '💸', commissionPct: 0 },
+    { id: 'otro', label: 'Otro servicio', emoji: '🔧', commissionPct: 0 },
+  ]
+  const [tipo, setTipo] = useState(tipos[0])
+  const [amount, setAmount] = useState('')
+  const [commission, setCommission] = useState('')
+  const [ref, setRef] = useState('')
+  const amt = parseCop(amount)
+  const suggestedCommission = Math.round((amt * tipo.commissionPct) / 100)
+  const comm = commission ? parseCop(commission) : suggestedCommission
+
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title="Recarga / Servicio"
+      footer={
+        <button
+          className="btn btn-primary btn-lg w-full"
+          disabled={amt <= 0}
+          onClick={() =>
+            onAdd({
+              productId: `srv:${tipo.id}:${uid()}`,
+              name: `${tipo.label}${ref ? ` (${ref})` : ''}`,
+              unit: 'unidad',
+              qty: 1,
+              unitPrice: amt,
+              lineDiscount: 0,
+              ivaRate: 0,
+              cost: Math.max(0, amt - comm), // la ganancia es la comisión
+              emoji: tipo.emoji,
+            })
+          }
+        >
+          Agregar · {cop(amt)}
+        </button>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid grid-cols-3 gap-2">
+          {tipos.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTipo(t)}
+              className={`flex flex-col items-center gap-1 rounded-xl border py-2 text-[11px] font-semibold ${
+                tipo.id === t.id ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-500'
+              }`}
+            >
+              <span className="text-xl">{t.emoji}</span>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div>
+          <label className="label">Valor que paga el cliente</label>
+          <input autoFocus className="input text-center text-2xl font-bold" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="$ 0" />
+          <div className="mt-2 grid grid-cols-4 gap-2">
+            {[2000, 5000, 10000, 20000].map((v) => (
+              <button key={v} onClick={() => setAmount(String(v))} className="btn btn-secondary py-2 text-xs">{cop(v)}</button>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="label">Tu ganancia (comisión)</label>
+            <input className="input" inputMode="numeric" value={commission} onChange={(e) => setCommission(e.target.value)} placeholder={cop(suggestedCommission)} />
+          </div>
+          <div>
+            <label className="label">Referencia (opcional)</label>
+            <input className="input" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Celular / factura" />
+          </div>
+        </div>
+        <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
+          Se cobra {cop(amt)} y tu utilidad registrada es {cop(comm)}. No descuenta inventario.
+        </p>
+      </div>
+    </Sheet>
   )
 }
 
@@ -342,6 +449,17 @@ function CartSheet({ open, onClose, onCheckout }: { open: boolean; onClose: () =
               onChange={(e) => cart.setGlobalDiscount(parseCop(e.target.value))}
               placeholder="$ 0"
             />
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={() => {
+                const rem = total % 50
+                if (rem) cart.setGlobalDiscount(cart.globalDiscount + rem)
+              }}
+              className="text-xs font-medium text-brand-600"
+            >
+              Redondear total a $50 ↓
+            </button>
           </div>
           <div className="flex items-center justify-between text-lg font-bold">
             <span>Total</span>

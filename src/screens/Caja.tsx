@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { useActiveLocationId, useLocations, useCurrentUser } from '@/hooks/data'
-import { openCashSession, closeCashSession } from '@/data/repo'
+import { openCashSession, closeCashSession, addCashMovement } from '@/data/repo'
 import { summarize, todayRange } from '@/lib/analytics'
 import { Sheet } from '@/components/Sheet'
 import { StatCard, Money, EmptyState, PageHeader } from '@/components/ui'
@@ -23,6 +23,7 @@ export default function Caja() {
   const user = useCurrentUser()
   const [openSheet, setOpenSheet] = useState(false)
   const [closeSheet, setCloseSheet] = useState(false)
+  const [movSheet, setMovSheet] = useState<null | 'ingreso' | 'egreso'>(null)
   const [base, setBase] = useState('')
   const [counted, setCounted] = useState('')
 
@@ -61,7 +62,13 @@ export default function Caja() {
     }
     return sum
   }, [session, todaySales])
-  const expectedCash = (session?.openingFloat ?? 0) + cashSinceOpen
+  // Movimientos de efectivo (ingresos/egresos) de la sesión abierta
+  const movements = useLiveQuery(
+    () => (session ? db.cashMovements.where('sessionId').equals(session.id).reverse().toArray() : []),
+    [session?.id],
+  )
+  const movNet = (movements ?? []).reduce((s, m) => s + (m.type === 'ingreso' ? m.amount : -m.amount), 0)
+  const expectedCash = (session?.openingFloat ?? 0) + cashSinceOpen + movNet
   const countedNum = parseCop(counted)
   const diff = countedNum - expectedCash
 
@@ -117,11 +124,32 @@ export default function Caja() {
           <div className="space-y-1.5 text-sm">
             <Row label="Base inicial" value={cop(session.openingFloat)} />
             <Row label="Ventas en efectivo" value={cop(cashSinceOpen)} />
+            {movNet !== 0 && <Row label="Ingresos/egresos" value={`${movNet >= 0 ? '+' : '−'}${cop(Math.abs(movNet))}`} />}
             <div className="flex items-center justify-between border-t border-slate-100 pt-2 font-bold">
               <span>Efectivo esperado en caja</span>
               <span className="text-emerald-600">{cop(expectedCash)}</span>
             </div>
           </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button onClick={() => setMovSheet('ingreso')} className="btn btn-secondary py-2 text-sm">+ Ingreso</button>
+            <button onClick={() => setMovSheet('egreso')} className="btn btn-secondary py-2 text-sm">− Egreso / gasto</button>
+          </div>
+
+          {(movements?.length ?? 0) > 0 && (
+            <div className="mt-3 space-y-1.5">
+              {movements?.map((m) => (
+                <div key={m.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-1.5 text-sm">
+                  <span className="truncate text-slate-600">
+                    {m.type === 'ingreso' ? '⬆️' : '⬇️'} {m.reason}{m.isExpense ? ' · gasto' : ''}
+                  </span>
+                  <span className={`font-semibold ${m.type === 'ingreso' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {m.type === 'ingreso' ? '+' : '−'}{cop(m.amount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -210,7 +238,77 @@ export default function Caja() {
           </div>
         </div>
       </Sheet>
+
+      {/* Registrar ingreso / egreso de efectivo */}
+      {movSheet && session && (
+        <MovementForm
+          type={movSheet}
+          onClose={() => setMovSheet(null)}
+          onSubmit={async ({ amount, reason, isExpense }) => {
+            await addCashMovement({
+              tenantId, locationId, sessionId: session.id, type: movSheet,
+              amount, reason, isExpense, userId: user!.id, userName: user!.name,
+            })
+            toast('success', movSheet === 'ingreso' ? 'Ingreso registrado' : 'Egreso registrado')
+            setMovSheet(null)
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+function MovementForm({
+  type, onClose, onSubmit,
+}: {
+  type: 'ingreso' | 'egreso'
+  onClose: () => void
+  onSubmit: (v: { amount: number; reason: string; isExpense: boolean }) => void
+}) {
+  const [amount, setAmount] = useState('')
+  const [reason, setReason] = useState('')
+  const [isExpense, setIsExpense] = useState(type === 'egreso')
+  const egreso = type === 'egreso'
+  const quick = egreso
+    ? ['Pago proveedor', 'Domicilio', 'Servicios', 'Arriendo', 'Retiro (sangría)']
+    : ['Base extra', 'Préstamo', 'Otro ingreso']
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={egreso ? 'Egreso / gasto de caja' : 'Ingreso a caja'}
+      footer={
+        <button
+          className={`btn btn-lg w-full ${egreso ? 'btn-danger' : 'btn-success'}`}
+          disabled={parseCop(amount) <= 0 || !reason.trim()}
+          onClick={() => onSubmit({ amount: parseCop(amount), reason: reason.trim(), isExpense })}
+        >
+          {egreso ? 'Registrar egreso' : 'Registrar ingreso'} · {cop(parseCop(amount))}
+        </button>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label className="label">Monto</label>
+          <input autoFocus className="input text-center text-2xl font-bold" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="$ 0" />
+        </div>
+        <div>
+          <label className="label">Concepto</label>
+          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={egreso ? 'Ej. pago a proveedor' : 'Ej. base extra'} />
+          <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto">
+            {quick.map((q) => (
+              <button key={q} onClick={() => setReason(q)} className="shrink-0 rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-500">{q}</button>
+            ))}
+          </div>
+        </div>
+        {egreso && (
+          <label className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
+            <input type="checkbox" checked={isExpense} onChange={(e) => setIsExpense(e.target.checked)} className="h-5 w-5" />
+            <span className="text-sm text-slate-600">Es un gasto del negocio (réstalo de la utilidad)</span>
+          </label>
+        )}
+      </div>
+    </Sheet>
   )
 }
 

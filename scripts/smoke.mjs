@@ -98,6 +98,15 @@ async function main() {
   if (!/Ver carrito/.test(txt)) console.log('· (aviso) no apareció la barra de carrito tras tocar producto')
   else console.log('✓ Agregar al carrito funciona')
 
+  // Recarga / servicio (no afecta inventario)
+  await clickText(page, 'Recarga / Servicio')
+  await sleep(500)
+  await page.keyboard.type('5000')
+  await sleep(200)
+  await clickText(page, 'Agregar')
+  await sleep(500)
+  console.log('✓ Recarga/servicio agregada al carrito')
+
   // 4b) Venta completa de extremo a extremo: carrito → cobrar → recibo
   ctx = 'checkout'
   await clickText(page, 'Ver carrito')
@@ -131,6 +140,43 @@ async function main() {
   await page.keyboard.press('Escape')
   await sleep(400)
   console.log('✓ Documentos: factura y remisión de ejemplo se abren')
+
+  // 4d) Caja: abrir caja y registrar un egreso de efectivo
+  ctx = 'caja-movimiento'
+  await page.evaluate(() => { location.hash = '#/caja' })
+  await sleep(900)
+  await clickText(page, 'Abrir caja')
+  await sleep(500)
+  await page.keyboard.type('50000')
+  await sleep(200)
+  await clickText(page, 'Abrir con')
+  await sleep(800)
+  await clickText(page, 'Egreso')
+  await sleep(500)
+  await page.keyboard.type('8000')
+  await sleep(200)
+  await clickText(page, 'Pago proveedor')
+  await sleep(200)
+  await clickText(page, 'Registrar egreso')
+  await sleep(800)
+  txt = await bodyText(page)
+  if (!/Pago proveedor/.test(txt)) throw new Error('El egreso de caja no se registró')
+  console.log('✓ Caja: egreso de efectivo (movimiento) registrado')
+
+  // 4e) Kardex en la ficha de producto
+  ctx = 'kardex'
+  await page.evaluate(() => { location.hash = '#/inventario' })
+  await sleep(900)
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('button')].find((x) => /umbral \d/.test(x.textContent || ''))
+    if (b) b.click()
+  })
+  await sleep(700)
+  txt = await bodyText(page)
+  if (!/Movimientos \(kardex\)/.test(txt)) throw new Error('Kardex no renderizó en la ficha de producto')
+  console.log('✓ Kardex (historial de movimientos) en ficha de producto')
+  await page.keyboard.press('Escape')
+  await sleep(400)
 
   // 5) Cerrar sesión y entrar como Super-Admin
   ctx = 'login-super'

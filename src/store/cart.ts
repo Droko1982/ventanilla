@@ -18,6 +18,7 @@ interface CartState {
   lines: CartLine[]
   globalDiscount: number
   addProduct: (p: Product, qty?: number) => void
+  addLine: (line: CartLine) => void
   setQty: (productId: string, qty: number) => void
   setLineDiscount: (productId: string, discount: number) => void
   remove: (productId: string) => void
@@ -59,6 +60,8 @@ export const useCart = create<CartState>((set) => ({
         ],
       }
     }),
+
+  addLine: (line) => set((s) => ({ lines: [...s.lines, line] })),
 
   setQty: (productId, qty) =>
     set((s) => ({

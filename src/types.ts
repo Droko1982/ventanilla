@@ -300,6 +300,20 @@ export interface AppNotification {
   createdAt: string
 }
 
+// --- Movimientos de efectivo en caja (ingresos / egresos / sangría) ---------
+export interface CashMovement {
+  id: string
+  tenantId: string
+  locationId: string
+  sessionId?: string // sesión de caja a la que pertenece
+  type: 'ingreso' | 'egreso'
+  amount: number
+  reason: string
+  isExpense: boolean // egreso que además es gasto del negocio (afecta utilidad)
+  userId: string
+  createdAt: string
+}
+
 // --- Gastos (para utilidad neta real) ---------------------------------------
 export interface Expense {
   id: string

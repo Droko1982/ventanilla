@@ -109,6 +109,14 @@ function TopBar() {
           <p className="text-sm text-slate-500">{tenant?.businessName}</p>
         </div>
         <div className="mt-5 space-y-2">
+          <a
+            href="https://wa.me/573147555896?text=Hola%2C%20necesito%20soporte%20de%20Ventanilla"
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-success w-full"
+          >
+            💬 Soporte por WhatsApp
+          </a>
           <button
             className="btn btn-secondary w-full"
             disabled={resetting}

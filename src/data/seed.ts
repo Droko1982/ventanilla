@@ -39,7 +39,7 @@ const tenant: Tenant = {
   ownerName: 'Marcela Ríos',
   nit: '900.123.456-7',
   email: 'laesquina@demo.co',
-  phone: '+57 310 555 0101',
+  phone: '+57 314 755 5896',
   city: 'Armenia, Quindío',
   status: 'activo',
   monthlyFeePerLocation: 49900,
@@ -581,7 +581,7 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Al subir una versión nueva del modelo de demo, se recarga automáticamente
 // para que cualquier visitante vea los datos/precios más recientes.
-const SEED_VERSION = '3-docs'
+const SEED_VERSION = '4-caja-servicios'
 const SEED_KEY = 'ventanilla-seed-version'
 
 export async function seedIfEmpty(): Promise<void> {

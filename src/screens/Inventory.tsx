@@ -12,7 +12,7 @@ import { Segmented, EmptyState, PageHeader, ProductThumb } from '@/components/ui
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
 import { cop, kg } from '@/lib/money'
-import { daysUntil } from '@/lib/format'
+import { daysUntil, timeAgo } from '@/lib/format'
 import { uid } from '@/lib/id'
 import { useSession } from '@/store/session'
 import type { Product, Stock } from '@/types'
@@ -191,6 +191,13 @@ function ProductDetailSheet({
   const locations = useLocations()
   const [newQty, setNewQty] = useState(String(stock.quantity))
   const allStock = useLiveQuery(() => db.stock.where('productId').equals(product.id).toArray(), [product.id])
+  const movements = useLiveQuery(
+    async () => {
+      const all = await db.stockMovements.where('productId').equals(product.id).reverse().toArray()
+      return all.filter((m) => m.locationId === locationId).slice(0, 20)
+    },
+    [product.id, locationId],
+  )
   const [transferTo, setTransferTo] = useState('')
   const [transferQty, setTransferQty] = useState('')
   const dExp = stock.nearestExpiry ? daysUntil(stock.nearestExpiry) : null
@@ -304,9 +311,34 @@ function ProductDetailSheet({
             </div>
           </div>
         )}
+
+        {/* Kardex: historial de movimientos del producto en este local */}
+        <div>
+          <p className="mb-2 text-sm font-semibold text-slate-600">Movimientos (kardex)</p>
+          {(movements?.length ?? 0) === 0 ? (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-400">Sin movimientos aún.</p>
+          ) : (
+            <div className="space-y-1">
+              {movements?.map((m) => (
+                <div key={m.id} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">{MOV_LABEL[m.type] ?? m.type}</span>
+                  <span className="text-xs text-slate-400">{timeAgo(m.createdAt)}</span>
+                  <span className={`w-16 text-right font-semibold ${m.qty >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {m.qty >= 0 ? '+' : ''}{product.unit === 'peso' ? kg(m.qty) : m.qty}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </Sheet>
   )
+}
+
+const MOV_LABEL: Record<string, string> = {
+  venta: 'Venta', entrada: 'Entrada', traslado_salida: 'Traslado (salida)',
+  traslado_entrada: 'Traslado (entrada)', ajuste: 'Ajuste', devolucion: 'Devolución', remision: 'Remisión',
 }
 
 // --- Carga masiva CSV / Excel ----------------------------------------------

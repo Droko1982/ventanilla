@@ -16,6 +16,7 @@ import type {
   AppNotification,
   Expense,
   Remision,
+  CashMovement,
 } from '@/types'
 
 // ============================================================================
@@ -44,6 +45,7 @@ export class VentanillaDB extends Dexie {
   notifications!: Table<AppNotification, string>
   expenses!: Table<Expense, string>
   remisiones!: Table<Remision, string>
+  cashMovements!: Table<CashMovement, string>
 
   constructor() {
     super('ventanilla')
@@ -67,6 +69,10 @@ export class VentanillaDB extends Dexie {
     // v2: remisiones (notas de despacho) + datos fiscales en ventas (sin índice)
     this.version(2).stores({
       remisiones: 'id, tenantId, locationId, status, createdAt',
+    })
+    // v3: movimientos de efectivo en caja (ingresos/egresos/sangría)
+    this.version(3).stores({
+      cashMovements: 'id, tenantId, locationId, sessionId, createdAt',
     })
   }
 }
