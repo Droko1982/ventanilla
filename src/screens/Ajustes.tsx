@@ -15,6 +15,7 @@ import { billingBreakdown } from '@/lib/billing'
 import { uid } from '@/lib/id'
 import { useSession } from '@/store/session'
 import { drawerSupported, drawerLinked, connectDrawer, unlinkDrawer, openCashDrawer, drawerMessage } from '@/lib/cashDrawer'
+import { scaleSupported, scaleLinked, connectScale, unlinkScale, readWeightOnce, scaleMessage } from '@/lib/scale'
 import type { Location, User, DianConfig, Tenant } from '@/types'
 
 export default function Ajustes() {
@@ -139,6 +140,11 @@ export default function Ajustes() {
         <CashDrawerSection tenant={tenant} tenantId={tenantId} />
       </Section>
 
+      {/* Báscula */}
+      <Section title="Báscula (granel)">
+        <ScaleSection />
+      </Section>
+
       {/* Nube / multi-dispositivo */}
       <Section title="Nube (multi-dispositivo)">
         <CloudSection />
@@ -230,6 +236,58 @@ function CashDrawerSection({ tenant, tenantId }: { tenant: Tenant; tenantId: str
         <input type="checkbox" checked={auto} onChange={(e) => toggleAuto(e.target.checked)} className="h-5 w-5" />
         <span className="text-sm text-slate-600">Abrir el cajón automáticamente en cada venta en efectivo</span>
       </label>
+    </div>
+  )
+}
+
+function ScaleSection() {
+  const [linked, setLinked] = useState(scaleLinked())
+  const supported = scaleSupported()
+
+  async function link() {
+    const ok = await connectScale()
+    setLinked(ok)
+    toast(ok ? 'success' : 'info', ok ? 'Báscula vinculada ✓' : 'No se pudo vincular. Conecta la báscula por USB/serial.')
+  }
+
+  async function test() {
+    const r = await readWeightOnce(true)
+    setLinked(scaleLinked())
+    const m = scaleMessage(r)
+    toast(m.tone, m.text)
+  }
+
+  return (
+    <div className="space-y-3">
+      {!supported && (
+        <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          Este dispositivo no soporta báscula por navegador. Úsalo en el PC de la tienda con Chrome o Edge.
+        </p>
+      )}
+      <div className="rounded-xl bg-slate-50 p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-sm text-slate-500">Estado</span>
+          <span className={`chip ${linked ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
+            {linked ? 'Vinculada' : 'Sin vincular'}
+          </span>
+        </div>
+        <p className="text-xs text-slate-500">
+          Lee el peso automáticamente al vender a granel (botón “⚖️ Leer báscula” en el POS). Vincula la báscula una vez por dispositivo.
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button onClick={link} disabled={!supported} className="btn btn-secondary text-sm disabled:opacity-50">
+            {linked ? 'Re-vincular' : 'Vincular báscula'}
+          </button>
+          <button onClick={test} disabled={!supported} className="btn btn-secondary text-sm disabled:opacity-50">
+            ⚖️ Probar lectura
+          </button>
+        </div>
+        {linked && (
+          <button onClick={() => { unlinkScale(); setLinked(false); toast('info', 'Báscula desvinculada') }} className="mt-2 w-full text-xs text-rose-500">
+            Desvincular
+          </button>
+        )}
+      </div>
     </div>
   )
 }

@@ -265,6 +265,11 @@ async function main() {
   if (!/Cajón monedero/i.test(txt) || !/Probar apertura/i.test(txt) || !/efectivo/i.test(txt)) throw new Error('Sección de cajón monedero no renderizó')
   console.log('✓ Ajustes: cajón monedero (Web Serial + apertura automática)')
 
+  // 4f-quinquies) Ajustes: báscula (granel)
+  ctx = 'bascula'
+  if (!/Báscula/i.test(txt) || !/Probar lectura/i.test(txt) || !/Vincular báscula/i.test(txt)) throw new Error('Sección de báscula no renderizó')
+  console.log('✓ Ajustes: báscula granel (Web Serial)')
+
   // 4g) Precio al por mayor visible en POS
   ctx = 'por-mayor'
   await page.evaluate(() => { location.hash = '#/pos' })

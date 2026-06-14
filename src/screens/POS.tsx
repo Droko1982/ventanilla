@@ -25,6 +25,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { receiptText, printReceipt } from '@/lib/receipt'
 import { openCashDrawer } from '@/lib/cashDrawer'
+import { readWeightOnce, scaleMessage } from '@/lib/scale'
 import { waLink, mailtoLink } from '@/lib/whatsapp'
 import { useSession } from '@/store/session'
 import { can } from '@/lib/permissions'
@@ -775,8 +776,19 @@ function CatChip({ active, onClick, label, emoji }: { active: boolean; onClick: 
 // --- Venta por peso / granel ------------------------------------------------
 function WeightSheet({ product, onClose, onConfirm }: { product: Product; onClose: () => void; onConfirm: (kg: number) => void }) {
   const [grams, setGrams] = useState('')
+  const [reading, setReading] = useState(false)
   const kgQty = (parseInt(grams || '0', 10) || 0) / 1000
   const subtotal = Math.round(product.price * kgQty)
+
+  async function readScale() {
+    setReading(true)
+    const r = await readWeightOnce(true)
+    setReading(false)
+    const m = scaleMessage(r)
+    toast(m.tone, m.text)
+    if (r.ok) setGrams(String(Math.round(r.kg * 1000)))
+  }
+
   return (
     <Sheet
       open
@@ -790,8 +802,11 @@ function WeightSheet({ product, onClose, onConfirm }: { product: Product; onClos
     >
       <div className="space-y-4">
         <p className="text-sm text-slate-500">
-          Precio: <b>{cop(product.price)}/kg</b>. Escribe el peso en gramos.
+          Precio: <b>{cop(product.price)}/kg</b>. Lee la báscula o escribe el peso en gramos.
         </p>
+        <button onClick={readScale} disabled={reading} className="btn btn-secondary w-full disabled:opacity-60">
+          ⚖️ {reading ? 'Leyendo báscula…' : 'Leer báscula'}
+        </button>
         <input
           autoFocus
           className="input text-center text-2xl font-bold"
