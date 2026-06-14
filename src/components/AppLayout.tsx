@@ -12,6 +12,7 @@ import {
   useUnreadNotifications,
 } from '@/hooks/data'
 import { resetDemo } from '@/data/seed'
+import { getTheme, toggleTheme } from '@/lib/theme'
 import { toast } from './Toast'
 
 // Barra superior: marca + selector de local + estado de red + campana + perfil.
@@ -30,6 +31,7 @@ function TopBar() {
   const { canInstall, promptInstall } = useInstallPrompt()
   const [menu, setMenu] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [dark, setDark] = useState(getTheme() === 'dark')
 
   const currentLocName =
     role === 'empleado'
@@ -120,6 +122,12 @@ function TopBar() {
             }}
           >
             📲 Instalar app en el celular
+          </button>
+          <button
+            className="btn btn-secondary w-full"
+            onClick={() => { const t = toggleTheme(); setDark(t === 'dark') }}
+          >
+            {dark ? '☀️ Modo claro' : '🌙 Modo oscuro'}
           </button>
           <a
             href="https://wa.me/573147555896?text=Hola%2C%20necesito%20soporte%20de%20Ventanilla"

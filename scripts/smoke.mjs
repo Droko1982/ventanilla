@@ -292,6 +292,17 @@ async function main() {
   if (!/Programa de puntos/i.test(txt) || !/fidelizaci/i.test(txt)) throw new Error('Sección de puntos no renderizó')
   console.log('✓ Ajustes: pagos Bre-B + programa de puntos')
 
+  // 4f-septies) Modo oscuro: la clase `dark` cambia el fondo a un tono oscuro
+  ctx = 'modo-oscuro'
+  const darkBg = await page.evaluate(() => {
+    document.documentElement.classList.add('dark')
+    const bg = getComputedStyle(document.body).backgroundColor
+    document.documentElement.classList.remove('dark')
+    return bg
+  })
+  if (!/rgb\(11, 18, 32\)/.test(darkBg)) throw new Error(`Modo oscuro no aplicó (body bg = ${darkBg})`)
+  console.log('✓ Modo oscuro (tema CSS aplicado)')
+
   // 4g) Precio al por mayor visible en POS
   ctx = 'por-mayor'
   await page.evaluate(() => { location.hash = '#/pos' })
@@ -325,6 +336,14 @@ async function main() {
   txt = await bodyText(page)
   if (!/Gaseosa/.test(txt)) throw new Error('No se agregó producto por código en el mostrador')
   console.log('✓ POS modo mostrador (clásico) + vueltas')
+
+  // 4g-bis2) Tercer modo: Lista (filas compactas con "Agregar")
+  ctx = 'modo-lista'
+  await clickText(page, 'Lista')
+  txt = await waitForText(page, 'Agregar', 4000)
+  if (!/Agregar/.test(txt)) throw new Error('Modo Lista no renderizó')
+  console.log('✓ POS modo lista (filas con Agregar)')
+
   await clickText(page, 'Fichas') // volver a fichas para no afectar pasos siguientes
   await sleep(500)
 

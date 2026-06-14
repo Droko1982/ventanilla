@@ -68,10 +68,10 @@ export default function POS() {
     [tenantId],
   )
   const changeOwed = useLiveQuery(() => (locationId ? db.changeOwed.get(locationId) : undefined), [locationId])
-  const [mode, setModeState] = useState<'tiles' | 'counter'>(
-    () => (localStorage.getItem('ventanilla-sales-mode') as 'tiles' | 'counter') || 'tiles',
+  const [mode, setModeState] = useState<'tiles' | 'counter' | 'list'>(
+    () => (localStorage.getItem('ventanilla-sales-mode') as 'tiles' | 'counter' | 'list') || 'tiles',
   )
-  const setMode = (m: 'tiles' | 'counter') => { localStorage.setItem('ventanilla-sales-mode', m); setModeState(m) }
+  const setMode = (m: 'tiles' | 'counter' | 'list') => { localStorage.setItem('ventanilla-sales-mode', m); setModeState(m) }
   const [vueltasOpen, setVueltasOpen] = useState(false)
 
   const stockMap = useMemo(() => {
@@ -175,6 +175,7 @@ export default function POS() {
       <div className="mb-3 flex items-center gap-2">
         <div className="flex rounded-xl bg-slate-100 p-0.5 text-xs font-semibold">
           <button onClick={() => setMode('tiles')} className={`rounded-lg px-3 py-1.5 ${mode === 'tiles' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500'}`}>🟩 Fichas</button>
+          <button onClick={() => setMode('list')} className={`rounded-lg px-3 py-1.5 ${mode === 'list' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500'}`}>📋 Lista</button>
           <button onClick={() => setMode('counter')} className={`rounded-lg px-3 py-1.5 ${mode === 'counter' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500'}`}>⌨️ Mostrador</button>
         </div>
         <div className="flex-1" />
@@ -229,8 +230,8 @@ export default function POS() {
         ))}
       </div>
 
-      {/* Grilla de productos */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+      {/* Acciones rápidas + (en modo Fichas) grilla de productos */}
+      <div className={mode === 'list' ? 'mb-2 grid grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2.5 sm:grid-cols-3'}>
         {canManage && (
           <button
             onClick={() => setQuickAdd(true)}
@@ -257,7 +258,7 @@ export default function POS() {
           <span className="text-xs font-semibold">Venta manual</span>
         </button>
 
-        {visibleProducts.map((p) => {
+        {mode !== 'list' && visibleProducts.map((p) => {
           const qty = stockMap.get(p.id) ?? 0
           const out = qty <= 0
           return (
@@ -297,6 +298,35 @@ export default function POS() {
           )
         })}
       </div>
+
+      {/* Vista Lista (compacta, ideal en computador o catálogos grandes) */}
+      {mode === 'list' && (
+        <div className="space-y-1.5">
+          {visibleProducts.map((p) => {
+            const qty = stockMap.get(p.id) ?? 0
+            const out = qty <= 0
+            return (
+              <div key={p.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-2 shadow-sm">
+                <ProductThumb photo={p.photo} emoji={p.imageEmoji} size={40} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-slate-700">{p.name}</p>
+                  <p className="text-xs text-slate-400">
+                    {out ? <span className="text-rose-500">Agotado</span> : `${p.unit === 'peso' ? kg(qty) : qty} en stock`}
+                    {p.wholesalePrice && p.wholesaleMinQty ? <span className="text-emerald-600"> · x{p.wholesaleMinQty}+ {cop(p.wholesalePrice)}</span> : null}
+                  </p>
+                </div>
+                <span className="font-bold text-brand-700">{cop(p.price)}{p.unit === 'peso' && <span className="text-[10px] font-normal text-slate-400">/kg</span>}</span>
+                {canManage && (
+                  <button onClick={() => setEditProduct(p)} aria-label={`Editar ${p.name}`} title="Editar producto" className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500 active:scale-95">
+                    <Icon name="edit" className="h-4 w-4" />
+                  </button>
+                )}
+                <button onClick={() => addToCart(p)} className="rounded-xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white active:scale-95">Agregar</button>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {visibleProducts.length === 0 && (
         <EmptyState emoji="🔍" title="Sin resultados" hint="Prueba otra búsqueda o agrega el producto." />
