@@ -3,6 +3,8 @@ import { useTenant, useLocations } from '@/hooks/data'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { exportAllData, importAllData } from '@/data/repo'
+import { cloudLogin, isCloudConfigured, getApiUrl, clearCloud } from '@/data/api'
+import { startCloud, stopCloud, syncNow } from '@/data/cloud'
 import { Sheet } from '@/components/Sheet'
 import { PageHeader } from '@/components/ui'
 import { Icon } from '@/components/icons'
@@ -131,6 +133,11 @@ export default function Ajustes() {
         </div>
       </Section>
 
+      {/* Nube / multi-dispositivo */}
+      <Section title="Nube (multi-dispositivo)">
+        <CloudSection />
+      </Section>
+
       {/* Datos y respaldo */}
       <Section title="Datos y respaldo">
         <div className="space-y-2">
@@ -155,6 +162,74 @@ export default function Ajustes() {
         <EmployeeForm employee={empEdit ?? undefined} tenantId={tenantId} locations={locations ?? []} onClose={() => { setEmpEdit(null); setEmpAdd(false) }} />
       )}
       {dianOpen && <DianForm tenantId={tenantId} dian={tenant.dian} onClose={() => setDianOpen(false)} />}
+    </div>
+  )
+}
+
+function CloudSection() {
+  const [connected, setConnected] = useState(isCloudConfigured())
+  const [url, setUrl] = useState(getApiUrl() || '')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  if (connected) {
+    return (
+      <div className="space-y-2">
+        <div className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          ✅ Conectado a la nube
+          <br />
+          <span className="break-all text-xs text-emerald-600">{getApiUrl()}</span>
+        </div>
+        <button
+          className="btn btn-secondary w-full text-sm"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true)
+            try { await syncNow(); toast('success', 'Sincronizado') }
+            catch { toast('error', 'No se pudo sincronizar') }
+            finally { setBusy(false) }
+          }}
+        >
+          {busy ? 'Sincronizando…' : '🔄 Sincronizar ahora'}
+        </button>
+        <button
+          className="btn btn-secondary w-full text-sm text-rose-600"
+          onClick={() => { stopCloud(); clearCloud(); setConnected(false); toast('info', 'Desconectado de la nube') }}
+        >
+          Desconectar
+        </button>
+      </div>
+    )
+  }
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-slate-400">
+        Conecta este dispositivo a tu backend para sincronizar en la nube y usar varios dispositivos.
+        Sin esto, todo funciona local en el equipo.
+      </p>
+      <input className="input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="URL del API (https://…)" />
+      <input className="input" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Correo del negocio" />
+      <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Contraseña" />
+      <button
+        className="btn btn-primary w-full"
+        disabled={busy || !url || !email}
+        onClick={async () => {
+          setBusy(true)
+          try {
+            await cloudLogin(url.trim(), email.trim(), password)
+            await startCloud()
+            setConnected(true)
+            toast('success', 'Conectado y sincronizando')
+          } catch (e: any) {
+            toast('error', e?.message || 'No se pudo conectar')
+          } finally {
+            setBusy(false)
+          }
+        }}
+      >
+        {busy ? 'Conectando…' : 'Conectar a la nube'}
+      </button>
     </div>
   )
 }

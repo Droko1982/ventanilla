@@ -1,0 +1,35 @@
+# Levanta PostgreSQL + el API de Ventanilla.
+# Uso local:  docker compose up -d
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ventanilla
+      POSTGRES_PASSWORD: ventanilla
+      POSTGRES_DB: ventanilla
+    ports:
+      - '5433:5432'
+    volumes:
+      - ventanilla_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ventanilla']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: 'postgresql://ventanilla:ventanilla@db:5432/ventanilla?schema=public'
+      PORT: '4000'
+    ports:
+      - '4000:4000'
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  ventanilla_pg:

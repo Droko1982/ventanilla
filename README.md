@@ -100,6 +100,21 @@ SMOKE_URL="https://droko1982.github.io/ventanilla/" node scripts/smoke.mjs   # c
 
 En el demo la transmisión a la DIAN está **simulada** para mostrar el flujo completo (numeración FE/POS/NC, IVA discriminado, estados enviado/pendiente, nota crédito). En producción cada cliente conecta su proveedor autorizado (Alegra, Factus o el software de la DIAN) con su resolución de numeración.
 
+## ☁️ Backend y nube (multi-dispositivo)
+
+El backend vive en [`server/`](server/) (Node + Express + Prisma + **PostgreSQL**): autenticación multi-tenant, sincronización offline-first e integraciones (**Wompi**, **WhatsApp Cloud API**, **DIAN**). La app funciona sin él (modo local); al conectarla, sincroniza y habilita varios dispositivos.
+
+```bash
+cd server
+cp .env.example .env
+docker compose up -d db        # PostgreSQL
+npm install && npm run prisma:push && npm run seed
+npm run dev                    # API en http://localhost:4000
+npm run smoke                  # verifica el API
+```
+
+Conectar la app a la nube: **Ajustes → Nube (multi-dispositivo)** (URL del API + correo + contraseña), o define `VITE_API_URL` al compilar. Guía completa de despliegue en [`server/README.md`](server/README.md).
+
 ## 🗺️ Próximas funciones sugeridas
 
 Combos/promociones, programa de puntos, variantes/presentaciones (caja→unidad), cotizaciones, lotes por vencimiento, etiquetas imprimibles, domicilios, pasarela de pago de la mensualidad (Wompi/PSE), respaldo/sincronización en la nube, WhatsApp Business API.

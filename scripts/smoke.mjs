@@ -322,6 +322,37 @@ async function main() {
   if (!/Probar el demo/.test(txt) || !/Ventanilla/.test(txt)) throw new Error('Landing no renderizó')
   console.log('✓ Landing de Ventanilla renderiza')
 
+  // 8) Nube — E2E (opcional, sólo con CLOUD_TEST=1 y el API local corriendo).
+  // Va al final porque la sincronización sobrescribe los datos locales del demo.
+  if (process.env.CLOUD_TEST) {
+    ctx = 'nube'
+    await page.evaluate(() => { localStorage.removeItem('ventanilla-session') })
+    await page.goto(BASE, { waitUntil: 'networkidle2' })
+    await sleep(1200)
+    await clickText(page, 'Dueño de la tienda')
+    await sleep(1500)
+    await page.evaluate(() => { location.hash = '#/ajustes' })
+    await sleep(1000)
+    await page.evaluate(({ url, email, pass }) => {
+      const setVal = (ph, val) => {
+        const i = [...document.querySelectorAll('input')].find((x) => (x.placeholder || '').includes(ph))
+        if (!i) return
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+        setter.call(i, val)
+        i.dispatchEvent(new Event('input', { bubbles: true }))
+      }
+      setVal('URL del API', url)
+      setVal('Correo del negocio', email)
+      setVal('Contraseña', pass)
+    }, { url: 'http://localhost:4000', email: 'laesquina@demo.co', pass: 'demo1234' })
+    await sleep(400)
+    await clickText(page, 'Conectar a la nube')
+    await sleep(3500)
+    txt = await bodyText(page)
+    if (!/Conectado a la nube/.test(txt)) throw new Error('No se conectó a la nube')
+    console.log('✓ Nube: login + sincronización con el API real')
+  }
+
   await browser.close()
 
   console.log('\n===== RESULTADO =====')

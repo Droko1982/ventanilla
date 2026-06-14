@@ -1,0 +1,95 @@
+// Esquema de la base de datos de Ventanilla (PostgreSQL).
+//
+// Estrategia: las tablas que necesitan consultas/seguridad del lado del servidor
+// (autenticación, facturación del SaaS) son ESTRUCTURADAS. Todo lo que la app
+// administra y sincroniza (productos, ventas, stock, clientes, caja…) se guarda
+// en un almacén genérico `SyncRecord` (un registro = una fila de Dexie del
+// cliente), lo que hace la sincronización offline-first simple y robusta.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Cliente del SaaS (dueño de una o varias ventanillas) -------------------
+model Tenant {
+  id                    String   @id
+  businessName          String
+  ownerName             String
+  nit                   String   @default("")
+  email                 String   @unique
+  passwordHash          String
+  status                String   @default("prueba") // activo | suspendido | prueba
+  city                  String   @default("")
+  phone                 String   @default("")
+  monthlyFeePerLocation Int      @default(49900)
+  paidUntil             DateTime @default(now())
+  locationCount         Int      @default(1)
+  monthlyGoal           Int?
+  commissionPct         Float?
+  dian                  Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  users       User[]
+  records     SyncRecord[]
+  payments    Payment[]
+}
+
+// --- Usuarios (admin con contraseña, empleados con PIN) ---------------------
+model User {
+  id           String   @id
+  tenantId     String?
+  name         String
+  role         String // superadmin | admin | empleado
+  email        String?
+  passwordHash String?
+  pinHash      String?
+  permissions  Json?
+  locationId   String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([email])
+}
+
+// --- Almacén genérico sincronizable -----------------------------------------
+// Cada fila representa un registro de una tabla del cliente (products, sales…).
+model SyncRecord {
+  id        String    @id @default(uuid())
+  tenantId  String
+  table     String
+  recordId  String
+  data      Json
+  deletedAt DateTime?
+  updatedAt DateTime  @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, table, recordId])
+  @@index([tenantId, updatedAt])
+}
+
+// --- Pagos de la mensualidad del SaaS (pasarela Wompi) ----------------------
+model Payment {
+  id        String   @id @default(uuid())
+  tenantId  String
+  amount    Int
+  reference String   @unique
+  status    String   @default("pendiente") // pendiente | aprobado | rechazado
+  provider  String   @default("wompi")
+  raw       Json?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
