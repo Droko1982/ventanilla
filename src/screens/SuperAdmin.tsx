@@ -115,11 +115,29 @@ function StatusChip({ status }: { status: Tenant['status'] }) {
 function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void }) {
   const billing = billingBreakdown(tenant.locationCount ?? 1, tenant.monthlyFeePerLocation)
   const overdue = daysUntil(tenant.paidUntil) < 0
+  const devices = useLiveQuery(() => db.devices.where('tenantId').equals(tenant.id).toArray(), [tenant.id]) ?? []
+  const seatsUsed = tenant.locationCount ?? 1
+  const maxSeats = tenant.maxSeats ?? seatsUsed
+  const maxDevices = tenant.maxDevices ?? 0
+  const devicesActive = devices.filter((d) => !d.blocked).length
 
   async function setStatus(status: Tenant['status']) {
     await db.tenants.update(tenant.id, { status })
     toast('success', status === 'activo' ? 'Cuenta activada' : 'Cuenta suspendida')
     onClose()
+  }
+
+  async function setSeats(n: number) {
+    await db.tenants.update(tenant.id, { maxSeats: Math.max(1, n) })
+    toast('success', `Licencia: ${Math.max(1, n)} punto(s)`)
+  }
+  async function setDevices(n: number) {
+    await db.tenants.update(tenant.id, { maxDevices: Math.max(1, n) })
+    toast('success', `Licencia: ${Math.max(1, n)} dispositivo(s)`)
+  }
+  async function releaseDevice(id: string) {
+    await db.devices.delete(id)
+    toast('success', 'Dispositivo liberado')
   }
 
   async function markPaid() {
@@ -147,6 +165,43 @@ function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void
             Pagado hasta <b>{fmtDate(tenant.paidUntil)}</b>{' '}
             {overdue && <span className="text-rose-600">(vencido)</span>}
           </p>
+        </div>
+
+        {/* Licencia: puntos (ventanillas) y dispositivos permitidos */}
+        <div className="rounded-xl border border-slate-200 p-3">
+          <p className="mb-2 text-sm font-semibold text-slate-600">Licencia</p>
+          <div className="flex items-center justify-between py-1.5">
+            <div className="text-sm">
+              <p className="font-medium text-slate-700">Puntos (ventanillas)</p>
+              <p className="text-xs text-slate-400">{seatsUsed} en uso · {maxSeats} licenciados</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setSeats(maxSeats - 1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100"><Icon name="minus" className="h-4 w-4" /></button>
+              <span className="w-6 text-center font-bold">{maxSeats}</span>
+              <button onClick={() => setSeats(maxSeats + 1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-brand-700"><Icon name="plus" className="h-4 w-4" /></button>
+            </div>
+          </div>
+          <div className="flex items-center justify-between border-t border-slate-100 py-1.5">
+            <div className="text-sm">
+              <p className="font-medium text-slate-700">Dispositivos</p>
+              <p className="text-xs text-slate-400">{devicesActive} conectados · {maxDevices || '—'} permitidos</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setDevices(maxDevices - 1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100"><Icon name="minus" className="h-4 w-4" /></button>
+              <span className="w-6 text-center font-bold">{maxDevices || 0}</span>
+              <button onClick={() => setDevices(maxDevices + 1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-brand-700"><Icon name="plus" className="h-4 w-4" /></button>
+            </div>
+          </div>
+          {devices.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {devices.map((d) => (
+                <div key={d.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs">
+                  <span className={d.blocked ? 'text-rose-500' : 'text-slate-600'}>{d.blocked ? '🚫 ' : '📱 '}{d.name}</span>
+                  <button onClick={() => releaseDevice(d.id)} className="text-rose-400">Liberar</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Cobro con descuento por paquete */}

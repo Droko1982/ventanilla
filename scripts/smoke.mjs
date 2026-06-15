@@ -570,6 +570,15 @@ async function main() {
   if (!txt.includes('Consola Super-Admin')) throw new Error('Consola Super-Admin no renderizó')
   console.log('✓ Consola Super-Admin renderiza')
 
+  // 5b) Licencia: el Super-Admin abre un cliente y ve control de puntos/dispositivos
+  ctx = 'licencia-superadmin'
+  await clickText(page, 'Tienda La Esquina')
+  txt = await waitForText(page, 'Licencia', 4000)
+  if (!/Licencia/.test(txt) || !/Puntos \(ventanillas\)/.test(txt) || !/Dispositivos/.test(txt)) throw new Error('Panel de licencia no renderizó')
+  console.log('✓ Super-Admin: licencia (puntos + dispositivos)')
+  await page.keyboard.press('Escape')
+  await sleep(300)
+
   // 6) Cajero con PIN
   ctx = 'login-cajero'
   await page.evaluate(() => { localStorage.removeItem('ventanilla-session') })

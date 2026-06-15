@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Icon } from './icons'
 import { Sheet } from './Sheet'
@@ -13,6 +13,7 @@ import {
 } from '@/hooks/data'
 import { resetDemo } from '@/data/seed'
 import { getTheme, toggleTheme } from '@/lib/theme'
+import { registerDevice } from '@/lib/device'
 import { toast } from './Toast'
 
 // Barra superior: marca + selector de local + estado de red + campana + perfil.
@@ -217,7 +218,43 @@ function BottomNav() {
   )
 }
 
+// Control de licencia: registra el dispositivo y bloquea si la cuenta está
+// suspendida o si se superó el cupo de dispositivos de la licencia.
+function LicenseBlocked({ deviceBlocked }: { deviceBlocked: boolean }) {
+  const tenant = useTenant()
+  const logout = useSession((s) => s.logout)
+  const navigate = useNavigate()
+  const wa = `https://wa.me/573147555896?text=${encodeURIComponent(`Hola, soy ${tenant?.businessName ?? 'un cliente'} y necesito reactivar mi licencia de Ventanilla.`)}`
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-900 px-6 text-center text-white">
+      <div className="text-5xl">🔒</div>
+      <h1 className="text-2xl font-extrabold">{deviceBlocked ? 'Dispositivo no autorizado' : 'Licencia inactiva'}</h1>
+      <p className="max-w-sm text-sm text-slate-300">
+        {deviceBlocked
+          ? 'Se alcanzó el número de dispositivos de tu licencia. Pide a la plataforma ampliar el cupo o libera otro dispositivo.'
+          : 'Tu cuenta está suspendida o la renta está vencida. Reactívala con la plataforma para seguir vendiendo.'}
+      </p>
+      <a href={wa} target="_blank" rel="noreferrer" className="btn btn-success w-full max-w-xs">
+        <Icon name="whatsapp" className="h-5 w-5" /> Contactar a la plataforma
+      </a>
+      <button onClick={() => { logout(); navigate('/') }} className="text-sm text-slate-400 underline">Cambiar de usuario</button>
+    </div>
+  )
+}
+
 export function AppLayout({ children }: { children: ReactNode }) {
+  const tenant = useTenant()
+  const role = useSession((s) => s.role)
+  const [deviceBlocked, setDeviceBlocked] = useState(false)
+
+  useEffect(() => {
+    if (!tenant || role === 'superadmin') return
+    registerDevice(tenant).then((r) => setDeviceBlocked(!r.allowed)).catch(() => {})
+  }, [tenant, role])
+
+  const blocked = !!tenant && role !== 'superadmin' && (tenant.status === 'suspendido' || deviceBlocked)
+  if (blocked) return <LicenseBlocked deviceBlocked={deviceBlocked} />
+
   return (
     <div className="flex min-h-screen flex-col bg-slate-100">
       <TopBar />

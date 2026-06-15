@@ -61,13 +61,22 @@ export default function Ajustes() {
 
   if (!tenant) return null
   const billing = billingBreakdown(locations?.length ?? 0, tenant.monthlyFeePerLocation)
+  const usedSeats = locations?.length ?? 0
+  const maxSeats = tenant.maxSeats ?? usedSeats
+  function addLocation() {
+    if (usedSeats >= maxSeats) {
+      toast('info', `Tu licencia permite ${maxSeats} punto(s). Pide a la plataforma ampliarla.`)
+      return
+    }
+    setLocAdd(true)
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader title="Ajustes" subtitle={tenant.businessName} />
 
       {/* Locales */}
-      <Section title="Locales / Ventanillas" action={<AddBtn onClick={() => setLocAdd(true)} />}>
+      <Section title={`Locales / Ventanillas (${usedSeats}/${maxSeats})`} action={<AddBtn onClick={addLocation} />}>
         {locations?.map((l) => (
           <button key={l.id} onClick={() => setLocEdit(l)} className="flex w-full items-center gap-3 rounded-xl bg-slate-50 p-3 text-left">
             <Icon name="building" className="h-5 w-5 text-brand-600" />
@@ -134,6 +143,16 @@ export default function Ajustes() {
             <p className="mt-2 text-xs font-semibold text-emerald-600">Ahorras {cop(billing.savings)}/mes por paquete</p>
           )}
           <p className="mt-2 text-xs text-slate-400">Pagado hasta {fmtDate(tenant.paidUntil)}</p>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-slate-50 p-3 text-center">
+            <p className="text-lg font-bold text-slate-700">{usedSeats}/{maxSeats}</p>
+            <p className="text-[11px] text-slate-400">Puntos (ventanillas)</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-3 text-center">
+            <p className="text-lg font-bold text-slate-700">{tenant.maxDevices ?? '—'}</p>
+            <p className="text-[11px] text-slate-400">Dispositivos permitidos</p>
+          </div>
         </div>
       </Section>
 

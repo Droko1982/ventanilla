@@ -29,6 +29,8 @@ model Tenant {
   monthlyFeePerLocation Int      @default(49900)
   paidUntil             DateTime @default(now())
   locationCount         Int      @default(1)
+  maxSeats              Int?
+  maxDevices            Int?
   monthlyGoal           Int?
   commissionPct         Float?
   dian                  Json?

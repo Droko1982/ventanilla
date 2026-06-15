@@ -13,8 +13,20 @@ adminRouter.get('/tenants', async (_req, res) => {
       id: t.id, businessName: t.businessName, ownerName: t.ownerName, email: t.email,
       city: t.city, status: t.status, paidUntil: t.paidUntil,
       monthlyFeePerLocation: t.monthlyFeePerLocation, locationCount: t.locationCount,
+      maxSeats: t.maxSeats, maxDevices: t.maxDevices,
     })),
   )
+})
+
+// Ajustar la licencia: puntos (ventanillas) y dispositivos permitidos.
+adminRouter.post('/tenants/:id/license', async (req, res) => {
+  const { maxSeats, maxDevices } = req.body ?? {}
+  const data: { maxSeats?: number; maxDevices?: number } = {}
+  if (Number.isFinite(maxSeats)) data.maxSeats = Math.max(1, Math.floor(maxSeats))
+  if (Number.isFinite(maxDevices)) data.maxDevices = Math.max(1, Math.floor(maxDevices))
+  if (!Object.keys(data).length) return res.status(400).json({ error: 'Nada que actualizar' })
+  await prisma.tenant.update({ where: { id: req.params.id }, data })
+  res.json({ ok: true, ...data })
 })
 
 // Activar / suspender un cliente.

@@ -50,6 +50,19 @@ export interface Tenant {
   loyaltyEnabled?: boolean
   loyaltyPointsPerThousand?: number // puntos que gana el cliente por cada $1.000 comprados
   loyaltyRedeemValue?: number // valor en $ de cada punto al canjear (ej. 1 punto = $20)
+  // Licenciamiento (lo controla el Super-Admin de la plataforma)
+  maxSeats?: number // puntos/ventanillas que la licencia permite abrir
+  maxDevices?: number // dispositivos que pueden conectarse/descargar la app
+}
+
+// Dispositivo que instaló/usa la app de un cliente (para el control de licencia).
+export interface Device {
+  id: string // id único generado al instalar (persistente en el dispositivo)
+  tenantId: string
+  name: string // navegador · sistema, o un alias
+  firstSeen: string
+  lastSeen: string
+  blocked?: boolean // true si excede la licencia (no debe operar)
 }
 
 export interface DianConfig {

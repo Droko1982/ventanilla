@@ -65,6 +65,8 @@ const tenant: Tenant = {
   loyaltyEnabled: true,
   loyaltyPointsPerThousand: 1,
   loyaltyRedeemValue: 20,
+  maxSeats: 5, // puntos/ventanillas licenciados (usa 3)
+  maxDevices: 5, // dispositivos permitidos por la licencia
 }
 
 // ---------------------------------------------------------------------------
@@ -635,7 +637,7 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Al subir una versión nueva del modelo de demo, se recarga automáticamente
 // para que cualquier visitante vea los datos/precios más recientes.
-const SEED_VERSION = '13-melo-caramelo-limpio'
+const SEED_VERSION = '14-licencia'
 const SEED_KEY = 'ventanilla-seed-version'
 
 export async function seedIfEmpty(): Promise<void> {

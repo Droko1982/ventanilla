@@ -21,6 +21,7 @@ import type {
   Purchase,
   ZReport,
   Domicilio,
+  Device,
 } from '@/types'
 
 // ============================================================================
@@ -54,6 +55,7 @@ export class VentanillaDB extends Dexie {
   purchases!: Table<Purchase, string>
   zReports!: Table<ZReport, string>
   domicilios!: Table<Domicilio, string>
+  devices!: Table<Device, string>
 
   constructor() {
     super('ventanilla')
@@ -97,6 +99,10 @@ export class VentanillaDB extends Dexie {
     // v7: domicilios (entregas)
     this.version(7).stores({
       domicilios: 'id, tenantId, locationId, status, createdAt',
+    })
+    // v8: devices (control de licencia por dispositivo)
+    this.version(8).stores({
+      devices: 'id, tenantId, lastSeen',
     })
   }
 }
