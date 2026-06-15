@@ -64,31 +64,23 @@ export async function notify(n: Omit<AppNotification, 'id' | 'read' | 'createdAt
 //  POS1-####  tiquete (documento equivalente POS)
 //  FE-####    factura electrónica de venta
 //  REM-####   remisión (no es documento DIAN)
-let dianCounter = 5000
-export function nextDianNumber(): string {
-  dianCounter += 1
-  return `POS1-${dianCounter}`
+// Consecutivos PERSISTENTES (no se reinician al recargar la PWA, para no
+// repetir números de documento fiscal entre sesiones).
+function nextSeq(key: string, base: number, prefix: string): string {
+  let n = base
+  try {
+    const stored = Number(localStorage.getItem(key))
+    if (Number.isFinite(stored) && stored >= base) n = stored
+  } catch { /* sin almacenamiento */ }
+  n += 1
+  try { localStorage.setItem(key, String(n)) } catch { /* ignore */ }
+  return `${prefix}${n}`
 }
-let facturaCounter = 940
-export function nextFacturaNumber(): string {
-  facturaCounter += 1
-  return `FE-${facturaCounter}`
-}
-let remisionCounter = 120
-export function nextRemisionNumber(): string {
-  remisionCounter += 1
-  return `REM-${remisionCounter}`
-}
-let ncCounter = 300
-export function nextCreditNoteNumber(): string {
-  ncCounter += 1
-  return `NC-${ncCounter}`
-}
-let ndCounter = 200
-export function nextDebitNoteNumber(): string {
-  ndCounter += 1
-  return `ND-${ndCounter}`
-}
+export function nextDianNumber(): string { return nextSeq('ventanilla-seq-pos', 5000, 'POS1-') }
+export function nextFacturaNumber(): string { return nextSeq('ventanilla-seq-fe', 940, 'FE-') }
+export function nextRemisionNumber(): string { return nextSeq('ventanilla-seq-rem', 120, 'REM-') }
+export function nextCreditNoteNumber(): string { return nextSeq('ventanilla-seq-nc', 300, 'NC-') }
+export function nextDebitNoteNumber(): string { return nextSeq('ventanilla-seq-nd', 200, 'ND-') }
 
 // ---- Registrar una venta ---------------------------------------------------
 export interface RecordSaleInput {
@@ -341,7 +333,10 @@ export async function returnSaleItems(
       const qty = Math.min(r.qty, item.qty)
       if (qty <= 0) continue
       const oldQty = item.qty
-      refund += item.unitPrice * qty
+      // Reembolsa lo realmente pagado por esas unidades (descuenta su parte del
+      // descuento de línea), para no devolver de más.
+      const refundedDiscount = oldQty > 0 ? Math.round((item.lineDiscount * qty) / oldQty) : 0
+      refund += item.unitPrice * qty - refundedDiscount
       const ratio = oldQty > 0 ? (oldQty - qty) / oldQty : 0
       item.lineDiscount = Math.round(item.lineDiscount * ratio)
       item.qty = Number((oldQty - qty).toFixed(3))

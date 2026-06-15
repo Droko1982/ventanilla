@@ -82,17 +82,23 @@ export default function Caja() {
   const summary = useMemo(() => summarize(todaySales ?? []), [todaySales])
   const activeLoc = locations?.find((l) => l.id === locationId)
 
+  // Ventas desde la apertura (no solo las de hoy: una caja puede cruzar
+  // medianoche). Debe coincidir con lo que calcula el cierre (closeCashSession).
+  const sessionSales = useLiveQuery(
+    async () => {
+      if (!session || !locationId) return []
+      const since = new Date(session.openedAt).getTime()
+      const all = await db.sales.where('locationId').equals(locationId).toArray()
+      return all.filter((s) => s.status === 'completada' && new Date(s.createdAt).getTime() >= since)
+    },
+    [session?.id, locationId],
+  )
   // Efectivo esperado en caja = base + ventas efectivo desde apertura
   const cashSinceOpen = useMemo(() => {
-    if (!session || !todaySales) return 0
-    const since = new Date(session.openedAt).getTime()
     let sum = 0
-    for (const s of todaySales) {
-      if (new Date(s.createdAt).getTime() < since || s.status !== 'completada') continue
-      for (const p of s.payments) if (p.method === 'efectivo') sum += p.amount
-    }
+    for (const s of sessionSales ?? []) for (const p of s.payments) if (p.method === 'efectivo') sum += p.amount
     return sum
-  }, [session, todaySales])
+  }, [sessionSales])
   // Movimientos de efectivo (ingresos/egresos) de la sesión abierta
   const movements = useLiveQuery(
     () => (session ? db.cashMovements.where('sessionId').equals(session.id).reverse().toArray() : []),

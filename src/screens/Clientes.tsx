@@ -200,7 +200,10 @@ function CustomerDetail({ customer, onClose }: { customer: Customer; onClose: ()
                 <button
                   className="btn btn-primary px-4"
                   onClick={async () => {
-                    await payCredit(customer.id, parseCop(abono))
+                    const amt = parseCop(abono)
+                    if (amt <= 0) return toast('error', 'Escribe un monto válido')
+                    if (amt > customer.creditBalance) return toast('error', `El abono supera el saldo (${cop(customer.creditBalance)})`)
+                    await payCredit(customer.id, amt)
                     toast('success', 'Abono registrado')
                     onClose()
                   }}
