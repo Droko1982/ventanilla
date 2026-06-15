@@ -50,11 +50,16 @@ export function productStats(sales: Sale[]): ProductStat[] {
   const map = new Map<string, ProductStat>()
   for (const s of sales) {
     if (s.status !== 'completada') continue
+    // Reparte el descuento global de la venta entre los ítems (proporcional al
+    // valor de cada línea) para que la utilidad no quede inflada.
+    const saleGross = s.items.reduce((a, it) => a + it.unitPrice * it.qty - it.lineDiscount, 0)
     for (const it of s.items) {
+      const itemGross = it.unitPrice * it.qty - it.lineDiscount
+      const share = saleGross > 0 ? (s.discount ?? 0) * (itemGross / saleGross) : 0
       const cur = map.get(it.productId) ?? { productId: it.productId, name: it.name, qty: 0, revenue: 0, profit: 0 }
       cur.qty += it.qty
-      cur.revenue += it.unitPrice * it.qty - it.lineDiscount
-      cur.profit += (it.unitPrice - it.cost) * it.qty - it.lineDiscount
+      cur.revenue += itemGross - share
+      cur.profit += (it.unitPrice - it.cost) * it.qty - it.lineDiscount - share
       map.set(it.productId, cur)
     }
   }

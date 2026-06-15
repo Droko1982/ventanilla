@@ -201,14 +201,15 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
         })
       }
 
-      // Fiado: aumenta saldo del cliente
+      // Fiado: aumenta saldo del cliente (suma TODAS las parcialidades fiado del
+      // pago mixto, no solo la primera).
       const earned = Math.round(total / 1000) * (loyaltyOn ? perThousand : 1)
-      const fiado = input.payments.find((p) => p.method === 'fiado')
-      if (fiado && input.customerId) {
+      const fiadoAmount = input.payments.filter((p) => p.method === 'fiado').reduce((a, p) => a + p.amount, 0)
+      if (fiadoAmount > 0 && input.customerId) {
         const c = await db.customers.get(input.customerId)
         if (c) {
           if (c.creditBalance <= 0) c.creditSince = now // empieza a deber: cuenta la antigüedad
-          c.creditBalance += fiado.amount
+          c.creditBalance += fiadoAmount
           c.totalSpent += total
           c.points = Math.max(0, (c.points ?? 0) - redeemPoints + earned)
           await db.customers.put(c)
@@ -735,10 +736,8 @@ export async function receivePurchase(
 }
 
 // ---- Compras: factura de compra (entrada con costo) -----------------------
-let purchaseCounter = 400
 export function nextPurchaseNumber(): string {
-  purchaseCounter += 1
-  return `FC-${purchaseCounter}`
+  return nextSeq('ventanilla-seq-fc', 400, 'FC-') // consecutivo persistente
 }
 
 export interface RecordPurchaseInput {

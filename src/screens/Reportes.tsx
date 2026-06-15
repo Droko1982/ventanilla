@@ -27,7 +27,7 @@ export default function Reportes() {
   const days = range === '7' ? 7 : range === '30' ? 30 : 90
   const ranged = useMemo(() => filterByRange(sales ?? [], days), [sales, days])
   const userName = useMemo(() => new Map((users ?? []).map((u) => [u.id, u.name])), [users])
-  const commission = commPct !== '' ? Number(commPct) : (tenant?.commissionPct ?? 1)
+  const commission = (() => { const c = Number(commPct); return commPct !== '' && Number.isFinite(c) ? c : (tenant?.commissionPct ?? 1) })()
 
   // Ventas por vendedor (para comisiones)
   const sellerStats = useMemo(() => {
@@ -101,7 +101,9 @@ export default function Reportes() {
       if (s.status !== 'completada') continue
       const cur = map.get(s.locationId) ?? { revenue: 0, profit: 0 }
       cur.revenue += s.total
-      for (const it of s.items) cur.profit += (it.unitPrice - it.cost) * it.qty - it.lineDiscount
+      // Resta el descuento global de la venta a la utilidad (no solo el de línea)
+      const itemsProfit = s.items.reduce((a, it) => a + (it.unitPrice - it.cost) * it.qty - it.lineDiscount, 0)
+      cur.profit += itemsProfit - (s.discount ?? 0)
       map.set(s.locationId, cur)
     }
     return locations
