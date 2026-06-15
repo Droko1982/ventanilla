@@ -96,6 +96,17 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {(locations?.length ?? 0) > 1 && (
+        <button onClick={() => navigate('/ventanillas')} className="card mb-4 flex w-full items-center gap-3 p-3 text-left active:scale-[0.99]">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-100 text-brand-700"><Icon name="building" className="h-6 w-6" /></span>
+          <div className="flex-1">
+            <p className="font-semibold text-slate-700">Mis ventanillas</p>
+            <p className="text-xs text-slate-400">Administra tus {locations?.length} locales de un vistazo</p>
+          </div>
+          <Icon name="arrow-left" className="h-5 w-5 rotate-180 text-slate-300" />
+        </button>
+      )}
+
       {/* Asistente de insights */}
       <div className="mb-4 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
         <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-600">

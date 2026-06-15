@@ -270,6 +270,13 @@ async function main() {
   if (!/Asistente/.test(txt)) throw new Error('Asistente de insights no renderizó')
   console.log('✓ Dashboard: históricos día/semana/mes/año + meta + asistente')
 
+  // 4f-bis0) Centro de ventanillas (administración multi-local)
+  ctx = 'ventanillas'
+  await page.evaluate(() => { location.hash = '#/ventanillas' })
+  txt = await waitForText(page, 'Mis ventanillas', 6000)
+  if (!/Mis ventanillas/.test(txt) || !/(Caja abierta|Caja cerrada)/.test(txt)) throw new Error('Centro de ventanillas no renderizó')
+  console.log('✓ Centro de ventanillas (multi-local de un vistazo)')
+
   // 4f-bis) Reportes: comisiones por vendedor + export contable
   ctx = 'reportes-comisiones'
   await page.evaluate(() => { location.hash = '#/reportes' })

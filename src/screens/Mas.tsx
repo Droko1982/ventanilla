@@ -9,6 +9,7 @@ export default function Mas() {
   const navigate = useNavigate()
   const tenant = useTenant()
   const allItems: { to: string; icon: any; label: string; desc: string; color: string; mod?: string }[] = [
+    { to: '/ventanillas', icon: 'building', label: 'Mis ventanillas', desc: 'Administra todos tus locales de un vistazo', color: 'bg-brand-100 text-brand-700', mod: 'ventanillas' },
     { to: '/ventas', icon: 'doc', label: 'Ventas y DIAN', desc: 'Historial, documentos POS, pendientes', color: 'bg-blue-100 text-blue-700', mod: 'ventas' },
     { to: '/documentos', icon: 'tag', label: 'Facturas y remisiones', desc: 'Factura electrónica y notas de entrega', color: 'bg-indigo-100 text-indigo-700', mod: 'documentos' },
     { to: '/eventos-recepcion', icon: 'doc', label: 'Eventos Recepción (DIAN)', desc: 'Acuse, recibo del bien y aceptación de compras', color: 'bg-indigo-100 text-indigo-700', mod: 'eventos' },

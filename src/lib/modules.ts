@@ -5,6 +5,8 @@
 export interface ModuleDef { key: string; label: string; group: string }
 
 export const MODULES: ModuleDef[] = [
+  // Administración
+  { key: 'ventanillas', label: 'Mis ventanillas (multi-local)', group: 'Administración' },
   // Ventas y documentos
   { key: 'ventas', label: 'Historial de ventas y DIAN', group: 'Ventas' },
   { key: 'documentos', label: 'Facturas y remisiones', group: 'Ventas' },
