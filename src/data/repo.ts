@@ -1223,6 +1223,64 @@ export async function abonarRemision(remisionId: string, amount: number): Promis
 }
 
 // ---- Fiado: registrar abono de un cliente ---------------------------------
+// Cambio masivo de precios: aplica un % (positivo sube, negativo baja) a una
+// lista de productos, redondeando a $50. Devuelve cuántos cambió.
+export async function bulkPriceChange(
+  products: Product[], pct: number,
+  meta: { tenantId: string; locationId: string; userId: string; userName: string },
+): Promise<number> {
+  let n = 0
+  for (const p of products) {
+    const raw = p.price * (1 + pct / 100)
+    const np = Math.max(0, Math.round(raw / 50) * 50)
+    if (np !== p.price) { await db.products.update(p.id, { price: np }); n++ }
+  }
+  if (n > 0) {
+    await audit({
+      tenantId: meta.tenantId, locationId: meta.locationId, userId: meta.userId, userName: meta.userName,
+      action: 'cambio masivo de precios', entity: 'producto', entityId: 'masivo',
+      detail: `${pct > 0 ? '+' : ''}${pct}% a ${n} producto(s)`,
+    })
+  }
+  return n
+}
+
+// Auto-rebaja de productos por vencer: pone una promo de % a los perecederos que
+// vencen pronto y la quita cuando ya no aplican (reabastecidos / vendidos).
+export async function runExpiryMarkdowns(tenantId: string, days: number, percent: number): Promise<number> {
+  const products = (await db.products.toArray()).filter((p) => p.tenantId === tenantId && p.active && p.perishable)
+  const stock = await db.stock.toArray()
+  const now = Date.now()
+  const soon = (exp?: string) => {
+    if (!exp) return false
+    const d = (new Date(exp).getTime() - now) / 86400000
+    return d <= days && d > -100 // por vencer o recién vencido (no fechas absurdas)
+  }
+  let applied = 0
+  for (const p of products) {
+    const expiringSoon = stock.some((s) => s.productId === p.id && s.quantity > 0 && soon(s.nearestExpiry))
+    if (expiringSoon && !p.markdownAuto) {
+      await db.products.update(p.id, { promoType: 'percent', promoValue: percent, markdownAuto: true })
+      applied++
+    } else if (!expiringSoon && p.markdownAuto) {
+      await db.products.update(p.id, { promoType: undefined, promoValue: undefined, markdownAuto: false })
+    }
+  }
+  return applied
+}
+
+export async function maybeExpiryMarkdowns(tenantId: string): Promise<void> {
+  const tenant = await db.tenants.get(tenantId)
+  if (!tenant?.autoMarkdownExpiry) return
+  const key = `ventanilla-markdown-${tenantId}`
+  try {
+    const last = Number(localStorage.getItem(key) || 0)
+    if (Date.now() - last < 24 * 3600000) return
+    localStorage.setItem(key, String(Date.now()))
+  } catch { /* sin almacenamiento */ }
+  try { await runExpiryMarkdowns(tenantId, tenant.markdownDays ?? 3, tenant.markdownPercent ?? 20) } catch { /* nunca rompe */ }
+}
+
 // Mensaje de recordatorio de fiado.
 export function fiadoReminderMsg(name: string, amount: number, businessName: string): string {
   return `Hola ${name}, te saluda *${businessName}*. Te recordamos amablemente tu saldo pendiente de ${cop(amount)}. ¡Gracias! 🙏`

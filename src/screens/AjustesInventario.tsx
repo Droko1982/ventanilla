@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import {
-  useActiveLocationId, useProducts, useStockForLocation, useCurrentUser,
+  useActiveLocationId, useProducts, useStockForLocation, useCurrentUser, useTenant,
 } from '@/hooks/data'
 import { db } from '@/data/db'
-import { stockMove, setStockExpiry, audit } from '@/data/repo'
+import { stockMove, setStockExpiry, audit, bulkPriceChange, runExpiryMarkdowns } from '@/data/repo'
 import { Segmented, EmptyState, PageHeader } from '@/components/ui'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
@@ -187,12 +187,22 @@ function QuickEdit({ field, products, stockMap, userId, userName, tenantId, loca
 }) {
   const [search, setSearch] = useState('')
   const [vals, setVals] = useState<Record<string, string>>({})
+  const [bulkPct, setBulkPct] = useState('')
 
   const list = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return products.slice(0, 20)
     return products.filter((p) => p.name.toLowerCase().includes(q) || p.barcode?.includes(search) || p.section?.toLowerCase().includes(q)).slice(0, 30)
   }, [products, search])
+
+  async function applyBulk() {
+    const pct = parseFloat(bulkPct.replace(',', '.'))
+    if (!pct || isNaN(pct)) return toast('error', 'Escribe un % (ej. 10 o -5)')
+    if (!confirm(`¿Aplicar ${pct > 0 ? '+' : ''}${pct}% al precio de ${list.length} producto(s) mostrados?`)) return
+    const n = await bulkPriceChange(list, pct, { tenantId, locationId, userId, userName })
+    toast('success', `${n} precio(s) actualizados`)
+    setBulkPct('')
+  }
 
   async function save(p: Product) {
     const raw = vals[p.id]
@@ -216,6 +226,17 @@ function QuickEdit({ field, products, stockMap, userId, userName, tenantId, loca
         <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
         <input className="input pl-10" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar producto…" />
       </div>
+
+      {field === 'precio' && (
+        <div className="mb-3 rounded-xl bg-slate-50 p-3">
+          <p className="mb-2 text-xs font-semibold text-slate-500">Cambio masivo (a los {list.length} mostrados; usa el buscador para acotar)</p>
+          <div className="flex items-center gap-2">
+            <input className="input flex-1 text-center" inputMode="numeric" value={bulkPct} onChange={(e) => setBulkPct(e.target.value)} placeholder="% ej. 10 (sube) o -5 (baja)" />
+            <button onClick={applyBulk} className="btn btn-primary px-4 text-sm">Aplicar</button>
+          </div>
+          <p className="mt-1 text-[11px] text-slate-400">Redondea a $50.</p>
+        </div>
+      )}
       <div className="space-y-2">
         {list.map((p) => (
           <div key={p.id} className="card flex items-center gap-2 p-2.5">
@@ -248,6 +269,18 @@ function ExpiryManager({ products, stockMap, userId, userName, tenantId, locatio
   userId: string; userName: string; tenantId: string; locationId: string
 }) {
   const [vals, setVals] = useState<Record<string, string>>({})
+  const tenant = useTenant()
+  const mdDays = tenant?.markdownDays ?? 3
+  const mdPct = tenant?.markdownPercent ?? 20
+
+  async function applyMarkdownNow() {
+    const n = await runExpiryMarkdowns(tenantId, mdDays, mdPct)
+    toast(n > 0 ? 'success' : 'info', n > 0 ? `${n} producto(s) rebajado(s) ${mdPct}%` : 'Nada por rebajar ahora')
+  }
+  async function toggleAutoMarkdown(v: boolean) {
+    await db.tenants.update(tenantId, { autoMarkdownExpiry: v })
+    toast('success', v ? 'Auto-rebaja activada' : 'Auto-rebaja desactivada')
+  }
 
   // Ordena: primero lo que vence antes (o ya vencido), luego sin fecha.
   const list = useMemo(() => {
@@ -287,6 +320,17 @@ function ExpiryManager({ products, stockMap, userId, userName, tenantId, locatio
       <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
         Fija la fecha de vencimiento del lote en góndola. Te avisamos antes de que se venza para rebajarlo o retirarlo.
       </p>
+
+      {/* Auto-rebaja de los por vencer */}
+      <div className="rounded-xl border border-slate-100 bg-white p-3">
+        <button onClick={applyMarkdownNow} className="btn btn-primary w-full text-sm">🏷️ Rebajar −{mdPct}% los que vencen en ≤{mdDays} días</button>
+        <label className="mt-2 flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2">
+          <input type="checkbox" checked={tenant?.autoMarkdownExpiry ?? false} onChange={(e) => toggleAutoMarkdown(e.target.checked)} className="h-5 w-5" />
+          <span className="text-sm text-slate-600">Rebajar automáticamente cada día</span>
+        </label>
+        <p className="mt-1 text-[11px] text-slate-400">La rebaja se quita sola cuando el producto se reabastece o se agota.</p>
+      </div>
+
       {list.map((p) => {
         const st = stockMap.get(p.id)
         const d = st?.nearestExpiry ? daysUntil(st.nearestExpiry) : null

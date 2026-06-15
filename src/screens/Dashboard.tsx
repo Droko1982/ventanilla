@@ -9,7 +9,7 @@ import {
 import { summarize, topProducts, filterByRange } from '@/lib/analytics'
 import { makePeriod, salesInPeriod, periodSeries, type Granularity } from '@/lib/period'
 import { buildInsights } from '@/lib/insights'
-import { maybeRecalcThresholds, maybeFiadoReminders } from '@/data/repo'
+import { maybeRecalcThresholds, maybeFiadoReminders, maybeExpiryMarkdowns } from '@/data/repo'
 import { daysUntil } from '@/lib/format'
 import { cop, parseCop } from '@/lib/money'
 import { db } from '@/data/db'
@@ -86,6 +86,7 @@ export default function Dashboard() {
     if (!tenant || !locations) return
     for (const l of locations) maybeRecalcThresholds(tenant.id, l.id)
     maybeFiadoReminders(tenant.id)
+    maybeExpiryMarkdowns(tenant.id)
   }, [tenant, locations])
 
   return (

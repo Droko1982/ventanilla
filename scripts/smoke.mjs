@@ -518,11 +518,13 @@ async function main() {
   await sleep(600)
   txt = await bodyText(page)
   if (!/Actual/.test(txt)) throw new Error('Cambio de precio no renderizó')
+  if (!/Cambio masivo/.test(txt)) throw new Error('Cambio masivo de precios no renderizó')
   await clickText(page, 'Vence')
   await sleep(600)
   txt = await bodyText(page)
   if (!/(Vence|Vencido|Sin fecha)/.test(txt)) throw new Error('Control de vencimientos no renderizó')
-  console.log('✓ Ajustes de inventario (entradas/salidas, precio, sección, vencimientos)')
+  if (!/Rebajar/.test(txt) || !/Rebajar automáticamente/.test(txt)) throw new Error('Auto-rebaja por vencimiento no renderizó')
+  console.log('✓ Ajustes de inventario (precio masivo + auto-rebaja por vencer)')
 
   // 4h-septies) Eventos Recepción DIAN
   ctx = 'eventos-recepcion'

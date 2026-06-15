@@ -58,6 +58,10 @@ export interface Tenant {
   // Recordatorios de fiado automáticos por WhatsApp
   autoFiadoReminder?: boolean
   fiadoReminderDays?: number // recordar si la deuda lleva ≥ N días sin recordatorio
+  // Auto-rebaja de productos por vencer
+  autoMarkdownExpiry?: boolean
+  markdownDays?: number // rebaja los que vencen en ≤ N días
+  markdownPercent?: number // % de rebaja
 }
 
 // Dispositivo que instaló/usa la app de un cliente (para el control de licencia).
@@ -143,6 +147,7 @@ export interface Product {
   wholesaleMinQty?: number // cantidad mínima para el precio al por mayor
   promoType?: '2x1' | 'percent' // promoción automática (opcional)
   promoValue?: number // % de descuento cuando promoType = 'percent'
+  markdownAuto?: boolean // la promo la puso la auto-rebaja por vencimiento (para revertir)
   allowNegative?: boolean // permitir vender por debajo de 0 (false = bloquear)
   active: boolean
   createdAt: string
