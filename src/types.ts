@@ -53,6 +53,8 @@ export interface Tenant {
   // Licenciamiento (lo controla el Super-Admin de la plataforma)
   maxSeats?: number // puntos/ventanillas que la licencia permite abrir
   maxDevices?: number // dispositivos que pueden conectarse/descargar la app
+  // Módulos visibles: el dueño oculta lo que no usa (todo activo por defecto).
+  modules?: Record<string, boolean>
 }
 
 // Dispositivo que instaló/usa la app de un cliente (para el control de licencia).

@@ -1,29 +1,33 @@
 import { useNavigate } from 'react-router-dom'
 import { Icon } from '@/components/icons'
 import { PageHeader } from '@/components/ui'
+import { useTenant } from '@/hooks/data'
+import { moduleEnabled } from '@/lib/modules'
 
 // Menú "Más": accesos a las secciones que no caben en la barra inferior.
 export default function Mas() {
   const navigate = useNavigate()
-  const items: { to: string; icon: any; label: string; desc: string; color: string }[] = [
-    { to: '/ventas', icon: 'doc', label: 'Ventas y DIAN', desc: 'Historial, documentos POS, pendientes', color: 'bg-blue-100 text-blue-700' },
-    { to: '/documentos', icon: 'tag', label: 'Facturas y remisiones', desc: 'Factura electrónica y notas de entrega', color: 'bg-indigo-100 text-indigo-700' },
-    { to: '/eventos-recepcion', icon: 'doc', label: 'Eventos Recepción (DIAN)', desc: 'Acuse, recibo del bien y aceptación de compras', color: 'bg-indigo-100 text-indigo-700' },
-    { to: '/reportes', icon: 'chart', label: 'Reportes', desc: 'Márgenes, más/menos vendidos, stock muerto', color: 'bg-emerald-100 text-emerald-700' },
-    { to: '/proveedores', icon: 'truck', label: 'Proveedores', desc: 'Reabastecer, pedidos, directorio, deuda', color: 'bg-amber-100 text-amber-700' },
-    { to: '/compras', icon: 'box', label: 'Compras', desc: 'Facturas de compra, costo promedio, entradas', color: 'bg-purple-100 text-purple-700' },
-    { to: '/reporte-inventario', icon: 'chart', label: 'Inventario General', desc: 'Reporte: costo prom., utilidad %, stock sugerido', color: 'bg-teal-100 text-teal-700' },
-    { to: '/ajustes-inventario', icon: 'box', label: 'Ajustes de inventario', desc: 'Entradas/salidas, precio, sección, vencimientos', color: 'bg-teal-100 text-teal-700' },
-    { to: '/clientes', icon: 'users', label: 'Clientes / Fiado', desc: 'Crédito, historial, abonos', color: 'bg-rose-100 text-rose-700' },
-    { to: '/cartera', icon: 'doc', label: 'Cartera', desc: 'Cuentas por cobrar: crédito y fiado, abonos', color: 'bg-rose-100 text-rose-700' },
-    { to: '/domicilios', icon: 'truck', label: 'Domicilios', desc: 'Entregas: estado, repartidor, mapa, WhatsApp', color: 'bg-orange-100 text-orange-700' },
-    { to: '/tienda', icon: 'tag', label: 'Tienda online', desc: 'Catálogo público; clientes piden por WhatsApp', color: 'bg-green-100 text-green-700' },
-    { to: '/autoservicio', icon: 'cart', label: 'Autoservicio (self-checkout)', desc: 'El cliente escanea, ve el total y paga solo', color: 'bg-cyan-100 text-cyan-700' },
-    { to: '/informe-z', icon: 'doc', label: 'Informe Z (fiscal)', desc: 'Cierre fiscal diario · Zetas', color: 'bg-blue-100 text-blue-700' },
-    { to: '/notificaciones', icon: 'bell', label: 'Notificaciones', desc: 'Alertas de stock, vencimientos, caja', color: 'bg-purple-100 text-purple-700' },
-    { to: '/auditoria', icon: 'shield', label: 'Auditoría', desc: 'Quién hizo o cambió cada cosa', color: 'bg-slate-200 text-slate-700' },
-    { to: '/ajustes', icon: 'gear', label: 'Ajustes', desc: 'Locales, empleados, DIAN, plan', color: 'bg-slate-100 text-slate-600' },
+  const tenant = useTenant()
+  const allItems: { to: string; icon: any; label: string; desc: string; color: string; mod?: string }[] = [
+    { to: '/ventas', icon: 'doc', label: 'Ventas y DIAN', desc: 'Historial, documentos POS, pendientes', color: 'bg-blue-100 text-blue-700', mod: 'ventas' },
+    { to: '/documentos', icon: 'tag', label: 'Facturas y remisiones', desc: 'Factura electrónica y notas de entrega', color: 'bg-indigo-100 text-indigo-700', mod: 'documentos' },
+    { to: '/eventos-recepcion', icon: 'doc', label: 'Eventos Recepción (DIAN)', desc: 'Acuse, recibo del bien y aceptación de compras', color: 'bg-indigo-100 text-indigo-700', mod: 'eventos' },
+    { to: '/reportes', icon: 'chart', label: 'Reportes', desc: 'Márgenes, más/menos vendidos, stock muerto', color: 'bg-emerald-100 text-emerald-700', mod: 'reportes' },
+    { to: '/proveedores', icon: 'truck', label: 'Proveedores', desc: 'Reabastecer, pedidos, directorio, deuda', color: 'bg-amber-100 text-amber-700', mod: 'proveedores' },
+    { to: '/compras', icon: 'box', label: 'Compras', desc: 'Facturas de compra, costo promedio, entradas', color: 'bg-purple-100 text-purple-700', mod: 'compras' },
+    { to: '/reporte-inventario', icon: 'chart', label: 'Inventario General', desc: 'Reporte: costo prom., utilidad %, stock sugerido', color: 'bg-teal-100 text-teal-700', mod: 'reporteInv' },
+    { to: '/ajustes-inventario', icon: 'box', label: 'Ajustes de inventario', desc: 'Entradas/salidas, precio, sección, vencimientos', color: 'bg-teal-100 text-teal-700', mod: 'ajustesInv' },
+    { to: '/clientes', icon: 'users', label: 'Clientes / Fiado', desc: 'Crédito, historial, abonos', color: 'bg-rose-100 text-rose-700', mod: 'clientes' },
+    { to: '/cartera', icon: 'doc', label: 'Cartera', desc: 'Cuentas por cobrar: crédito y fiado, abonos', color: 'bg-rose-100 text-rose-700', mod: 'cartera' },
+    { to: '/domicilios', icon: 'truck', label: 'Domicilios', desc: 'Entregas: estado, repartidor, mapa, WhatsApp', color: 'bg-orange-100 text-orange-700', mod: 'domicilios' },
+    { to: '/tienda', icon: 'tag', label: 'Tienda online', desc: 'Catálogo público; clientes piden por WhatsApp', color: 'bg-green-100 text-green-700', mod: 'tienda' },
+    { to: '/autoservicio', icon: 'cart', label: 'Autoservicio (self-checkout)', desc: 'El cliente escanea, ve el total y paga solo', color: 'bg-cyan-100 text-cyan-700', mod: 'autoservicio' },
+    { to: '/informe-z', icon: 'doc', label: 'Informe Z (fiscal)', desc: 'Cierre fiscal diario · Zetas', color: 'bg-blue-100 text-blue-700', mod: 'informeZ' },
+    { to: '/notificaciones', icon: 'bell', label: 'Notificaciones', desc: 'Alertas de stock, vencimientos, caja', color: 'bg-purple-100 text-purple-700', mod: 'notificaciones' },
+    { to: '/auditoria', icon: 'shield', label: 'Auditoría', desc: 'Quién hizo o cambió cada cosa', color: 'bg-slate-200 text-slate-700', mod: 'auditoria' },
+    { to: '/ajustes', icon: 'gear', label: 'Ajustes', desc: 'Locales, empleados, módulos, DIAN, plan', color: 'bg-slate-100 text-slate-600' },
   ]
+  const items = allItems.filter((it) => !it.mod || moduleEnabled(tenant, it.mod))
   return (
     <div>
       <PageHeader title="Más" subtitle="Todas las herramientas de tu negocio" />

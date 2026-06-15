@@ -16,6 +16,7 @@ import { uid } from '@/lib/id'
 import { useSession } from '@/store/session'
 import { drawerSupported, drawerLinked, connectDrawer, unlinkDrawer, openCashDrawer, drawerMessage } from '@/lib/cashDrawer'
 import { scaleSupported, scaleLinked, connectScale, unlinkScale, readWeightOnce, scaleMessage } from '@/lib/scale'
+import { MODULES, moduleEnabled } from '@/lib/modules'
 import { QRCode } from '@/components/QRCode'
 import { breBPayload, BREB_KEY_TYPES } from '@/lib/breB'
 import type { Location, User, DianConfig, Tenant } from '@/types'
@@ -166,6 +167,11 @@ export default function Ajustes() {
         </button>
       </Section>
 
+      {/* Módulos visibles */}
+      <Section title="Módulos">
+        <ModulesSection tenant={tenant} tenantId={tenantId} />
+      </Section>
+
       {/* Pagos Bre-B */}
       <Section title="Pagos Bre-B">
         <BreBSection tenant={tenant} tenantId={tenantId} />
@@ -224,6 +230,34 @@ export default function Ajustes() {
         <EmployeeForm employee={empEdit ?? undefined} tenantId={tenantId} locations={locations ?? []} onClose={() => { setEmpEdit(null); setEmpAdd(false) }} />
       )}
       {dianOpen && <DianForm tenantId={tenantId} dian={tenant.dian} onClose={() => setDianOpen(false)} />}
+    </div>
+  )
+}
+
+function ModulesSection({ tenant, tenantId }: { tenant: Tenant; tenantId: string }) {
+  async function toggle(key: string, on: boolean) {
+    const modules = { ...(tenant.modules ?? {}), [key]: on }
+    await db.tenants.update(tenantId, { modules })
+  }
+  const groups = [...new Set(MODULES.map((m) => m.group))]
+  return (
+    <div className="space-y-3">
+      <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">
+        Activa solo lo que uses; lo demás se oculta del menú (no se borra nada y lo puedes reactivar cuando quieras).
+      </p>
+      {groups.map((g) => (
+        <div key={g}>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{g}</p>
+          <div className="space-y-1.5">
+            {MODULES.filter((m) => m.group === g).map((m) => (
+              <label key={m.key} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
+                <span className="text-sm text-slate-600">{m.label}</span>
+                <input type="checkbox" checked={moduleEnabled(tenant, m.key)} onChange={(e) => toggle(m.key, e.target.checked)} className="h-5 w-5" />
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -579,7 +613,8 @@ function EmployeeForm({ employee, tenantId, locations, onClose }: { employee?: U
   const [canDiscount, setCanDiscount] = useState(p?.canDiscount !== false)
   const [canManageInventory, setCanManageInventory] = useState(p?.canManageInventory !== false)
   const [canCashMovement, setCanCashMovement] = useState(p?.canCashMovement !== false)
-  const [canVoid, setCanVoid] = useState(p?.canVoid !== false)
+  // Anular ventas es lo más sensible: por defecto OFF en empleados NUEVOS.
+  const [canVoid, setCanVoid] = useState(employee ? p?.canVoid !== false : false)
 
   const perms = [
     { label: 'Aplicar descuentos y redondeo', val: canDiscount, set: setCanDiscount },

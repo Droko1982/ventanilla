@@ -307,6 +307,32 @@ async function main() {
   console.log('✓ Ajustes: nube con auto-registro (crear cuenta / iniciar sesión)')
   if (!/Legal/i.test(txt) || !/Ley 1581/.test(txt)) throw new Error('Sección Legal no renderizó')
   console.log('✓ Ajustes: sección Legal (privacidad + términos)')
+  if (!/Módulos/i.test(txt) || !/Activa solo lo que uses/i.test(txt)) throw new Error('Sección Módulos no renderizó')
+  console.log('✓ Ajustes: sección Módulos (activar/ocultar)')
+
+  // Ocultar "Domicilios" y verificar que desaparece del menú Más
+  ctx = 'modulos-ocultar'
+  await page.evaluate(() => {
+    const labels = [...document.querySelectorAll('label')]
+    const dom = labels.find((l) => /Domicilios/.test(l.textContent || ''))
+    const cb = dom && dom.querySelector('input[type=checkbox]')
+    if (cb && cb.checked) cb.click()
+  })
+  await sleep(500)
+  await page.evaluate(() => { location.hash = '#/mas' })
+  await waitForText(page, 'Más', 4000)
+  if (!(await waitForGone(page, 'Domicilios', 4000))) throw new Error('El módulo oculto sigue en el menú')
+  console.log('✓ Módulos: ocultar quita el ítem del menú Más')
+  // Reactivar para no afectar otros pasos
+  await page.evaluate(() => { location.hash = '#/ajustes' })
+  await sleep(500)
+  await page.evaluate(() => {
+    const labels = [...document.querySelectorAll('label')]
+    const dom = labels.find((l) => /Domicilios/.test(l.textContent || ''))
+    const cb = dom && dom.querySelector('input[type=checkbox]')
+    if (cb && !cb.checked) cb.click()
+  })
+  await sleep(400)
 
   // 4f-septies) Modo oscuro: la clase `dark` cambia el fondo a un tono oscuro
   ctx = 'modo-oscuro'

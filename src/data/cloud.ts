@@ -83,6 +83,9 @@ async function pull() {
     for (const r of res.records || []) {
       const table = (db as any)[r.table]
       if (!table) continue
+      // No pisar un registro que tiene un cambio local aún sin sincronizar
+      // (el cambio local se subirá en el próximo push y prevalece hasta entonces).
+      if (dirty.has(`${r.table}:${r.recordId}`)) continue
       if (r.deleted) await table.delete(r.recordId)
       else await table.put(r.data)
     }

@@ -27,6 +27,7 @@ import { receiptText, printReceipt } from '@/lib/receipt'
 import { openCashDrawer } from '@/lib/cashDrawer'
 import { readWeightOnce, scaleMessage } from '@/lib/scale'
 import { publishCartView } from '@/lib/customerScreen'
+import { moduleEnabled } from '@/lib/modules'
 import { hasBreB, breBPayload } from '@/lib/breB'
 import { QRCode } from '@/components/QRCode'
 import { waLink, mailtoLink } from '@/lib/whatsapp'
@@ -262,21 +263,25 @@ export default function POS() {
           </button>
         )}
 
-        <button
-          onClick={() => setServiceOpen(true)}
-          className="flex flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-brand-300 bg-brand-50/40 p-3 text-brand-600 active:scale-[0.98]"
-        >
-          <span className="text-2xl">📱</span>
-          <span className="text-xs font-semibold">Recarga / Servicio</span>
-        </button>
+        {moduleEnabled(tenant, 'servicios') && (
+          <button
+            onClick={() => setServiceOpen(true)}
+            className="flex flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-brand-300 bg-brand-50/40 p-3 text-brand-600 active:scale-[0.98]"
+          >
+            <span className="text-2xl">📱</span>
+            <span className="text-xs font-semibold">Recarga / Servicio</span>
+          </button>
+        )}
 
-        <button
-          onClick={() => setManualOpen(true)}
-          className="flex flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/40 p-3 text-amber-700 active:scale-[0.98]"
-        >
-          <span className="text-2xl">✍️</span>
-          <span className="text-xs font-semibold">Venta manual</span>
-        </button>
+        {moduleEnabled(tenant, 'ventaManual') && (
+          <button
+            onClick={() => setManualOpen(true)}
+            className="flex flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/40 p-3 text-amber-700 active:scale-[0.98]"
+          >
+            <span className="text-2xl">✍️</span>
+            <span className="text-xs font-semibold">Venta manual</span>
+          </button>
+        )}
 
         {mode !== 'list' && visibleProducts.map((p) => {
           const qty = stockMap.get(p.id) ?? 0
