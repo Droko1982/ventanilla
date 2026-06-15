@@ -207,6 +207,15 @@ export default function Ajustes() {
         </div>
       </Section>
 
+      {/* Legal */}
+      <Section title="Legal">
+        <div className="grid grid-cols-2 gap-2">
+          <a href={`${import.meta.env.BASE_URL}privacidad.html`} target="_blank" rel="noreferrer" className="btn btn-secondary text-sm">Privacidad</a>
+          <a href={`${import.meta.env.BASE_URL}terminos.html`} target="_blank" rel="noreferrer" className="btn btn-secondary text-sm">Términos</a>
+        </div>
+        <p className="text-xs text-slate-400">Tratamiento de datos conforme a la Ley 1581 de 2012 (Colombia).</p>
+      </Section>
+
       {/* Sheets */}
       {(locEdit || locAdd) && (
         <LocationForm location={locEdit ?? undefined} tenantId={tenantId} city={tenant.city} onClose={() => { setLocEdit(null); setLocAdd(false) }} />
@@ -425,6 +434,8 @@ function CloudSection() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [bizName, setBizName] = useState('')
   const [ownerName, setOwnerName] = useState('')
+  const [accepted, setAccepted] = useState(false)
+  const legalBase = import.meta.env.BASE_URL
 
   if (connected) {
     return (
@@ -494,7 +505,13 @@ function CloudSection() {
       )}
       <input className="input" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Correo del negocio" />
       <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Contraseña" />
-      <button className="btn btn-primary w-full" disabled={busy || !url || !email || !password} onClick={connect}>
+      {mode === 'register' && (
+        <label className="flex items-start gap-2 px-1 text-xs text-slate-500">
+          <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} className="mt-0.5 h-4 w-4" />
+          <span>Acepto los <a href={`${legalBase}terminos.html`} target="_blank" rel="noreferrer" className="text-brand-600 underline">Términos</a> y la <a href={`${legalBase}privacidad.html`} target="_blank" rel="noreferrer" className="text-brand-600 underline">Política de Privacidad</a>.</span>
+        </label>
+      )}
+      <button className="btn btn-primary w-full" disabled={busy || !url || !email || !password || (mode === 'register' && !accepted)} onClick={connect}>
         {busy ? 'Conectando…' : mode === 'register' ? 'Crear cuenta y conectar' : 'Conectar a la nube'}
       </button>
     </div>

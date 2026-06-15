@@ -62,10 +62,10 @@ El `assetlinks.json` se ve así (PWABuilder ya lo genera con TU huella):
 3. Completa la ficha: **descripción** (puedes reusar la del landing), **ícono**
    512×512 (usa `public/icons/icon-512.png`), **gráfico de funciones** 1024×500,
    **capturas** de pantalla (teléfono), **categoría** Negocios/Compras.
-4. **Política de privacidad** (obligatoria): publica una página simple (puede ser
-   en GitHub Pages) explicando que los datos se guardan en el dispositivo del
-   negocio y, si conecta la nube, en su servidor. (Ver plantilla en
-   `server/DESPLIEGUE-GRATIS.md` para dónde alojarla.)
+4. **Política de privacidad** (obligatoria en Play): ya está publicada en
+   `https://droko1982.github.io/ventanilla/privacidad.html` (y los Términos en
+   `.../terminos.html`). Usa esa URL en el campo "Política de privacidad" de la
+   ficha de Play. Recuerda completar tu razón social/NIT en esos documentos.
 5. Cuestionario de contenido + público objetivo → enviar a **revisión**.
 6. Google revisa (de horas a pocos días). Al aprobar, queda **descargable**.
 

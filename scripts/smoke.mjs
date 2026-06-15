@@ -305,6 +305,8 @@ async function main() {
   console.log('✓ Ajustes: pagar mensualidad (cobro de renta)')
   if (!/Crear cuenta/i.test(txt) || !/Iniciar sesión/i.test(txt)) throw new Error('Auto-registro a la nube no renderizó')
   console.log('✓ Ajustes: nube con auto-registro (crear cuenta / iniciar sesión)')
+  if (!/Legal/i.test(txt) || !/Ley 1581/.test(txt)) throw new Error('Sección Legal no renderizó')
+  console.log('✓ Ajustes: sección Legal (privacidad + términos)')
 
   // 4f-septies) Modo oscuro: la clase `dark` cambia el fondo a un tono oscuro
   ctx = 'modo-oscuro'
@@ -642,6 +644,18 @@ async function main() {
   txt = await bodyText(page)
   if (!/Probar el demo/.test(txt) || !/Ventanilla/.test(txt)) throw new Error('Landing no renderizó')
   console.log('✓ Landing de Ventanilla renderiza')
+
+  // 7b) Documentos legales (privacidad y términos) — requeridos por ley/Play
+  ctx = 'legal'
+  await page.goto(BASE + 'privacidad.html', { waitUntil: 'networkidle2' })
+  await sleep(400)
+  txt = await bodyText(page)
+  if (!/Tratamiento de Datos/i.test(txt) || !/Ley 1581/.test(txt)) throw new Error('Política de privacidad no renderizó')
+  await page.goto(BASE + 'terminos.html', { waitUntil: 'networkidle2' })
+  await sleep(400)
+  txt = await bodyText(page)
+  if (!/Términos y Condiciones/i.test(txt) || !/Colombia/.test(txt)) throw new Error('Términos no renderizó')
+  console.log('✓ Legal: política de privacidad + términos')
 
   // 8) Nube — E2E (opcional, sólo con CLOUD_TEST=1 y el API local corriendo).
   // Va al final porque la sincronización sobrescribe los datos locales del demo.
