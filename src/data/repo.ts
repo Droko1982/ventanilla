@@ -2,6 +2,7 @@ import { db } from './db'
 import { api, isCloudConfigured } from './api'
 import { uid } from '@/lib/id'
 import { startOfToday } from '@/lib/format'
+import { cop } from '@/lib/money'
 import type {
   Sale,
   SaleItem,
@@ -206,6 +207,7 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
       if (fiado && input.customerId) {
         const c = await db.customers.get(input.customerId)
         if (c) {
+          if (c.creditBalance <= 0) c.creditSince = now // empieza a deber: cuenta la antigüedad
           c.creditBalance += fiado.amount
           c.totalSpent += total
           c.points = Math.max(0, (c.points ?? 0) - redeemPoints + earned)
@@ -1221,10 +1223,49 @@ export async function abonarRemision(remisionId: string, amount: number): Promis
 }
 
 // ---- Fiado: registrar abono de un cliente ---------------------------------
+// Mensaje de recordatorio de fiado.
+export function fiadoReminderMsg(name: string, amount: number, businessName: string): string {
+  return `Hola ${name}, te saluda *${businessName}*. Te recordamos amablemente tu saldo pendiente de ${cop(amount)}. ¡Gracias! 🙏`
+}
+
+// Envía recordatorios de fiado por WhatsApp (vía nube) a clientes con deuda con
+// antigüedad ≥ N días y sin recordatorio reciente. Devuelve cuántos se enviaron.
+export async function runFiadoReminders(tenantId: string): Promise<number> {
+  const tenant = await db.tenants.get(tenantId)
+  const days = tenant?.fiadoReminderDays ?? 7
+  const cutoff = Date.now() - days * 86400000
+  const customers = (await db.customers.toArray()).filter((c) => c.tenantId === tenantId && c.creditBalance > 0 && c.phone)
+  let sent = 0
+  for (const c of customers) {
+    const since = c.creditSince ? new Date(c.creditSince).getTime() : 0
+    const lastRem = c.lastReminder ? new Date(c.lastReminder).getTime() : 0
+    if (since && since > cutoff) continue // aún no cumple los N días debiendo
+    if (lastRem && lastRem > cutoff) continue // ya se le recordó hace poco
+    const ok = await sendSupplierWhatsApp(c.phone!, fiadoReminderMsg(c.name, c.creditBalance, tenant?.businessName ?? 'tu tienda'))
+    if (ok) { c.lastReminder = new Date().toISOString(); await db.customers.put(c); sent++ }
+  }
+  return sent
+}
+
+// Corre los recordatorios automáticos a lo sumo 1 vez al día (si está activado y
+// hay nube + WhatsApp). Se llama al abrir la app.
+export async function maybeFiadoReminders(tenantId: string): Promise<void> {
+  const tenant = await db.tenants.get(tenantId)
+  if (!tenant?.autoFiadoReminder || !isCloudConfigured()) return
+  const key = `ventanilla-fiado-rem-${tenantId}`
+  try {
+    const last = Number(localStorage.getItem(key) || 0)
+    if (Date.now() - last < 24 * 3600000) return
+    localStorage.setItem(key, String(Date.now()))
+  } catch { /* sin almacenamiento */ }
+  try { await runFiadoReminders(tenantId) } catch { /* nunca rompe */ }
+}
+
 export async function payCredit(customerId: string, amount: number): Promise<Customer | null> {
   const c = await db.customers.get(customerId)
   if (!c) return null
   c.creditBalance = Math.max(0, c.creditBalance - amount)
+  if (c.creditBalance === 0) { c.creditSince = undefined; c.lastReminder = undefined } // saldó: reinicia antigüedad
   await db.customers.put(c)
   return c
 }

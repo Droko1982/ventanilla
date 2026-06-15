@@ -353,6 +353,7 @@ const customers: Customer[] = [
     phone: '573201112233',
     idNumber: '41.234.567',
     creditBalance: 23500,
+    creditSince: iso(new Date(Date.now() - 22 * 86400000)),
     totalSpent: 540000,
     points: 540,
     createdAt: tenant.createdAt,
@@ -364,6 +365,7 @@ const customers: Customer[] = [
     phone: '573204445566',
     idNumber: '7.890.123',
     creditBalance: 12000,
+    creditSince: iso(new Date(Date.now() - 6 * 86400000)),
     totalSpent: 310000,
     points: 310,
     createdAt: tenant.createdAt,
@@ -637,7 +639,7 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Al subir una versión nueva del modelo de demo, se recarga automáticamente
 // para que cualquier visitante vea los datos/precios más recientes.
-const SEED_VERSION = '14-licencia'
+const SEED_VERSION = '15-fiado-antiguedad'
 const SEED_KEY = 'ventanilla-seed-version'
 
 export async function seedIfEmpty(): Promise<void> {

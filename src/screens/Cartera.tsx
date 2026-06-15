@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { useScopeLocationIds, useCustomers } from '@/hooks/data'
-import { abonarRemision, payCredit } from '@/data/repo'
+import { abonarRemision, payCredit, runFiadoReminders } from '@/data/repo'
+import { isCloudConfigured } from '@/data/api'
 import { Sheet } from '@/components/Sheet'
 import { Segmented, EmptyState, PageHeader, StatCard, Money } from '@/components/ui'
 import { toast } from '@/components/Toast'
@@ -10,9 +11,11 @@ import { cop, parseCop } from '@/lib/money'
 import { fmtDate, daysUntil } from '@/lib/format'
 import { waLink } from '@/lib/whatsapp'
 import { Icon } from '@/components/icons'
+import { useSession } from '@/store/session'
 import type { Remision } from '@/types'
 
 export default function Cartera() {
+  const tenantId = useSession((s) => s.tenantId)!
   const scopeIds = useScopeLocationIds()
   const customers = useCustomers()
   const [tab, setTab] = useState<'todas' | 'atrasadas'>('todas')
@@ -88,28 +91,55 @@ export default function Cartera() {
       </div>
 
       {/* Fiado de clientes */}
-      <p className="mb-2 mt-5 text-sm font-semibold text-slate-600">Fiado por cliente</p>
+      <div className="mb-2 mt-5 flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-600">Fiado por cliente</p>
+        {fiadoClientes.length > 0 && (
+          <button
+            onClick={async () => {
+              if (!isCloudConfigured()) return toast('info', 'Conecta la nube + WhatsApp en Ajustes para enviar a todos. O usa "recordar" de cada cliente.')
+              const n = await runFiadoReminders(tenantId)
+              toast(n > 0 ? 'success' : 'info', n > 0 ? `Recordatorio enviado a ${n} cliente(s)` : 'Nadie por recordar ahora')
+            }}
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white"
+          >
+            📲 Recordar a todos
+          </button>
+        )}
+      </div>
       <div className="space-y-2">
-        {fiadoClientes.map((c) => (
+        {fiadoClientes.map((c) => {
+          const dias = c.creditSince ? Math.floor((Date.now() - new Date(c.creditSince).getTime()) / 86400000) : null
+          return (
           <div key={c.id} className="card flex items-center gap-3 p-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-rose-100 font-bold text-rose-700">{c.name.slice(0, 1)}</span>
             <div className="min-w-0 flex-1">
               <p className="truncate font-semibold text-slate-700">{c.name}</p>
-              {c.phone && (
-                <a href={waLink(c.phone, `Hola ${c.name}, recuerda tu saldo de ${cop(c.creditBalance)}. ¡Gracias!`)} target="_blank" rel="noreferrer" className="text-xs text-emerald-600">
-                  <Icon name="whatsapp" className="mr-0.5 inline h-3 w-3" /> recordar
-                </a>
-              )}
+              <div className="flex items-center gap-2">
+                {dias !== null && <span className={`text-xs ${dias >= 15 ? 'text-rose-500 font-semibold' : 'text-slate-400'}`}>debe hace {dias} día(s)</span>}
+                {c.phone && (
+                  <a href={waLink(c.phone, `Hola ${c.name}, recuerda tu saldo de ${cop(c.creditBalance)}. ¡Gracias!`)} target="_blank" rel="noreferrer" className="text-xs text-emerald-600">
+                    <Icon name="whatsapp" className="mr-0.5 inline h-3 w-3" /> recordar
+                  </a>
+                )}
+              </div>
             </div>
             <span className="font-bold text-rose-600">{cop(c.creditBalance)}</span>
             <button
-              onClick={async () => { const a = prompt(`Abono de ${c.name}:`); if (a) { await payCredit(c.id, parseCop(a)); toast('success', 'Abono registrado') } }}
+              onClick={async () => {
+                const a = prompt(`Abono de ${c.name} (saldo ${cop(c.creditBalance)}):`)
+                if (a === null) return
+                const amt = parseCop(a)
+                if (amt <= 0) return toast('error', 'Monto inválido')
+                if (amt > c.creditBalance) return toast('error', 'El abono supera el saldo')
+                await payCredit(c.id, amt); toast('success', 'Abono registrado')
+              }}
               className="btn btn-success px-3 py-2 text-xs"
             >
               Abonar
             </button>
           </div>
-        ))}
+          )
+        })}
         {fiadoClientes.length === 0 && <EmptyState emoji="✅" title="Sin fiado pendiente" />}
       </div>
 

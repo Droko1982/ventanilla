@@ -182,6 +182,11 @@ export default function Ajustes() {
         <LoyaltySection tenant={tenant} tenantId={tenantId} />
       </Section>
 
+      {/* Recordatorios de fiado */}
+      <Section title="Recordatorios de fiado">
+        <FiadoReminderSection tenant={tenant} tenantId={tenantId} />
+      </Section>
+
       {/* Cajón monedero */}
       <Section title="Cajón monedero">
         <CashDrawerSection tenant={tenant} tenantId={tenantId} />
@@ -258,6 +263,39 @@ function ModulesSection({ tenant, tenantId }: { tenant: Tenant; tenantId: string
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+function FiadoReminderSection({ tenant, tenantId }: { tenant: Tenant; tenantId: string }) {
+  const enabled = tenant.autoFiadoReminder ?? false
+  const [days, setDays] = useState(String(tenant.fiadoReminderDays ?? 7))
+  async function toggle(v: boolean) {
+    await db.tenants.update(tenantId, { autoFiadoReminder: v })
+    toast('success', v ? 'Recordatorios automáticos activados' : 'Recordatorios automáticos desactivados')
+  }
+  async function saveDays() {
+    await db.tenants.update(tenantId, { fiadoReminderDays: Math.max(1, parseInt(days || '7', 10)) || 7 })
+    toast('success', 'Guardado')
+  }
+  return (
+    <div className="space-y-3">
+      <label className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
+        <input type="checkbox" checked={enabled} onChange={(e) => toggle(e.target.checked)} className="h-5 w-5" />
+        <span className="text-sm text-slate-600">Enviar recordatorio de fiado por WhatsApp automáticamente</span>
+      </label>
+      {enabled && (
+        <>
+          <div className="flex items-center gap-2">
+            <label className="label mb-0 flex-1">Recordar si la deuda lleva ≥</label>
+            <input className="input w-20 text-center" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} onBlur={saveDays} />
+            <span className="text-sm text-slate-500">días</span>
+          </div>
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Requiere la nube conectada con WhatsApp. Sin nube, usa "Recordar a todos" o el botón de cada cliente en Cartera.
+          </p>
+        </>
+      )}
     </div>
   )
 }

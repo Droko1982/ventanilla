@@ -308,6 +308,8 @@ async function main() {
   if (!/Bre-B/i.test(txt) || !/llave/i.test(txt)) throw new Error('Sección Bre-B no renderizó')
   if (!/Programa de puntos/i.test(txt) || !/fidelizaci/i.test(txt)) throw new Error('Sección de puntos no renderizó')
   console.log('✓ Ajustes: pagos Bre-B + programa de puntos')
+  if (!/Recordatorios de fiado/i.test(txt)) throw new Error('Sección recordatorios de fiado no renderizó')
+  console.log('✓ Ajustes: recordatorios de fiado automáticos')
   if (!/Pagar mensualidad/i.test(txt)) throw new Error('Botón de pago de mensualidad no renderizó')
   console.log('✓ Ajustes: pagar mensualidad (cobro de renta)')
   if (!/Crear cuenta/i.test(txt) || !/Iniciar sesión/i.test(txt)) throw new Error('Auto-registro a la nube no renderizó')
@@ -504,6 +506,8 @@ async function main() {
   txt = await waitForText(page, 'REM-121', 9000)
   if (!/Cartera/.test(txt) || !/REM-121/.test(txt)) throw new Error('Cartera no renderizó')
   console.log('✓ Cartera (remisiones a crédito + fiado)')
+  if (!/Recordar a todos/.test(txt) || !/debe hace/.test(txt)) throw new Error('Recordatorios/antigüedad de fiado no renderizó')
+  console.log('✓ Cartera: antigüedad de deuda + recordar a todos')
 
   // 4h-sexies) Ajustes de inventario
   ctx = 'ajustes-inventario'

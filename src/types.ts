@@ -55,6 +55,9 @@ export interface Tenant {
   maxDevices?: number // dispositivos que pueden conectarse/descargar la app
   // Módulos visibles: el dueño oculta lo que no usa (todo activo por defecto).
   modules?: Record<string, boolean>
+  // Recordatorios de fiado automáticos por WhatsApp
+  autoFiadoReminder?: boolean
+  fiadoReminderDays?: number // recordar si la deuda lleva ≥ N días sin recordatorio
 }
 
 // Dispositivo que instaló/usa la app de un cliente (para el control de licencia).
@@ -296,6 +299,8 @@ export interface Customer {
   creditBalance: number // saldo de fiado pendiente
   totalSpent: number
   points: number // puntos de fidelización acumulados
+  creditSince?: string // desde cuándo debe (para la antigüedad de la deuda)
+  lastReminder?: string // último recordatorio de pago enviado
   createdAt: string
 }
 
