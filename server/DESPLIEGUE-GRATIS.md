@@ -51,6 +51,17 @@ En Render → *Environment* agrega las llaves y se activan solas (sin ellas, mod
 - **WhatsApp Cloud API** (envío automático): `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` (Meta/Facebook, tramo gratis mensual).
 - **DIAN**: la conecta cada negocio con su proveedor autorizado (Alegra/Factus) desde Ajustes.
 
+## Build de producción con la nube pre-cargada (opcional)
+Para que la app de tus clientes **ya sepa la URL del API** (y solo tengan que
+*Crear cuenta* o *Iniciar sesión* en Ajustes → Nube), compila el frontend con la
+variable `VITE_API_URL`:
+```powershell
+$env:VITE_API_URL="https://ventanilla-api-vvzh.onrender.com"; npm run build
+```
+La app del demo público (sin esa variable) sigue siendo 100% local. En Ajustes →
+Nube ahora hay pestaña **Crear cuenta**: un negocio nuevo se registra solo y
+queda conectado y sincronizando en todos sus dispositivos.
+
 ## Alternativas 100% gratis (por si Render no te gusta)
 - API: **Koyeb** o **Fly.io** (también plan gratis) — usan el `Dockerfile` de `server/`.
 - DB: **Supabase** (Postgres gratis) en vez de Neon.

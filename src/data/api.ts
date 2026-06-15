@@ -59,3 +59,14 @@ export async function cloudLogin(url: string, email: string, password: string) {
   setToken(d.token)
   return d
 }
+
+// Crea una cuenta nueva (negocio) en la nube y conecta este dispositivo.
+export async function cloudRegister(
+  url: string,
+  data: { businessName: string; ownerName: string; email: string; password: string; phone?: string; city?: string },
+) {
+  setApiUrl(url)
+  const d = await api<{ token: string }>('/auth/register', { method: 'POST', body: data, auth: false })
+  setToken(d.token)
+  return d
+}

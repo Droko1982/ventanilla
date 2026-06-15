@@ -3,7 +3,7 @@ import { useTenant, useLocations } from '@/hooks/data'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { exportAllData, importAllData, requestMonthlyCheckout } from '@/data/repo'
-import { cloudLogin, isCloudConfigured, getApiUrl, clearCloud } from '@/data/api'
+import { cloudLogin, cloudRegister, isCloudConfigured, getApiUrl, clearCloud } from '@/data/api'
 import { startCloud, stopCloud, syncNow } from '@/data/cloud'
 import { Sheet } from '@/components/Sheet'
 import { PageHeader } from '@/components/ui'
@@ -422,6 +422,9 @@ function CloudSection() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [bizName, setBizName] = useState('')
+  const [ownerName, setOwnerName] = useState('')
 
   if (connected) {
     return (
@@ -452,33 +455,47 @@ function CloudSection() {
       </div>
     )
   }
+  async function connect() {
+    setBusy(true)
+    try {
+      if (mode === 'register') {
+        if (!bizName.trim() || !ownerName.trim()) { toast('error', 'Completa el nombre del negocio y el dueño'); return }
+        await cloudRegister(url.trim(), { businessName: bizName.trim(), ownerName: ownerName.trim(), email: email.trim(), password })
+        toast('success', 'Cuenta creada y conectada')
+      } else {
+        await cloudLogin(url.trim(), email.trim(), password)
+        toast('success', 'Conectado y sincronizando')
+      }
+      await startCloud()
+      setConnected(true)
+    } catch (e: any) {
+      toast('error', e?.message || 'No se pudo conectar')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-2">
       <p className="text-xs text-slate-400">
-        Conecta este dispositivo a tu backend para sincronizar en la nube y usar varios dispositivos.
+        Conecta este dispositivo a la nube para sincronizar y usar varios dispositivos.
         Sin esto, todo funciona local en el equipo.
       </p>
+      <div className="flex rounded-xl bg-slate-100 p-0.5 text-sm font-semibold">
+        <button onClick={() => setMode('login')} className={`flex-1 rounded-lg py-1.5 ${mode === 'login' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500'}`}>Iniciar sesión</button>
+        <button onClick={() => setMode('register')} className={`flex-1 rounded-lg py-1.5 ${mode === 'register' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500'}`}>Crear cuenta</button>
+      </div>
       <input className="input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="URL del API (https://…)" />
+      {mode === 'register' && (
+        <>
+          <input className="input" value={bizName} onChange={(e) => setBizName(e.target.value)} placeholder="Nombre del negocio" />
+          <input className="input" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="Tu nombre (dueño)" />
+        </>
+      )}
       <input className="input" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Correo del negocio" />
       <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Contraseña" />
-      <button
-        className="btn btn-primary w-full"
-        disabled={busy || !url || !email}
-        onClick={async () => {
-          setBusy(true)
-          try {
-            await cloudLogin(url.trim(), email.trim(), password)
-            await startCloud()
-            setConnected(true)
-            toast('success', 'Conectado y sincronizando')
-          } catch (e: any) {
-            toast('error', e?.message || 'No se pudo conectar')
-          } finally {
-            setBusy(false)
-          }
-        }}
-      >
-        {busy ? 'Conectando…' : 'Conectar a la nube'}
+      <button className="btn btn-primary w-full" disabled={busy || !url || !email || !password} onClick={connect}>
+        {busy ? 'Conectando…' : mode === 'register' ? 'Crear cuenta y conectar' : 'Conectar a la nube'}
       </button>
     </div>
   )

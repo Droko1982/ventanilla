@@ -303,6 +303,8 @@ async function main() {
   console.log('✓ Ajustes: pagos Bre-B + programa de puntos')
   if (!/Pagar mensualidad/i.test(txt)) throw new Error('Botón de pago de mensualidad no renderizó')
   console.log('✓ Ajustes: pagar mensualidad (cobro de renta)')
+  if (!/Crear cuenta/i.test(txt) || !/Iniciar sesión/i.test(txt)) throw new Error('Auto-registro a la nube no renderizó')
+  console.log('✓ Ajustes: nube con auto-registro (crear cuenta / iniciar sesión)')
 
   // 4f-septies) Modo oscuro: la clase `dark` cambia el fondo a un tono oscuro
   ctx = 'modo-oscuro'
