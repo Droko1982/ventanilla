@@ -288,9 +288,22 @@ function PurchaseOrderCard({ po, supplierName, userId, userName }: { po: any; su
         </span>
       </div>
       {po.status !== 'recibido' && (
-        <button onClick={() => setOpen(true)} className="btn btn-primary mt-3 w-full py-2 text-sm">
-          Recibir mercancía
-        </button>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            onClick={async () => {
+              const map: Record<string, number> = {}
+              for (const it of po.items) map[it.productId] = it.suggestedQty
+              await receivePurchase(po.id, map, userId, userName)
+              toast('success', 'Recibido todo · stock actualizado')
+            }}
+            className="btn btn-primary py-2 text-sm"
+          >
+            ✅ Recibir todo
+          </button>
+          <button onClick={() => setOpen(true)} className="btn btn-secondary py-2 text-sm">
+            Recibir parcial…
+          </button>
+        </div>
       )}
 
       <Sheet

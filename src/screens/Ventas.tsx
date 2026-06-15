@@ -20,6 +20,7 @@ export default function Ventas() {
   const tenant = useTenant()
   const [filter, setFilter] = useState<'todas' | 'pendiente'>('todas')
   const [detail, setDetail] = useState<Sale | null>(null)
+  const [busyDian, setBusyDian] = useState(false)
 
   const locName = useMemo(() => new Map((locations ?? []).map((l) => [l.id, l.name])), [locations])
 
@@ -52,6 +53,22 @@ export default function Ventas() {
           ]}
         />
       </div>
+
+      {pending.length > 0 && (
+        <button
+          onClick={async () => {
+            setBusyDian(true)
+            let n = 0
+            for (const s of pending) { try { await transmitDian(s.id); n++ } catch { /* sigue con las demás */ } }
+            setBusyDian(false)
+            toast('success', `${n} documento(s) transmitidos a la DIAN`)
+          }}
+          disabled={busyDian}
+          className="btn btn-primary mb-4 w-full text-sm disabled:opacity-60"
+        >
+          {busyDian ? 'Transmitiendo…' : `🧾 Transmitir todos los pendientes (${pending.length})`}
+        </button>
+      )}
 
       <div className="space-y-2">
         {list.slice(0, 100).map((s) => (

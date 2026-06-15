@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { useActiveLocationId, useLocations, useCurrentUser, useTenant } from '@/hooks/data'
-import { openCashSession, closeCashSession, addCashMovement, audit } from '@/data/repo'
+import { openCashSession, closeCashSession, addCashMovement, audit, generateZReport } from '@/data/repo'
 import { openCashDrawer, drawerMessage } from '@/lib/cashDrawer'
 import { summarize, todayRange } from '@/lib/analytics'
 import { Sheet } from '@/components/Sheet'
@@ -57,6 +57,7 @@ export default function Caja() {
   const [movSheet, setMovSheet] = useState<null | 'ingreso' | 'egreso'>(null)
   const [base, setBase] = useState('')
   const [counted, setCounted] = useState('')
+  const [autoZ, setAutoZ] = useState(true)
 
   const session = useLiveQuery(
     () =>
@@ -285,6 +286,10 @@ export default function Caja() {
               const cs = await closeCashSession({ sessionId: session.id, countedCash: countedNum, userId: user!.id, userName: user!.name })
               if (cs)
                 toast(cs.difference === 0 ? 'success' : 'info', cs.difference === 0 ? 'Caja cuadrada ✓' : `Diferencia: ${cop(cs.difference!)}`)
+              // Informe Z del día automático al cerrar (si está activado)
+              if (cs && autoZ) {
+                try { await generateZReport(tenantId, locationId, new Date().toISOString().slice(0, 10), false, user!.id, user!.name); toast('success', 'Informe Z generado') } catch { /* no bloquea el cierre */ }
+              }
               // Envía el resumen del cierre al dueño por WhatsApp (gesto del usuario → no se bloquea)
               if (cs && tenant?.phone) sendSummary({ counted: countedNum, diff: cs.difference ?? diff })
               setCounted('')
@@ -296,10 +301,11 @@ export default function Caja() {
         }
       >
         <div className="space-y-4">
-          <p className="text-sm text-slate-500">Cuenta el efectivo físico en la caja y escríbelo. El sistema lo compara con lo registrado.</p>
+          <p className="text-sm text-slate-500">Cuenta los billetes y monedas: el total se calcula solo. O escribe el efectivo contado directamente.</p>
+          <BillCounter onTotal={(n) => setCounted(String(n))} />
           <div>
             <label className="label">Efectivo contado</label>
-            <input autoFocus className="input text-center text-2xl font-bold" inputMode="numeric" value={counted} onChange={(e) => setCounted(e.target.value)} placeholder="$ 0" />
+            <input className="input text-center text-2xl font-bold" inputMode="numeric" value={counted} onChange={(e) => setCounted(e.target.value)} placeholder="$ 0" />
           </div>
           <div className="space-y-1.5 rounded-xl bg-slate-50 p-3 text-sm">
             <Row label="Esperado" value={cop(expectedCash)} />
@@ -309,6 +315,10 @@ export default function Caja() {
               <span>{diff > 0 ? '+' : ''}{cop(diff)}</span>
             </div>
           </div>
+          <label className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
+            <input type="checkbox" checked={autoZ} onChange={(e) => setAutoZ(e.target.checked)} className="h-5 w-5" />
+            <span className="text-sm text-slate-600">Generar Informe Z del día al cerrar</span>
+          </label>
         </div>
       </Sheet>
 
@@ -382,6 +392,35 @@ function MovementForm({
         )}
       </div>
     </Sheet>
+  )
+}
+
+// Arqueo asistido: cuenta billetes/monedas y suma el total automáticamente.
+const DENOMS = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50]
+function BillCounter({ onTotal }: { onTotal: (n: number) => void }) {
+  const [qty, setQty] = useState<Record<number, string>>({})
+  const total = DENOMS.reduce((s, d) => s + d * (parseInt(qty[d] || '0', 10) || 0), 0)
+  function set(d: number, v: string) {
+    const nq = { ...qty, [d]: v.replace(/\D/g, '') }
+    setQty(nq)
+    onTotal(DENOMS.reduce((s, x) => s + x * (parseInt(nq[x] || '0', 10) || 0), 0))
+  }
+  return (
+    <div className="rounded-xl border border-slate-100 p-3">
+      <p className="mb-2 text-xs font-semibold text-slate-500">🧮 Contar billetes y monedas</p>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+        {DENOMS.map((d) => (
+          <div key={d} className="flex items-center gap-2">
+            <span className="w-16 shrink-0 text-right text-xs text-slate-500">{cop(d)}</span>
+            <span className="text-xs text-slate-300">×</span>
+            <input className="w-full rounded-lg border border-slate-200 px-2 py-1 text-right text-sm" inputMode="numeric" value={qty[d] ?? ''} onChange={(e) => set(d, e.target.value)} placeholder="0" />
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex justify-between border-t border-slate-100 pt-2 text-sm font-bold text-slate-700">
+        <span>Total contado</span><span>{cop(total)}</span>
+      </div>
+    </div>
   )
 }
 

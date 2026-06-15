@@ -9,6 +9,7 @@ import { StatCard, Money, Segmented, PageHeader, EmptyState } from '@/components
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
 import { cop } from '@/lib/money'
+import { waLink } from '@/lib/whatsapp'
 import { useSession } from '@/store/session'
 
 export default function Reportes() {
@@ -122,6 +123,20 @@ export default function Reportes() {
     toast('success', 'Reporte exportado (CSV)')
   }
 
+  function sendReport() {
+    const phone = tenant?.phone
+    if (!phone) return toast('error', 'Configura el teléfono del negocio en Ajustes')
+    const L: string[] = []
+    L.push(`*Reporte ${days} días · ${tenant?.businessName ?? ''}*`)
+    L.push('')
+    L.push(`🧾 Ventas: ${summary.count} por ${cop(summary.revenue)}`)
+    L.push(`📈 Utilidad bruta: ${cop(summary.profit)}`)
+    L.push(`💰 Utilidad neta: ${cop(netProfit)} (gastos ${cop(expenses ?? 0)})`)
+    if (top.length) { L.push(''); L.push('Más vendidos:'); top.slice(0, 3).forEach((t, i) => L.push(`${i + 1}. ${t.name} (${t.qty})`)) }
+    if (deadStock.length) L.push(`\n🐌 ${deadStock.length} producto(s) sin venderse (stock muerto)`)
+    window.open(waLink(phone, L.join('\n')), '_blank')
+  }
+
   return (
     <div>
       <PageHeader
@@ -145,6 +160,10 @@ export default function Reportes() {
           ]}
         />
       </div>
+
+      <button onClick={sendReport} className="btn btn-success mb-4 w-full text-sm">
+        <Icon name="whatsapp" className="h-4 w-4" /> Enviar reporte del período al dueño
+      </button>
 
       <div className="mb-4 grid grid-cols-2 gap-2.5">
         <StatCard label="Ventas" value={<Money value={summary.revenue} />} accent="text-brand-700" />

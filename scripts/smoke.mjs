@@ -223,6 +223,15 @@ async function main() {
   if (!/Pago proveedor/.test(txt)) throw new Error('El egreso de caja no se registró')
   console.log('✓ Caja: egreso de efectivo (movimiento) registrado')
 
+  // 4d-ter) Caja: arqueo asistido (contar billetes) + Z automático al cerrar
+  ctx = 'caja-arqueo'
+  await clickText(page, 'Cerrar caja')
+  txt = await waitForText(page, 'Contar billetes', 4000)
+  if (!/Contar billetes/.test(txt) || !/Informe Z del día/.test(txt)) throw new Error('Arqueo asistido / Z automático no renderizó')
+  console.log('✓ Caja: arqueo asistido (billetes) + Z automático al cerrar')
+  await page.keyboard.press('Escape')
+  await sleep(300)
+
   // 4d-bis) Caja: resumen del día al WhatsApp + botón abrir cajón
   if (!/Enviar resumen del día/i.test(txt)) throw new Error('Botón de resumen del día no renderizó')
   if (!/Abrir cajón monedero/i.test(txt)) throw new Error('Botón de abrir cajón no renderizó')
@@ -284,6 +293,8 @@ async function main() {
   txt = await bodyText(page)
   if (!/Ventas por vendedor/.test(txt) || !/reporte contable/i.test(txt)) throw new Error('Comisiones/export contable no renderizó')
   console.log('✓ Reportes: comisiones por vendedor + export contable')
+  if (!/Enviar reporte del período al dueño/.test(txt)) throw new Error('Envío de reporte al dueño no renderizó')
+  console.log('✓ Reportes: enviar reporte al dueño por WhatsApp')
 
   // 4f-ter) Ajustes: respaldo exportar/importar
   ctx = 'respaldo'
@@ -436,6 +447,14 @@ async function main() {
   await sleep(1500)
   console.log('✓ Reabastecimiento automático por WhatsApp (crea pedidos a proveedores)')
 
+  // Recibir pedido en 1 toque ("Recibir todo") — pestaña Pedidos
+  await clickText(page, 'Pedidos')
+  txt = await waitForText(page, 'Recibir todo', 5000)
+  if (!/Recibir todo/.test(txt)) throw new Error('Botón "Recibir todo" no apareció')
+  console.log('✓ Compras: recibir pedido en 1 toque (Recibir todo)')
+  await clickText(page, 'Reabastecer')
+  await sleep(300)
+
   ctx = 'cuentas-por-pagar'
   await clickText(page, 'Por pagar')
   await sleep(900)
@@ -584,6 +603,9 @@ async function main() {
   ctx = 'devolucion-parcial'
   await page.evaluate(() => { location.hash = '#/ventas' })
   await sleep(800)
+  txt = await bodyText(page)
+  if (!/Transmitir todos los pendientes/.test(txt)) throw new Error('Lote DIAN (transmitir todos) no renderizó')
+  console.log('✓ DIAN: transmitir todos los pendientes (lote)')
   await page.evaluate(() => {
     const b = [...document.querySelectorAll('button')].find((x) => / items/.test(x.textContent || ''))
     if (b) b.click()
