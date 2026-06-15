@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import {
   useActiveLocationId,
   useProducts,
@@ -26,6 +26,7 @@ import { db } from '@/data/db'
 import { receiptText, printReceipt } from '@/lib/receipt'
 import { openCashDrawer } from '@/lib/cashDrawer'
 import { readWeightOnce, scaleMessage } from '@/lib/scale'
+import { publishCartView } from '@/lib/customerScreen'
 import { hasBreB, breBPayload } from '@/lib/breB'
 import { QRCode } from '@/components/QRCode'
 import { waLink, mailtoLink } from '@/lib/whatsapp'
@@ -165,6 +166,19 @@ export default function POS() {
   const total = cartTotal(cart.lines, cart.globalDiscount)
   const count = cartCount(cart.lines)
 
+  // Refleja el carrito en la pantalla del cliente (2º monitor) en vivo
+  useEffect(() => {
+    publishCartView({
+      lines: cart.lines.map((l) => ({
+        name: l.name, emoji: l.emoji, qty: l.qty, unit: l.unit,
+        lineTotal: l.unitPrice * l.qty - l.lineDiscount - (l.promoSaving ?? 0),
+      })),
+      total,
+      businessName: tenant?.businessName ?? 'Ventanilla',
+      at: 0,
+    })
+  }, [cart.lines, total, tenant])
+
   if (!locationId) {
     return <EmptyState emoji="🏪" title="Sin local asignado" hint="Selecciona un local para vender." />
   }
@@ -217,8 +231,14 @@ export default function POS() {
         <button onClick={() => setScanOpen(true)} className="btn btn-primary px-4" aria-label="Escanear">
           <Icon name="scan" className="h-6 w-6" />
         </button>
-        <button onClick={() => setDisplayOpen(true)} className="btn btn-secondary px-3" aria-label="Pantalla cliente" title="Mostrar al cliente">
+        <button onClick={() => setDisplayOpen(true)} className="btn btn-secondary px-3" aria-label="Pantalla cliente" title="Mostrar al cliente (misma pantalla)">
           📺
+        </button>
+        <button
+          onClick={() => window.open('#/pantalla', 'ventanilla_cliente', 'width=1000,height=800')}
+          className="btn btn-secondary px-3" aria-label="Segunda pantalla" title="Abrir pantalla del cliente en otro monitor"
+        >
+          🖥️
         </button>
       </div>
 

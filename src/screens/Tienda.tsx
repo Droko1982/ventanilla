@@ -13,6 +13,12 @@ import type { Product } from '@/types'
 export default function Tienda() {
   const tenants = useLiveQuery(() => db.tenants.toArray(), [])
   const products = useLiveQuery(() => db.products.filter((p) => p.active).toArray(), [])
+  const stockRows = useLiveQuery(() => db.stock.toArray(), [])
+  const stockByProduct = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const s of stockRows ?? []) m.set(s.productId, (m.get(s.productId) ?? 0) + s.quantity)
+    return m
+  }, [stockRows])
   const tenant = useMemo(() => {
     const tid = products?.[0]?.tenantId
     return (tenants ?? []).find((t) => t.id === tid) ?? (tenants ?? [])[0]
@@ -91,7 +97,7 @@ export default function Tienda() {
       {/* Productos */}
       <div className="space-y-2 p-3">
         {list.map((p) => (
-          <CatalogRow key={p.id} product={p} qty={qty[p.id] ?? 0} onChange={(v) => setQ(p.id, v)} />
+          <CatalogRow key={p.id} product={p} qty={qty[p.id] ?? 0} stock={stockByProduct.get(p.id) ?? 0} onChange={(v) => setQ(p.id, v)} />
         ))}
         {list.length === 0 && (
           <p className="py-10 text-center text-sm text-slate-400">No hay productos para mostrar.</p>
@@ -120,16 +126,23 @@ export default function Tienda() {
   )
 }
 
-function CatalogRow({ product, qty, onChange }: { product: Product; qty: number; onChange: (v: number) => void }) {
+function CatalogRow({ product, qty, stock, onChange }: { product: Product; qty: number; stock: number; onChange: (v: number) => void }) {
+  const out = stock <= 0
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-white p-2.5 shadow-sm">
+    <div className={`flex items-center gap-3 rounded-2xl bg-white p-2.5 shadow-sm ${out ? 'opacity-70' : ''}`}>
       <ProductThumb photo={product.photo} emoji={product.imageEmoji} size={48} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-slate-700">{product.name}</p>
-        {product.brand && <p className="truncate text-xs text-slate-400">{product.brand}</p>}
         <p className="font-bold text-brand-700">{cop(product.price)}{product.unit === 'peso' && <span className="text-xs font-normal text-slate-400">/kg</span>}</p>
+        {out
+          ? <span className="text-xs font-semibold text-rose-500">Agotado</span>
+          : stock <= 5
+            ? <span className="text-xs font-medium text-amber-600">Últimas {product.unit === 'peso' ? `${stock} kg` : `${stock} und`}</span>
+            : <span className="text-xs text-slate-400">Disponible</span>}
       </div>
-      {qty <= 0 ? (
+      {out ? (
+        <span className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-400">Agotado</span>
+      ) : qty <= 0 ? (
         <button onClick={() => onChange(1)} className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white active:scale-95">Agregar</button>
       ) : (
         <div className="flex items-center gap-2">

@@ -174,8 +174,8 @@ function BottomNav() {
   const unread = (notifs ?? []).filter((n) => !n.read).length
 
   const adminItems = [
-    { to: '/', icon: 'home', label: 'Inicio', end: true },
-    { to: '/pos', icon: 'cart', label: 'Vender' },
+    { to: '/', icon: 'cart', label: 'Vender', end: true },
+    { to: '/resumen', icon: 'home', label: 'Resumen' },
     { to: '/inventario', icon: 'box', label: 'Inventario' },
     { to: '/caja', icon: 'cash', label: 'Caja' },
     { to: '/mas', icon: 'grid', label: 'Más' },

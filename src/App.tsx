@@ -26,6 +26,7 @@ const AjustesInventario = lazy(() => import('@/screens/AjustesInventario'))
 const EventosRecepcion = lazy(() => import('@/screens/EventosRecepcion'))
 const Domicilios = lazy(() => import('@/screens/Domicilios'))
 const Tienda = lazy(() => import('@/screens/Tienda'))
+const PantallaCliente = lazy(() => import('@/screens/PantallaCliente'))
 const Reportes = lazy(() => import('@/screens/Reportes'))
 const Notificaciones = lazy(() => import('@/screens/Notificaciones'))
 const Ajustes = lazy(() => import('@/screens/Ajustes'))
@@ -48,6 +49,15 @@ export default function App() {
     )
   }
 
+  // Pantalla del cliente (2º monitor): muestra en vivo lo que se va vendiendo.
+  if (pathname === '/pantalla') {
+    return (
+      <Suspense fallback={<Spinner label="Cargando…" />}>
+        <PantallaCliente />
+      </Suspense>
+    )
+  }
+
   return (
     <>
       <ToastContainer />
@@ -59,8 +69,10 @@ export default function App() {
         ) : (
           <AppLayout>
             <Routes>
-              <Route path="/" element={role === 'empleado' ? <POS /> : <Dashboard />} />
+              {/* La pantalla inicial es el POS (facturación + lista), estilo supermercado */}
+              <Route path="/" element={<POS />} />
               <Route path="/pos" element={<POS />} />
+              <Route path="/resumen" element={<Dashboard />} />
               <Route path="/inventario" element={<Inventory />} />
               <Route path="/caja" element={<Caja />} />
               <Route path="/mas" element={<Mas />} />

@@ -93,9 +93,9 @@ async function main() {
   // 2) Entrar como Dueño
   ctx = 'login-admin'
   await clickText(page, 'Dueño de la tienda')
-  txt = await waitForText(page, 'Hola,', 9000)
-  if (!/Hola,/.test(txt)) throw new Error('Dashboard de admin no renderizó')
-  console.log('✓ Dashboard (Dueño) renderiza')
+  txt = await waitForText(page, 'Producto nuevo', 9000)
+  if (!/Producto nuevo/.test(txt)) throw new Error('Inicio (POS) del Dueño no renderizó')
+  console.log('✓ Inicio = POS (facturación + lista) para el Dueño')
 
   // 3) Recorrer todas las rutas del admin
   const routes = [
@@ -111,7 +111,7 @@ async function main() {
     ['#/auditoria', 'Auditoría'],
     ['#/ajustes', 'Ajustes'],
     ['#/mas', 'Más'],
-    ['#/', 'Hola,'],
+    ['#/resumen', 'Hola,'],
   ]
   for (const [hash, expect] of routes) {
     ctx = `ruta ${hash}`
@@ -257,7 +257,7 @@ async function main() {
 
   // 4f) Dashboard: cambiar granularidad día/semana/mes/año
   ctx = 'dashboard-periodos'
-  await page.evaluate(() => { location.hash = '#/' })
+  await page.evaluate(() => { location.hash = '#/resumen' })
   await sleep(800)
   await clickText(page, 'Año')
   await sleep(500)
@@ -556,6 +556,14 @@ async function main() {
   txt = await waitForText(page, 'Enviar pedido por WhatsApp', 4000)
   if (!/Enviar pedido por WhatsApp/.test(txt)) throw new Error('La barra de pedido no apareció')
   console.log('✓ Tienda online (catálogo público + pedido por WhatsApp)')
+
+  // 4j2) Pantalla del cliente (2º monitor)
+  ctx = 'pantalla-cliente'
+  await page.evaluate(() => { location.hash = '#/pantalla' })
+  txt = await waitForText(page, 'Gracias por su compra', 5000)
+  if (!/Gracias por su compra/.test(txt)) throw new Error('Pantalla del cliente no renderizó')
+  console.log('✓ Pantalla del cliente (2º monitor)')
+
   await page.evaluate(() => { location.hash = '#/' })
   await sleep(600)
 
