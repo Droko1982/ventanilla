@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTenant, useLocations } from '@/hooks/data'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
-import { exportAllData, importAllData } from '@/data/repo'
+import { exportAllData, importAllData, requestMonthlyCheckout } from '@/data/repo'
 import { cloudLogin, isCloudConfigured, getApiUrl, clearCloud } from '@/data/api'
 import { startCloud, stopCloud, syncNow } from '@/data/cloud'
 import { Sheet } from '@/components/Sheet'
@@ -154,6 +154,16 @@ export default function Ajustes() {
             <p className="text-[11px] text-slate-400">Dispositivos permitidos</p>
           </div>
         </div>
+        <button
+          onClick={async () => {
+            const r = await requestMonthlyCheckout()
+            if (r?.url) window.open(r.url, '_blank')
+            else toast('info', 'Conecta la nube en Ajustes para pagar en línea con tarjeta/PSE/Nequi.')
+          }}
+          className="btn btn-primary mt-2 w-full"
+        >
+          💳 Pagar mensualidad
+        </button>
       </Section>
 
       {/* Pagos Bre-B */}

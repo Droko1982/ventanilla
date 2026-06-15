@@ -597,6 +597,16 @@ export async function sendSupplierWhatsApp(phone: string, message: string): Prom
   }
 }
 
+// Pide a la nube un enlace de pago de la mensualidad (Wompi). Devuelve la URL.
+export async function requestMonthlyCheckout(): Promise<{ url?: string; amount?: number; simulated?: boolean } | null> {
+  if (!isCloudConfigured()) return null
+  try {
+    return await api<{ url?: string; amount?: number; simulated?: boolean }>('/billing/checkout', { method: 'POST' })
+  } catch {
+    return null
+  }
+}
+
 // Envía un correo al proveedor (pedido automático). Automático vía backend si la
 // app está conectada a la nube; si no, no puede enviarse solo.
 export async function sendSupplierEmail(to: string, subject: string, message: string): Promise<boolean> {

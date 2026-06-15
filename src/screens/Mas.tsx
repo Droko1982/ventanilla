@@ -18,6 +18,7 @@ export default function Mas() {
     { to: '/cartera', icon: 'doc', label: 'Cartera', desc: 'Cuentas por cobrar: crédito y fiado, abonos', color: 'bg-rose-100 text-rose-700' },
     { to: '/domicilios', icon: 'truck', label: 'Domicilios', desc: 'Entregas: estado, repartidor, mapa, WhatsApp', color: 'bg-orange-100 text-orange-700' },
     { to: '/tienda', icon: 'tag', label: 'Tienda online', desc: 'Catálogo público; clientes piden por WhatsApp', color: 'bg-green-100 text-green-700' },
+    { to: '/autoservicio', icon: 'cart', label: 'Autoservicio (self-checkout)', desc: 'El cliente escanea, ve el total y paga solo', color: 'bg-cyan-100 text-cyan-700' },
     { to: '/informe-z', icon: 'doc', label: 'Informe Z (fiscal)', desc: 'Cierre fiscal diario · Zetas', color: 'bg-blue-100 text-blue-700' },
     { to: '/notificaciones', icon: 'bell', label: 'Notificaciones', desc: 'Alertas de stock, vencimientos, caja', color: 'bg-purple-100 text-purple-700' },
     { to: '/auditoria', icon: 'shield', label: 'Auditoría', desc: 'Quién hizo o cambió cada cosa', color: 'bg-slate-200 text-slate-700' },

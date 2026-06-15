@@ -14,6 +14,8 @@ import {
 import { resetDemo } from '@/data/seed'
 import { getTheme, toggleTheme } from '@/lib/theme'
 import { registerDevice } from '@/lib/device'
+import { requestMonthlyCheckout } from '@/data/repo'
+import { daysUntil } from '@/lib/format'
 import { toast } from './Toast'
 
 // Barra superior: marca + selector de local + estado de red + campana + perfil.
@@ -219,21 +221,40 @@ function BottomNav() {
 }
 
 // Control de licencia: registra el dispositivo y bloquea si la cuenta está
-// suspendida o si se superó el cupo de dispositivos de la licencia.
-function LicenseBlocked({ deviceBlocked }: { deviceBlocked: boolean }) {
+// suspendida, vencida (renta no pagada) o si se superó el cupo de dispositivos.
+function LicenseBlocked({ reason }: { reason: 'device' | 'suspended' | 'overdue' }) {
   const tenant = useTenant()
   const logout = useSession((s) => s.logout)
   const navigate = useNavigate()
+  const [busy, setBusy] = useState(false)
   const wa = `https://wa.me/573147555896?text=${encodeURIComponent(`Hola, soy ${tenant?.businessName ?? 'un cliente'} y necesito reactivar mi licencia de Ventanilla.`)}`
+
+  async function pay() {
+    setBusy(true)
+    const r = await requestMonthlyCheckout()
+    setBusy(false)
+    if (r?.url) window.open(r.url, '_blank')
+    else toast('info', 'Conecta la nube (Ajustes) para pagar en línea, o contacta a la plataforma.')
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-900 px-6 text-center text-white">
       <div className="text-5xl">🔒</div>
-      <h1 className="text-2xl font-extrabold">{deviceBlocked ? 'Dispositivo no autorizado' : 'Licencia inactiva'}</h1>
+      <h1 className="text-2xl font-extrabold">
+        {reason === 'device' ? 'Dispositivo no autorizado' : reason === 'overdue' ? 'Renta vencida' : 'Licencia inactiva'}
+      </h1>
       <p className="max-w-sm text-sm text-slate-300">
-        {deviceBlocked
+        {reason === 'device'
           ? 'Se alcanzó el número de dispositivos de tu licencia. Pide a la plataforma ampliar el cupo o libera otro dispositivo.'
-          : 'Tu cuenta está suspendida o la renta está vencida. Reactívala con la plataforma para seguir vendiendo.'}
+          : reason === 'overdue'
+            ? 'Tu mensualidad está vencida. Paga para seguir vendiendo.'
+            : 'Tu cuenta está suspendida. Reactívala con la plataforma para seguir vendiendo.'}
       </p>
+      {reason !== 'device' && (
+        <button onClick={pay} disabled={busy} className="btn btn-primary w-full max-w-xs">
+          {busy ? 'Generando pago…' : '💳 Pagar mensualidad'}
+        </button>
+      )}
       <a href={wa} target="_blank" rel="noreferrer" className="btn btn-success w-full max-w-xs">
         <Icon name="whatsapp" className="h-5 w-5" /> Contactar a la plataforma
       </a>
@@ -241,6 +262,8 @@ function LicenseBlocked({ deviceBlocked }: { deviceBlocked: boolean }) {
     </div>
   )
 }
+
+const LICENSE_GRACE_DAYS = 5
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const tenant = useTenant()
@@ -252,8 +275,13 @@ export function AppLayout({ children }: { children: ReactNode }) {
     registerDevice(tenant).then((r) => setDeviceBlocked(!r.allowed)).catch(() => {})
   }, [tenant, role])
 
-  const blocked = !!tenant && role !== 'superadmin' && (tenant.status === 'suspendido' || deviceBlocked)
-  if (blocked) return <LicenseBlocked deviceBlocked={deviceBlocked} />
+  let reason: 'device' | 'suspended' | 'overdue' | null = null
+  if (tenant && role !== 'superadmin') {
+    if (deviceBlocked) reason = 'device'
+    else if (tenant.status === 'suspendido') reason = 'suspended'
+    else if (daysUntil(tenant.paidUntil) < -LICENSE_GRACE_DAYS) reason = 'overdue'
+  }
+  if (reason) return <LicenseBlocked reason={reason} />
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-100">

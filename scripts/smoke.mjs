@@ -301,6 +301,8 @@ async function main() {
   if (!/Bre-B/i.test(txt) || !/llave/i.test(txt)) throw new Error('Sección Bre-B no renderizó')
   if (!/Programa de puntos/i.test(txt) || !/fidelizaci/i.test(txt)) throw new Error('Sección de puntos no renderizó')
   console.log('✓ Ajustes: pagos Bre-B + programa de puntos')
+  if (!/Pagar mensualidad/i.test(txt)) throw new Error('Botón de pago de mensualidad no renderizó')
+  console.log('✓ Ajustes: pagar mensualidad (cobro de renta)')
 
   // 4f-septies) Modo oscuro: la clase `dark` cambia el fondo a un tono oscuro
   ctx = 'modo-oscuro'
@@ -563,6 +565,13 @@ async function main() {
   txt = await waitForText(page, 'Gracias por su compra', 5000)
   if (!/Gracias por su compra/.test(txt)) throw new Error('Pantalla del cliente no renderizó')
   console.log('✓ Pantalla del cliente (2º monitor)')
+
+  // 4j3) Autoservicio (self-checkout): el cliente escanea y ve el total
+  ctx = 'autoservicio'
+  await page.evaluate(() => { location.hash = '#/autoservicio' })
+  txt = await waitForText(page, 'Escanea tu producto', 6000)
+  if (!/Escanea tu producto/.test(txt) || !/Pagar/.test(txt)) throw new Error('Autoservicio no renderizó')
+  console.log('✓ Autoservicio (self-checkout)')
 
   await page.evaluate(() => { location.hash = '#/' })
   await sleep(600)

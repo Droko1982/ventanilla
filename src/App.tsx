@@ -27,6 +27,7 @@ const EventosRecepcion = lazy(() => import('@/screens/EventosRecepcion'))
 const Domicilios = lazy(() => import('@/screens/Domicilios'))
 const Tienda = lazy(() => import('@/screens/Tienda'))
 const PantallaCliente = lazy(() => import('@/screens/PantallaCliente'))
+const Autoservicio = lazy(() => import('@/screens/Autoservicio'))
 const Reportes = lazy(() => import('@/screens/Reportes'))
 const Notificaciones = lazy(() => import('@/screens/Notificaciones'))
 const Ajustes = lazy(() => import('@/screens/Ajustes'))
@@ -73,6 +74,7 @@ export default function App() {
               <Route path="/" element={<POS />} />
               <Route path="/pos" element={<POS />} />
               <Route path="/resumen" element={<Dashboard />} />
+              <Route path="/autoservicio" element={<Autoservicio />} />
               <Route path="/inventario" element={<Inventory />} />
               <Route path="/caja" element={<Caja />} />
               <Route path="/mas" element={<Mas />} />
