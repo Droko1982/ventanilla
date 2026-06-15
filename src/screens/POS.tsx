@@ -84,6 +84,21 @@ export default function POS() {
 
   const activeLoc = locations?.find((l) => l.id === locationId)
 
+  // Velocidad de venta (últimos 30 días) para poner los más vendidos al frente.
+  const recentSales = useLiveQuery(
+    () => (locationId ? db.sales.where('locationId').equals(locationId).toArray() : []),
+    [locationId],
+  )
+  const soldRank = useMemo(() => {
+    const since = Date.now() - 30 * 86400000
+    const m = new Map<string, number>()
+    for (const s of recentSales ?? []) {
+      if (s.status !== 'completada' || new Date(s.createdAt).getTime() < since) continue
+      for (const it of s.items) m.set(it.productId, (m.get(it.productId) ?? 0) + it.qty)
+    }
+    return m
+  }, [recentSales])
+
   const visibleProducts = useMemo(() => {
     let list = (products ?? []).filter((p) => p.active)
     // Granel sólo en locales habilitados
@@ -100,8 +115,13 @@ export default function POS() {
           p.description?.toLowerCase().includes(q),
       )
     }
-    return list
-  }, [products, cat, search, activeLoc])
+    // Los más vendidos primero (acelera la venta); empate por nombre.
+    return [...list].sort((a, b) => {
+      const ra = soldRank.get(a.id) ?? 0
+      const rb = soldRank.get(b.id) ?? 0
+      return rb - ra || a.name.localeCompare(b.name)
+    })
+  }, [products, cat, search, activeLoc, soldRank])
 
   const addToCart = useCallback(
     (p: Product) => {
@@ -179,6 +199,31 @@ export default function POS() {
       at: 0,
     })
   }, [cart.lines, total, tenant])
+
+  // Cierra la venta (reutilizado por el cobro normal y el cobro rápido).
+  async function completeSale(payments: Payment[], opts: PayOpts, showReceipt = true) {
+    if (!locationId || !user) return
+    const items = cart.lines.map((l) => ({
+      productId: l.productId, name: l.name, unit: l.unit, qty: l.qty,
+      unitPrice: l.unitPrice, lineDiscount: l.lineDiscount + (l.promoSaving ?? 0),
+      ivaRate: l.ivaRate, cost: l.cost,
+    }))
+    const sale = await recordSale({
+      tenantId, locationId, userId: user.id, userName: user.name,
+      items, discount: cart.globalDiscount, payments,
+      customerId: opts.customerId ?? cart.meta.customerId,
+      customerDoc: opts.customerDoc, transmitDian: opts.transmitDian,
+      vendedorId: cart.meta.vendedorId, vendedorName: cart.meta.vendedorName,
+      discountReason: cart.meta.discountReason, note: opts.note, redeemPoints: opts.redeemPoints,
+    })
+    cart.clear()
+    setPayOpen(false)
+    if (showReceipt) setReceipt(sale)
+    toast('success', 'Venta registrada ✓')
+    if (tenant?.autoOpenDrawer && payments.some((p) => p.method === 'efectivo')) {
+      openCashDrawer().catch(() => { /* sin cajón en este dispositivo */ })
+    }
+  }
 
   if (!locationId) {
     return <EmptyState emoji="🏪" title="Sin local asignado" hint="Selecciona un local para vender." />
@@ -357,22 +402,27 @@ export default function POS() {
         <EmptyState emoji="🔍" title="Sin resultados" hint="Prueba otra búsqueda o agrega el producto." />
       )}
 
-      {/* Barra fija del carrito */}
+      {/* Barra fija del carrito: ver carrito + cobro rápido en efectivo */}
       {count > 0 && (
-        <button
-          onClick={() => setCartOpen(true)}
-          className="fixed inset-x-0 bottom-[60px] z-30 mx-auto flex max-w-3xl items-center justify-between gap-2 px-3"
-        >
-          <span className="flex w-full items-center justify-between rounded-2xl bg-brand-600 px-5 py-3.5 text-white shadow-lg">
+        <div className="fixed inset-x-0 bottom-[60px] z-30 mx-auto flex max-w-3xl items-center gap-2 px-3">
+          <button
+            onClick={() => setCartOpen(true)}
+            className="flex flex-1 items-center justify-between rounded-2xl bg-brand-600 px-5 py-3.5 text-white shadow-lg active:scale-[0.99]"
+          >
             <span className="flex items-center gap-2 font-semibold">
-              <span className="flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-white/25 px-1 text-sm">
-                {count}
-              </span>
+              <span className="flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-white/25 px-1 text-sm">{count}</span>
               Ver carrito
             </span>
             <span className="text-lg font-bold">{cop(total)}</span>
-          </span>
-        </button>
+          </button>
+          <button
+            onClick={() => completeSale([{ method: 'efectivo', amount: total, confirmed: true }], { transmitDian: tenant?.dian.enabled ?? true }, false)}
+            className="flex shrink-0 items-center gap-1 rounded-2xl bg-emerald-600 px-4 py-3.5 font-bold text-white shadow-lg active:scale-95"
+            title="Cobro rápido en efectivo (exacto) y cerrar"
+          >
+            💵 Efectivo
+          </button>
+        </div>
       )}
         </>
       )}
@@ -398,43 +448,7 @@ export default function POS() {
           total={total}
           defaultCustomerId={cart.meta.customerId}
           onClose={() => setPayOpen(false)}
-          onConfirm={async (payments, opts) => {
-            const items = cart.lines.map((l) => ({
-              productId: l.productId,
-              name: l.name,
-              unit: l.unit,
-              qty: l.qty,
-              unitPrice: l.unitPrice,
-              lineDiscount: l.lineDiscount + (l.promoSaving ?? 0), // incluye promoción
-              ivaRate: l.ivaRate,
-              cost: l.cost,
-            }))
-            const sale = await recordSale({
-              tenantId,
-              locationId,
-              userId: user!.id,
-              userName: user!.name,
-              items,
-              discount: cart.globalDiscount,
-              payments,
-              customerId: opts.customerId ?? cart.meta.customerId,
-              customerDoc: opts.customerDoc,
-              transmitDian: opts.transmitDian,
-              vendedorId: cart.meta.vendedorId,
-              vendedorName: cart.meta.vendedorName,
-              discountReason: cart.meta.discountReason,
-              note: opts.note,
-              redeemPoints: opts.redeemPoints,
-            })
-            cart.clear()
-            setPayOpen(false)
-            setReceipt(sale)
-            toast('success', 'Venta registrada ✓')
-            // Abre el cajón monedero en ventas con efectivo (si está activado)
-            if (tenant?.autoOpenDrawer && payments.some((p) => p.method === 'efectivo')) {
-              openCashDrawer().catch(() => { /* sin cajón en este dispositivo */ })
-            }
-          }}
+          onConfirm={(payments, opts) => completeSale(payments, opts)}
         />
       )}
 

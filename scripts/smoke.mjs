@@ -410,6 +410,18 @@ async function main() {
   if (!(await waitForGone(page, 'Editar producto', 5000))) throw new Error('El formulario de edición no cerró tras guardar')
   console.log('✓ Editar producto desde el POS (modificar producto creado)')
 
+  // 4g-quater) Cobro rápido en efectivo (1 toque) — al final del bloque POS
+  ctx = 'cobro-rapido'
+  await page.evaluate(() => {
+    const tiles = [...document.querySelectorAll('button')].filter((b) => /en stock|Agotado/.test(b.textContent || ''))
+    if (tiles[0]) tiles[0].click()
+  })
+  txt = await waitForText(page, '💵 Efectivo', 4000)
+  if (!/💵 Efectivo/.test(txt)) throw new Error('Botón de cobro rápido no apareció')
+  await clickText(page, '💵 Efectivo')
+  if (!(await waitForGone(page, 'Ver carrito', 4000))) throw new Error('El cobro rápido no cerró la venta')
+  console.log('✓ POS: cobro rápido en efectivo (1 toque)')
+
   // 4h) Proveedores: reabastecimiento automático + cuentas por pagar
   ctx = 'reabastecimiento-auto'
   await page.evaluate(() => { location.hash = '#/proveedores' })
