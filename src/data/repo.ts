@@ -1413,13 +1413,33 @@ export interface CreateDomicilioInput {
   note?: string
 }
 
+// Busca un cliente por teléfono o nombre; si no existe, lo crea. Sirve para
+// que un fiado (p. ej. en domicilios) quede como deuda de un cliente real.
+export async function findOrCreateCustomer(
+  tenantId: string, info: { name: string; phone?: string; address?: string },
+): Promise<string> {
+  const all = (await db.customers.toArray()).filter((c) => c.tenantId === tenantId)
+  const match = all.find((c) => (info.phone && c.phone && c.phone === info.phone) || c.name.toLowerCase() === info.name.trim().toLowerCase())
+  if (match) return match.id
+  const id = uid('c')
+  await db.customers.put({
+    id, tenantId, name: info.name.trim(), phone: info.phone, address: info.address,
+    creditBalance: 0, totalSpent: 0, points: 0, createdAt: new Date().toISOString(),
+  })
+  return id
+}
+
 export async function createDomicilio(input: CreateDomicilioInput): Promise<Domicilio> {
   const total = Math.round(input.items.reduce((s, it) => s + it.unitPrice * it.qty - it.lineDiscount, 0))
+  // Si el domicilio es a fiado, vincula (o crea) el cliente para registrar la deuda.
+  const customerId = input.paymentMethod === 'fiado'
+    ? await findOrCreateCustomer(input.tenantId, { name: input.customerName, phone: input.phone, address: input.address })
+    : undefined
   const sale = await recordSale({
     tenantId: input.tenantId, locationId: input.locationId, userId: input.userId, userName: input.userName,
     items: input.items, discount: 0,
     payments: [{ method: input.paymentMethod, amount: total, confirmed: input.paymentMethod !== 'fiado' }],
-    customerName: input.customerName, customerAddress: input.address,
+    customerId, customerName: input.customerName, customerAddress: input.address,
     note: input.note, transmitDian: true,
   })
   const dom: Domicilio = {

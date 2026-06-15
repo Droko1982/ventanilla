@@ -134,7 +134,7 @@ export default function ReporteInventario() {
                   <td className={`px-2 py-1.5 text-right font-semibold ${low ? 'text-amber-600' : 'text-slate-700'}`}>{r.p.unit === 'peso' ? kg(r.st.quantity) : r.st.quantity}</td>
                   <td className="px-2 py-1.5 text-right text-slate-500">{cop(r.p.avgCost ?? r.p.cost)}</td>
                   <td className="px-2 py-1.5 text-right text-slate-700">{cop(r.p.price)}</td>
-                  <td className="px-2 py-1.5 text-right text-emerald-600">{util(r.p)}%</td>
+                  <td className={`px-2 py-1.5 text-right ${util(r.p) < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{util(r.p)}%</td>
                   <td className="px-2 py-1.5 text-right text-slate-400">{r.st.reorderTarget}</td>
                 </tr>
               )

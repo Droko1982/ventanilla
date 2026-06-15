@@ -83,7 +83,24 @@ function ImportClientsSheet({ tenantId, onClose }: { tenantId: string; onClose: 
   const [count, setCount] = useState(0)
 
   function parseCSV(text: string): string[][] {
-    return text.split(/\r?\n/).filter((l) => l.trim()).map((line) => line.split(/[;,]/).map((c) => c.trim()))
+    const rows: string[][] = []
+    for (const raw of text.split(/\r?\n/)) {
+      if (!raw.trim()) continue
+      const cells: string[] = []
+      let cur = '', inQ = false
+      for (let i = 0; i < raw.length; i++) {
+        const ch = raw[i]
+        if (inQ) {
+          if (ch === '"') { if (raw[i + 1] === '"') { cur += '"'; i++ } else inQ = false }
+          else cur += ch
+        } else if (ch === '"') inQ = true
+        else if (ch === ',' || ch === ';') { cells.push(cur.trim()); cur = '' }
+        else cur += ch
+      }
+      cells.push(cur.trim())
+      rows.push(cells)
+    }
+    return rows
   }
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

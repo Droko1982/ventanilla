@@ -20,18 +20,24 @@ export interface CartLine {
   emoji?: string
 }
 
-// Precio efectivo según la cantidad (aplica por mayor si corresponde).
-function effPrice(l: Pick<CartLine, 'basePrice' | 'unitPrice' | 'wholesalePrice' | 'wholesaleMinQty'>, qty: number): number {
+// Precio de la línea según la cantidad. El precio al por mayor y la promoción
+// NO se apilan: el cliente recibe el MEJOR de los dos. El 2x1 solo aplica por
+// unidad (no tiene sentido en productos por peso).
+function priceLine(
+  l: Pick<CartLine, 'basePrice' | 'unitPrice' | 'wholesalePrice' | 'wholesaleMinQty' | 'promoType' | 'promoValue' | 'unit'>,
+  qty: number,
+): { unitPrice: number; promoSaving: number } {
   const base = l.basePrice ?? l.unitPrice
-  if (l.wholesalePrice && l.wholesaleMinQty && qty >= l.wholesaleMinQty) return l.wholesalePrice
-  return base
-}
+  const wholesaleActive = !!(l.wholesalePrice && l.wholesaleMinQty && qty >= l.wholesaleMinQty)
+  const wholesaleTotal = wholesaleActive ? l.wholesalePrice! * qty : base * qty
 
-// Ahorro por promoción automática (2x1 o % de descuento).
-function promoSaving(l: Pick<CartLine, 'promoType' | 'promoValue'>, qty: number, unitPrice: number): number {
-  if (l.promoType === '2x1') return Math.floor(qty / 2) * unitPrice
-  if (l.promoType === 'percent' && l.promoValue) return Math.round(unitPrice * qty * (l.promoValue / 100))
-  return 0
+  let promoSav = 0
+  if (l.promoType === '2x1' && l.unit !== 'peso') promoSav = Math.floor(qty / 2) * base
+  else if (l.promoType === 'percent' && l.promoValue) promoSav = Math.round(base * qty * (l.promoValue / 100))
+  const promoTotal = base * qty - promoSav
+
+  if (wholesaleActive && wholesaleTotal <= promoTotal) return { unitPrice: l.wholesalePrice!, promoSaving: 0 }
+  return { unitPrice: base, promoSaving: promoSav }
 }
 
 export interface SaleMeta {
@@ -69,8 +75,8 @@ export const useCart = create<CartState>((set) => ({
           lines: s.lines.map((l) => {
             if (l.productId !== p.id) return l
             const newQty = p.unit === 'peso' ? (qty ?? l.qty) : l.qty + (qty ?? 1)
-            const up = effPrice(l, newQty)
-            return { ...l, qty: newQty, unitPrice: up, promoSaving: promoSaving(l, newQty, up) }
+            const pr = priceLine(l, newQty)
+            return { ...l, qty: newQty, unitPrice: pr.unitPrice, promoSaving: pr.promoSaving }
           }),
         }
       }
@@ -91,8 +97,9 @@ export const useCart = create<CartState>((set) => ({
         cost: p.cost,
         emoji: p.imageEmoji,
       }
-      line.unitPrice = effPrice(line, newQty)
-      line.promoSaving = promoSaving(line, newQty, line.unitPrice)
+      const pr0 = priceLine(line, newQty)
+      line.unitPrice = pr0.unitPrice
+      line.promoSaving = pr0.promoSaving
       return { lines: [...s.lines, line] }
     }),
 
@@ -105,8 +112,8 @@ export const useCart = create<CartState>((set) => ({
           ? s.lines.filter((l) => l.productId !== productId)
           : s.lines.map((l) => {
               if (l.productId !== productId) return l
-              const up = effPrice(l, qty)
-              return { ...l, qty, unitPrice: up, promoSaving: promoSaving(l, qty, up) }
+              const pr = priceLine(l, qty)
+              return { ...l, qty, unitPrice: pr.unitPrice, promoSaving: pr.promoSaving }
             }),
     })),
 

@@ -143,7 +143,7 @@ function CustomerFields({
           className="input"
           onChange={(e) => {
             const c = customers?.find((x) => x.id === e.target.value)
-            if (c) { setName(c.name); setDoc(c.idNumber ?? ''); setAddress?.('') }
+            if (c) { setName(c.name); setDoc(c.idNumber ?? ''); setAddress?.(c.address ?? '') }
           }}
           defaultValue=""
         >
