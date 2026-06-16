@@ -1,10 +1,28 @@
 import { Router } from 'express'
+import crypto from 'crypto'
 import { prisma } from '../db.js'
 import { authRequired, type AuthedRequest } from '../auth.js'
 import { env } from '../env.js'
 import { uid } from '../util.js'
 
 export const billingRouter = Router()
+
+// Verifica la firma del evento de Wompi (algoritmo oficial: SHA256 de los
+// valores de las propiedades indicadas + timestamp + secreto de eventos).
+function wompiSignatureValid(event: any, secret: string): boolean {
+  const props: unknown = event?.signature?.properties
+  const given: unknown = event?.signature?.checksum
+  const ts = event?.timestamp
+  if (!Array.isArray(props) || typeof given !== 'string' || ts === undefined) return false
+  let concat = ''
+  for (const path of props) {
+    const val = String(path).split('.').reduce((o: any, k) => (o == null ? o : o[k]), event.data)
+    concat += val == null ? '' : String(val)
+  }
+  concat += String(ts) + secret
+  const digest = crypto.createHash('sha256').update(concat).digest('hex')
+  return digest.toLowerCase() === given.toLowerCase()
+}
 
 // Crea un enlace de pago para la mensualidad del SaaS.
 // Si hay llaves de Wompi configuradas, crea un Payment Link real; si no, simula.
@@ -47,6 +65,12 @@ billingRouter.post('/checkout', authRequired, async (req: AuthedRequest, res) =>
 // Webhook de Wompi: confirma el pago y extiende la mensualidad.
 billingRouter.post('/webhook', async (req, res) => {
   const event = req.body
+  // Sin secreto de eventos configurado no se puede verificar la firma: no se
+  // confía en el evento (evita que cualquiera marque pagos como aprobados).
+  if (!env.wompi.eventsSecret) return res.status(503).json({ error: 'Webhook no configurado' })
+  if (!wompiSignatureValid(event, env.wompi.eventsSecret)) {
+    return res.status(401).json({ error: 'Firma del evento inválida' })
+  }
   try {
     const tx = event?.data?.transaction
     if (tx?.status === 'APPROVED' && tx?.reference) {

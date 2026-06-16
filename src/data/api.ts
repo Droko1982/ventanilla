@@ -3,6 +3,7 @@
 
 const URL_KEY = 'ventanilla-api-url'
 const TOKEN_KEY = 'ventanilla-token'
+const ROLE_KEY = 'ventanilla-role'
 
 export function getApiUrl(): string {
   const stored = localStorage.getItem(URL_KEY)
@@ -18,9 +19,16 @@ export function getToken(): string {
 export function setToken(t: string) {
   localStorage.setItem(TOKEN_KEY, t)
 }
+export function getRole(): string {
+  return localStorage.getItem(ROLE_KEY) || ''
+}
+export function setRole(r: string) {
+  localStorage.setItem(ROLE_KEY, r)
+}
 export function clearCloud() {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(URL_KEY)
+  localStorage.removeItem(ROLE_KEY)
   localStorage.removeItem('ventanilla-last-pull')
   localStorage.removeItem('ventanilla-dirty')
 }
@@ -44,19 +52,28 @@ export async function api<T = any>(path: string, opts: ApiOpts = {}): Promise<T>
     body: body ? JSON.stringify(body) : undefined,
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error((data as any).error || `Error ${res.status}`)
+  if (!res.ok) {
+    // Token vencido o inválido: limpia la sesión de nube y avisa una sola vez,
+    // para no quedar reintentando contra el servidor en bucle.
+    if (res.status === 401 && getToken()) {
+      localStorage.removeItem(TOKEN_KEY)
+      window.dispatchEvent(new CustomEvent('ventanilla:auth-expired'))
+    }
+    throw new Error((data as any).error || `Error ${res.status}`)
+  }
   return data as T
 }
 
 // Conecta este dispositivo a una cuenta del backend (dueño).
 export async function cloudLogin(url: string, email: string, password: string) {
   setApiUrl(url)
-  const d = await api<{ token: string }>('/auth/login', {
+  const d = await api<{ token: string; user?: { role?: string } }>('/auth/login', {
     method: 'POST',
     body: { email, password },
     auth: false,
   })
   setToken(d.token)
+  setRole(d.user?.role ?? 'admin')
   return d
 }
 
@@ -73,6 +90,7 @@ export async function superAdminLogin(url: string, email: string, password: stri
   const d = await api<{ token: string; user?: { role?: string } }>('/auth/login', { method: 'POST', body: { email, password }, auth: false })
   if (d.user?.role !== 'superadmin') { throw new Error('Esas credenciales no son de Super-Admin') }
   setToken(d.token)
+  setRole('superadmin')
   return true
 }
 
@@ -97,5 +115,6 @@ export async function cloudRegister(
   setApiUrl(url)
   const d = await api<{ token: string }>('/auth/register', { method: 'POST', body: data, auth: false })
   setToken(d.token)
+  setRole('admin')
   return d
 }

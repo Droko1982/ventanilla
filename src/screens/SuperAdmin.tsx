@@ -10,7 +10,7 @@ import { cop } from '@/lib/money'
 import { fmtDate, daysUntil } from '@/lib/format'
 import { monthlyTotal, billingBreakdown } from '@/lib/billing'
 import {
-  getApiUrl, superAdminLogin, adminListTenants, adminSetStatus, adminPay, adminSetLicense,
+  getApiUrl, getRole, superAdminLogin, adminListTenants, adminSetStatus, adminPay, adminSetLicense,
   clearCloud, type CloudTenant,
 } from '@/data/api'
 import type { Tenant, AccountStatus } from '@/types'
@@ -51,9 +51,10 @@ export default function SuperAdmin() {
   }
 
   // Si este dispositivo ya tiene una sesión Super-Admin guardada, reconecta solo.
+  // Solo si el rol guardado es super-admin (no sondea con token de dueño).
   useEffect(() => {
-    if (!getApiUrl()) return
-    adminListTenants().then(setCloud).catch(() => {}) // si no es super-admin, sigue en local
+    if (getRole() !== 'superadmin' || !getApiUrl()) return
+    adminListTenants().then(setCloud).catch(() => {})
   }, [])
 
   const rows: Row[] = cloud
@@ -226,13 +227,13 @@ function CloudPanel({ connected, count, onConnect, onDisconnect, onRefresh }: {
 }
 
 function StatusChip({ status }: { status: Tenant['status'] }) {
-  const map = {
+  const map: Record<string, string> = {
     activo: 'bg-emerald-100 text-emerald-700',
     suspendido: 'bg-rose-100 text-rose-700',
     prueba: 'bg-blue-100 text-blue-700',
   }
-  const label = { activo: 'Activo', suspendido: 'Suspendido', prueba: 'Prueba' }
-  return <span className={`chip ${map[status]}`}>{label[status]}</span>
+  const label: Record<string, string> = { activo: 'Activo', suspendido: 'Suspendido', prueba: 'Prueba' }
+  return <span className={`chip ${map[status] ?? 'bg-slate-100 text-slate-600'}`}>{label[status] ?? status}</span>
 }
 
 function TenantDetail({ tenant, cloud, onChanged, onClose }: {

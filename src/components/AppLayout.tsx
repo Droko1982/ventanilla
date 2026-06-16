@@ -327,6 +327,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
     registerDevice(tenant).then((r) => setDeviceBlocked(!r.allowed)).catch(() => {})
   }, [tenant, role])
 
+  // Si la sesión de nube expira (token vencido), avisar al usuario para que
+  // vuelva a conectarse desde Ajustes. El trabajo local sigue intacto.
+  useEffect(() => {
+    const onExpired = () => toast('error', 'Tu sesión en la nube expiró. Vuelve a conectarte en Ajustes → Nube.')
+    window.addEventListener('ventanilla:auth-expired', onExpired)
+    return () => window.removeEventListener('ventanilla:auth-expired', onExpired)
+  }, [])
+
   let reason: 'device' | 'suspended' | 'overdue' | null = null
   if (tenant && role !== 'superadmin') {
     if (deviceBlocked) reason = 'device'

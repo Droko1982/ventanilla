@@ -92,8 +92,16 @@ syncRouter.post('/', authRequired, async (req: AuthedRequest, res) => {
       const d = rec.data as any
       const existing = await prisma.user.findUnique({ where: { id: rec.recordId } })
       if (existing && existing.tenantId !== tenantId) continue
+      // Anti-escalada de privilegios: el rol se limita a admin/empleado (nunca
+      // superadmin) y solo un admin puede asignar/cambiar el rol. Un empleado
+      // no puede ascenderse ni ascender a otros; en sus push se conserva el rol.
+      const callerIsAdmin = req.auth!.role === 'admin'
+      const wanted = d.role === 'admin' || d.role === 'empleado' ? d.role : 'empleado'
+      const role = existing
+        ? (callerIsAdmin ? wanted : existing.role)
+        : (callerIsAdmin ? wanted : 'empleado')
       const base = {
-        tenantId, name: d.name ?? 'Empleado', role: d.role ?? 'empleado',
+        tenantId, name: d.name ?? 'Empleado', role,
         email: d.email ?? null, locationId: d.locationId ?? null,
         permissions: d.permissions ?? undefined, active: d.active ?? true,
       }

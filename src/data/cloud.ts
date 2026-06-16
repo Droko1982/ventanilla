@@ -111,6 +111,9 @@ export async function startCloud(): Promise<void> {
   if (timer) clearInterval(timer)
   timer = setInterval(() => { syncNow().catch(() => {}) }, 30000)
   window.addEventListener('online', () => { syncNow().catch(() => {}) })
+  // Si el token venció (401), api() emite este evento: paramos la sincronización
+  // para no reintentar en bucle hasta que el usuario vuelva a conectarse.
+  window.addEventListener('ventanilla:auth-expired', () => stopCloud(), { once: true })
 }
 
 export function stopCloud() {

@@ -36,6 +36,12 @@ npm run seed             # negocio demo: laesquina@demo.co / demo1234 (PIN 1234)
 4. *Apply* / *Deploy*. Cuando termine, copia la URL, algo como `https://ventanilla-api.onrender.com`.
 5. Verifica abriendo `https://ventanilla-api.onrender.com/health` (debe decir `ok`).
 
+> ⚠️ **Seguridad obligatoria antes de cobrar a clientes reales.** En Render → tu servicio → *Environment*, confirma que existan estas dos variables (sin ellas, el servidor arranca pero genera un secreto aleatorio temporal que cambia en cada reinicio, así que **la consola Super-Admin no podrá entrar con una clave por defecto** y los usuarios tendrán que reconectarse seguido):
+> - `JWT_SECRET` — el blueprint la genera sola (`generateValue`). Confirma que esté.
+> - `SUPERADMIN_PASSWORD` — **defínela tú** con una clave fuerte. Es la que usarás para entrar a la consola Super-Admin (junto con `SUPERADMIN_EMAIL`, por defecto `admin@ventanilla.co`). Ya **no existe** la clave por defecto `ventanilla-admin`.
+> - Opcional pero recomendado: `CORS_ORIGIN = https://droko1982.github.io` para restringir el origen.
+> Tras cambiar variables, haz *Manual Deploy → Clear build cache & deploy* (o *Restart*).
+
 ## 4) Conectar la app a la nube (30 s)
 1. Abre **https://droko1982.github.io/ventanilla/** → entra como **Dueño**.
 2. **Ajustes → Nube (multi-dispositivo)** → pega:
