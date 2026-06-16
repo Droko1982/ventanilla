@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSession } from '@/store/session'
 import { toast } from '@/components/Toast'
 import { Icon } from '@/components/icons'
+import { PinPad } from '@/components/PinPad'
 
 // Pantalla de entrada del demo: elegir rol con un toque. Pensada para que
 // cualquier persona entienda en segundos qué puede probar.
@@ -89,6 +90,9 @@ export default function Login() {
       ) : (
         <PinPad
           pin={pin}
+          tone="brand"
+          label="Ingresa tu PIN de 4 dígitos"
+          hint="Demo: Centro 1234 · Norte 2345 · Pereira 3456"
           onDigit={(d) => submitPin(pin + d)}
           onBack={() => setPin(pin.slice(0, -1))}
           onCancel={() => {
@@ -101,56 +105,3 @@ export default function Login() {
   )
 }
 
-function PinPad({
-  pin,
-  onDigit,
-  onBack,
-  onCancel,
-}: {
-  pin: string
-  onDigit: (d: string) => void
-  onBack: () => void
-  onCancel: () => void
-}) {
-  return (
-    <div className="w-full max-w-xs">
-      <p className="mb-1 text-center text-sm text-brand-100">Ingresa tu PIN de 4 dígitos</p>
-      <p className="mb-4 text-center text-xs text-brand-200">
-        Demo: Centro 1234 · Norte 2345 · Pereira 3456
-      </p>
-      <div className="mb-6 flex justify-center gap-3">
-        {[0, 1, 2, 3].map((i) => (
-          <div
-            key={i}
-            className={`h-4 w-4 rounded-full border-2 border-white/60 ${
-              pin.length > i ? 'bg-white' : ''
-            }`}
-          />
-        ))}
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((n) => (
-          <button
-            key={n}
-            onClick={() => onDigit(n)}
-            className="aspect-square rounded-2xl bg-white/15 text-2xl font-semibold backdrop-blur active:bg-white/30"
-          >
-            {n}
-          </button>
-        ))}
-        <button onClick={onCancel} className="aspect-square rounded-2xl text-sm text-brand-200">
-          Cancelar
-        </button>
-        <button
-          onClick={() => onDigit('0')}
-          className="aspect-square rounded-2xl bg-white/15 text-2xl font-semibold backdrop-blur active:bg-white/30"
-        >
-          0
-        </button>
-        <button onClick={onBack} className="aspect-square rounded-2xl text-2xl text-brand-100">
-          ⌫
-        </button>
-      </div>
-    </div>
-  )
-}

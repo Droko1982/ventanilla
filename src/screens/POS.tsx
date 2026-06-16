@@ -14,6 +14,7 @@ import { useCart, cartSubtotal, cartTotal, cartCount, type CartLine } from '@/st
 import { useBarcodeWedge } from '@/hooks/useBarcodeWedge'
 import { Scanner } from '@/components/Scanner'
 import { Sheet } from '@/components/Sheet'
+import { PinPad } from '@/components/PinPad'
 import { ProductForm } from '@/components/ProductForm'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
@@ -910,8 +911,8 @@ function CatChip({ active, onClick, label, emoji }: { active: boolean; onClick: 
 // PIN del vendedor: confirma que la venta queda a nombre de quien realmente vende.
 function VendorPinSheet({ vendor, onConfirm, onClose }: { vendor: User; onConfirm: () => void; onClose: () => void }) {
   const [pin, setPin] = useState('')
-  function check(p: string) {
-    const v = p.replace(/\D/g, '').slice(0, 4)
+  function add(d: string) {
+    const v = (pin + d).slice(0, 4)
     setPin(v)
     if (v.length === 4) {
       if (v === vendor.pin) onConfirm()
@@ -920,17 +921,9 @@ function VendorPinSheet({ vendor, onConfirm, onClose }: { vendor: User; onConfir
   }
   return (
     <Sheet open onClose={onClose} title={`PIN de ${vendor.name}`}>
-      <div className="space-y-3">
-        <p className="text-sm text-slate-500">Ingresa tu PIN para que la venta quede registrada a tu nombre, {vendor.name}.</p>
-        <input
-          className="input text-center text-4xl tracking-[0.4em]"
-          inputMode="numeric"
-          maxLength={4}
-          autoFocus
-          value={pin}
-          onChange={(e) => check(e.target.value)}
-          placeholder="••••"
-        />
+      <div className="space-y-4">
+        <p className="text-center text-sm text-slate-500">Ingresa tu PIN —con el teclado o tocando los números— para que la venta quede a tu nombre.</p>
+        <PinPad pin={pin} tone="light" onDigit={add} onBack={() => setPin(pin.slice(0, -1))} onCancel={onClose} />
       </div>
     </Sheet>
   )
@@ -1437,6 +1430,16 @@ function ReceiptSheet({ sale, onClose }: { sale: Sale; onClose: () => void }) {
   const locations = useLocations()
   const location = locations?.find((l) => l.id === sale.locationId)
   const [phone, setPhone] = useState('')
+
+  // Enter inicia una venta nueva (cierra el recibo), sin tener que tocar el botón.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (document.activeElement?.tagName || '').toUpperCase()
+      if (e.key === 'Enter' && tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA') { e.preventDefault(); onClose() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   if (!tenant || !location) return null
   const text = receiptText(sale, tenant, location)

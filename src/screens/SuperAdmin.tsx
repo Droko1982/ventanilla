@@ -7,6 +7,7 @@ import { Sheet } from '@/components/Sheet'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
 import { cop } from '@/lib/money'
+import { getTheme, toggleTheme } from '@/lib/theme'
 import { fmtDate, daysUntil } from '@/lib/format'
 import { monthlyTotal, billingBreakdown } from '@/lib/billing'
 import {
@@ -42,6 +43,7 @@ type Row = {
 // En modo DEMO usa datos locales; conectado a la nube controla a los clientes reales.
 export default function SuperAdmin() {
   const logout = useSession((s) => s.logout)
+  const [dark, setDark] = useState(getTheme() === 'dark')
   const localTenants = useLiveQuery(() => db.tenants.toArray(), [])
   const [cloud, setCloud] = useState<CloudTenant[] | null>(null) // null = modo local
   const [filter, setFilter] = useState<'todos' | 'activo' | 'suspendido' | 'mora'>('todos')
@@ -88,6 +90,9 @@ export default function SuperAdmin() {
             <p className="font-bold leading-tight">Consola Super-Admin</p>
             <p className="text-xs text-slate-400">{cloud ? 'Conectado a la nube' : 'Plataforma Ventanilla'}</p>
           </div>
+          <button onClick={() => { const t = toggleTheme(); setDark(t === 'dark') }} className="flex h-9 w-9 items-center justify-center rounded-full text-lg text-slate-300 hover:bg-white/10" title="Modo claro / oscuro">
+            {dark ? '☀️' : '🌙'}
+          </button>
           <button onClick={logout} className="flex h-9 w-9 items-center justify-center rounded-full text-slate-300 hover:bg-white/10">
             <Icon name="logout" className="h-5 w-5" />
           </button>
