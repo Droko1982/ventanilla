@@ -51,6 +51,17 @@ adminRouter.post('/tenants/:id/pay', async (req, res) => {
   res.json({ ok: true })
 })
 
+// Eliminar un cliente por completo (cascade borra sus usuarios, datos y pagos).
+// Acción del dueño de la plataforma para depurar o dar de baja a un cliente.
+adminRouter.delete('/tenants/:id', async (req, res) => {
+  try {
+    await prisma.tenant.delete({ where: { id: req.params.id } })
+    res.json({ ok: true })
+  } catch {
+    res.status(404).json({ error: 'No existe o no se pudo eliminar' })
+  }
+})
+
 // Dispositivos conectados de un cliente (para gestionarlos desde la consola).
 adminRouter.get('/tenants/:id/devices', async (req, res) => {
   const rows = await prisma.syncRecord.findMany({

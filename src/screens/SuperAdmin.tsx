@@ -11,7 +11,7 @@ import { fmtDate, daysUntil } from '@/lib/format'
 import { monthlyTotal, billingBreakdown } from '@/lib/billing'
 import {
   getApiUrl, getRole, superAdminLogin, adminListTenants, adminSetStatus, adminPay, adminSetLicense,
-  adminListDevices, adminReleaseDevice, clearCloud, type CloudTenant, type CloudDevice,
+  adminListDevices, adminReleaseDevice, adminDeleteTenant, clearCloud, type CloudTenant, type CloudDevice,
 } from '@/data/api'
 import type { Tenant, AccountStatus } from '@/types'
 
@@ -299,6 +299,14 @@ function TenantDetail({ tenant, cloud, onChanged, onClose }: {
     onClose()
   }
 
+  async function removeTenant() {
+    if (!confirm(`¿Eliminar definitivamente a "${tenant.businessName}"? Se borran su cuenta, datos y pagos. Esto no se puede deshacer.`)) return
+    if (cloud) { await adminDeleteTenant(tenant.id); await onChanged() }
+    else await db.tenants.delete(tenant.id)
+    toast('success', 'Cliente eliminado')
+    onClose()
+  }
+
   return (
     <Sheet open onClose={onClose} title={tenant.businessName}>
       <div className="space-y-4">
@@ -383,6 +391,10 @@ function TenantDetail({ tenant, cloud, onChanged, onClose }: {
         <p className="text-center text-xs text-slate-400">
           {cloud ? 'Los cambios se aplican en la cuenta real del cliente.' : 'Estás en el demo local. Conéctate a la nube para gestionar clientes reales.'}
         </p>
+
+        <button onClick={removeTenant} className="w-full text-center text-xs text-rose-400 hover:text-rose-600">
+          Eliminar cliente definitivamente
+        </button>
       </div>
     </Sheet>
   )

@@ -103,6 +103,9 @@ export async function adminSetStatus(id: string, status: string): Promise<void> 
 export async function adminPay(id: string): Promise<void> {
   await api(`/admin/tenants/${id}/pay`, { method: 'POST' })
 }
+export async function adminDeleteTenant(id: string): Promise<void> {
+  await api(`/admin/tenants/${id}`, { method: 'DELETE' })
+}
 export async function adminSetLicense(id: string, data: { maxSeats?: number; maxDevices?: number }): Promise<void> {
   await api(`/admin/tenants/${id}/license`, { method: 'POST', body: data })
 }
