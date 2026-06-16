@@ -12,5 +12,5 @@ COPY src ./src
 RUN npm run build
 
 EXPOSE 4000
-# Sincroniza el esquema con la base y arranca el API.
-CMD ["sh", "-c", "npx prisma db push --skip-generate --accept-data-loss && node dist/index.js"]
+# Migraciones versionadas con auto-baseline seguro (sin --accept-data-loss).
+CMD ["sh", "-c", "(npx prisma migrate resolve --applied 0_init || true) && npx prisma migrate deploy && node dist/index.js"]

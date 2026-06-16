@@ -50,3 +50,27 @@ adminRouter.post('/tenants/:id/pay', async (req, res) => {
   await prisma.tenant.update({ where: { id: req.params.id }, data: { status: 'activo', paidUntil: new Date(base + 30 * 86400000) } })
   res.json({ ok: true })
 })
+
+// Dispositivos conectados de un cliente (para gestionarlos desde la consola).
+adminRouter.get('/tenants/:id/devices', async (req, res) => {
+  const rows = await prisma.syncRecord.findMany({
+    where: { tenantId: req.params.id, table: 'devices', deletedAt: null },
+    orderBy: { updatedAt: 'desc' },
+  })
+  res.json(rows.map((r) => {
+    const d = (r.data ?? {}) as any
+    return { id: r.recordId, name: d.name ?? 'Dispositivo', blocked: !!d.blocked, lastSeen: d.lastSeen ?? null }
+  }))
+})
+
+// Liberar un dispositivo: libera el cupo. El equipo activo se vuelve a registrar
+// al abrir la app; uno perdido/robado desaparece y deja el cupo libre.
+adminRouter.post('/tenants/:id/devices/release', async (req, res) => {
+  const recordId = String(req.body?.recordId ?? '')
+  if (!recordId) return res.status(400).json({ error: 'Falta recordId' })
+  await prisma.syncRecord.updateMany({
+    where: { tenantId: req.params.id, table: 'devices', recordId },
+    data: { deletedAt: new Date() },
+  })
+  res.json({ ok: true })
+})

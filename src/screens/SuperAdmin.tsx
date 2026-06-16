@@ -11,7 +11,7 @@ import { fmtDate, daysUntil } from '@/lib/format'
 import { monthlyTotal, billingBreakdown } from '@/lib/billing'
 import {
   getApiUrl, getRole, superAdminLogin, adminListTenants, adminSetStatus, adminPay, adminSetLicense,
-  clearCloud, type CloudTenant,
+  adminListDevices, adminReleaseDevice, clearCloud, type CloudTenant, type CloudDevice,
 } from '@/data/api'
 import type { Tenant, AccountStatus } from '@/types'
 
@@ -244,12 +244,17 @@ function TenantDetail({ tenant, cloud, onChanged, onClose }: {
 }) {
   const billing = billingBreakdown(tenant.locationCount ?? 1, tenant.monthlyFeePerLocation)
   const overdue = daysUntil(tenant.paidUntil) < 0
-  // En la nube solo conocemos el conteo de dispositivos; en local, la lista completa.
-  const devices = useLiveQuery(() => db.devices.where('tenantId').equals(tenant.id).toArray(), [tenant.id]) ?? []
+  // En local la lista de dispositivos viene de Dexie; en la nube se trae del API.
+  const localDevices = useLiveQuery(() => db.devices.where('tenantId').equals(tenant.id).toArray(), [tenant.id]) ?? []
+  const [cloudDevices, setCloudDevices] = useState<CloudDevice[]>([])
+  useEffect(() => {
+    if (cloud) adminListDevices(tenant.id).then(setCloudDevices).catch(() => {})
+  }, [cloud, tenant.id])
+  const deviceList: { id: string; name: string; blocked?: boolean }[] = cloud ? cloudDevices : localDevices
   const seatsUsed = tenant.locationCount ?? 1
   const maxSeats = tenant.maxSeats ?? seatsUsed
   const maxDevices = tenant.maxDevices ?? 0
-  const devicesActive = cloud ? (tenant.deviceCount ?? 0) : devices.filter((d) => !d.blocked).length
+  const devicesActive = deviceList.filter((d) => !d.blocked).length
 
   async function setStatus(status: AccountStatus) {
     if (cloud) { await adminSetStatus(tenant.id, status); await onChanged() }
@@ -271,7 +276,13 @@ function TenantDetail({ tenant, cloud, onChanged, onClose }: {
     toast('success', `Licencia: ${v} dispositivo(s)`)
   }
   async function releaseDevice(id: string) {
-    await db.devices.delete(id)
+    if (cloud) {
+      await adminReleaseDevice(tenant.id, id)
+      setCloudDevices(await adminListDevices(tenant.id).catch(() => cloudDevices))
+      await onChanged()
+    } else {
+      await db.devices.delete(id)
+    }
     toast('success', 'Dispositivo liberado')
   }
 
@@ -332,9 +343,9 @@ function TenantDetail({ tenant, cloud, onChanged, onClose }: {
               <button onClick={() => setDevices(maxDevices + 1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-brand-700"><Icon name="plus" className="h-4 w-4" /></button>
             </div>
           </div>
-          {!cloud && devices.length > 0 && (
+          {deviceList.length > 0 && (
             <div className="mt-2 space-y-1">
-              {devices.map((d) => (
+              {deviceList.map((d) => (
                 <div key={d.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs">
                   <span className={d.blocked ? 'text-rose-500' : 'text-slate-600'}>{d.blocked ? '🚫 ' : '📱 '}{d.name}</span>
                   <button onClick={() => releaseDevice(d.id)} className="text-rose-400">Liberar</button>

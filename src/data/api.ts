@@ -106,6 +106,13 @@ export async function adminPay(id: string): Promise<void> {
 export async function adminSetLicense(id: string, data: { maxSeats?: number; maxDevices?: number }): Promise<void> {
   await api(`/admin/tenants/${id}/license`, { method: 'POST', body: data })
 }
+export interface CloudDevice { id: string; name: string; blocked: boolean; lastSeen: string | null }
+export async function adminListDevices(id: string): Promise<CloudDevice[]> {
+  return api<CloudDevice[]>(`/admin/tenants/${id}/devices`)
+}
+export async function adminReleaseDevice(id: string, recordId: string): Promise<void> {
+  await api(`/admin/tenants/${id}/devices/release`, { method: 'POST', body: { recordId } })
+}
 
 // Crea una cuenta nueva (negocio) en la nube y conecta este dispositivo.
 export async function cloudRegister(

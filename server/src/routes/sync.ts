@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
 import { authRequired, hash, type AuthedRequest } from '../auth.js'
+import { licenseActive } from '../license.js'
 
 export const syncRouter = Router()
 
@@ -21,6 +22,8 @@ interface SyncIn {
 }
 
 // --- PULL: trae los cambios desde `since` ----------------------------------
+// El pull queda ABIERTO a propósito: así un negocio recién suspendido descarga
+// su nuevo estado y la app se autobloquea. La escritura (push) sí se bloquea.
 syncRouter.get('/', authRequired, async (req: AuthedRequest, res) => {
   const tenantId = req.auth!.tenantId
   if (!tenantId) return res.json({ serverTime: new Date().toISOString(), records: [] })
@@ -70,7 +73,7 @@ syncRouter.get('/', authRequired, async (req: AuthedRequest, res) => {
 })
 
 // --- PUSH: aplica los cambios locales del cliente --------------------------
-syncRouter.post('/', authRequired, async (req: AuthedRequest, res) => {
+syncRouter.post('/', authRequired, licenseActive, async (req: AuthedRequest, res) => {
   const tenantId = req.auth!.tenantId
   if (!tenantId) return res.status(400).json({ error: 'Sin tenant' })
   const incoming = (req.body?.records ?? []) as SyncIn[]

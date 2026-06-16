@@ -8,7 +8,10 @@ services:
     rootDir: server
     plan: free
     buildCommand: npm install && npx prisma generate && npm run build
-    startCommand: npx prisma db push --skip-generate --accept-data-loss && npm start
+    # Migraciones versionadas (sin --accept-data-loss). En el primer arranque,
+    # 'resolve --applied 0_init' marca la base existente como baseline (no ejecuta
+    # SQL ni toca datos); luego 'migrate deploy' aplica solo migraciones nuevas.
+    startCommand: (npx prisma migrate resolve --applied 0_init || true) && npx prisma migrate deploy && npm start
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
