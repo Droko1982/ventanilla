@@ -80,6 +80,22 @@ model SyncRecord {
   @@index([tenantId, updatedAt])
 }
 
+// --- Banco de productos compartido (catálogo global entre todas las tiendas) --
+// Solo ficha de catálogo (nombre, marca, categoría, unidad, ícono). NO guarda
+// precios ni costos: eso es propio y competitivo de cada tienda.
+model BankProduct {
+  barcode    String   @id // código de barras = llave global
+  name       String
+  brand      String?
+  category   String?
+  unit       String   @default("unidad")
+  imageEmoji String?
+  uses       Int      @default(1) // cuántas tiendas lo han aportado/usado
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([name])
+}
+
 // --- Pagos de la mensualidad del SaaS (pasarela Wompi) ----------------------
 model Payment {
   id        String   @id @default(uuid())

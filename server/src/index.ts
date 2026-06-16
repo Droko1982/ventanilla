@@ -10,6 +10,7 @@ import { whatsappRouter } from './routes/whatsapp.js'
 import { emailRouter } from './routes/email.js'
 import { dianRouter } from './routes/dian.js'
 import { adminRouter } from './routes/admin.js'
+import { bankRouter } from './routes/bank.js'
 
 const app = express()
 // En Render (y cualquier proxy) confía en el primer proxy para obtener la IP
@@ -55,6 +56,7 @@ app.use('/whatsapp', whatsappRouter)
 app.use('/email', emailRouter)
 app.use('/dian', dianRouter)
 app.use('/admin', adminRouter)
+app.use('/bank', bankRouter)
 
 app.use((_req, res) => res.status(404).json({ error: 'Ruta no encontrada' }))
 

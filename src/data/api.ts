@@ -122,6 +122,26 @@ export async function adminReleaseDevice(id: string, recordId: string): Promise<
   await api(`/admin/tenants/${id}/devices/release`, { method: 'POST', body: { recordId } })
 }
 
+// --- Banco de productos compartido (catálogo global entre tiendas) ----------
+export interface BankProduct {
+  barcode: string; name: string; brand?: string | null; category?: string | null
+  unit?: string; imageEmoji?: string | null
+}
+// Consulta exacta por código (autocompletar al escanear). Null si no hay nube/red.
+export async function bankLookup(barcode: string): Promise<BankProduct | null> {
+  if (!isCloudConfigured() || !navigator.onLine) return null
+  try { return await api<BankProduct | null>(`/bank/${encodeURIComponent(barcode)}`) } catch { return null }
+}
+export async function bankSearch(q: string): Promise<BankProduct[]> {
+  if (!isCloudConfigured() || !navigator.onLine) return []
+  try { return await api<BankProduct[]>(`/bank?q=${encodeURIComponent(q)}`) } catch { return [] }
+}
+// Aporta una ficha al banco (no bloquea ni lanza si falla).
+export async function bankContribute(p: BankProduct): Promise<void> {
+  if (!isCloudConfigured() || !navigator.onLine) return
+  try { await api('/bank', { method: 'POST', body: p }) } catch { /* silencioso */ }
+}
+
 // Crea una cuenta nueva (negocio) en la nube y conecta este dispositivo.
 export async function cloudRegister(
   url: string,

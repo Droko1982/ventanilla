@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Sheet } from './Sheet'
 import { Scanner } from './Scanner'
 import { Icon } from './icons'
@@ -7,6 +7,7 @@ import { db } from '@/data/db'
 import { uid, internalCode } from '@/lib/id'
 import { parseCop } from '@/lib/money'
 import { fileToCompressedDataUrl } from '@/lib/image'
+import { bankLookup, bankSearch, bankContribute, isCloudConfigured, type BankProduct } from '@/data/api'
 import type { Category, Location, Product, Supplier } from '@/types'
 
 // Formulario de producto reutilizable: crear (con stock inicial) o editar.
@@ -59,6 +60,34 @@ export function ProductForm({
   const [uploading, setUploading] = useState(false)
   const [initialQty, setInitialQty] = useState('')
   const [saving, setSaving] = useState(false)
+  const [bankOpen, setBankOpen] = useState(false)
+  const bankOn = isCloudConfigured()
+
+  // Rellena el formulario con una ficha del banco (sin tocar precio/costo).
+  function prefillFromBank(hit: BankProduct) {
+    setName(hit.name)
+    if (hit.barcode) setBarcode(hit.barcode)
+    if (hit.brand) setBrand(hit.brand)
+    if (hit.unit === 'peso' || hit.unit === 'unidad') setUnit(hit.unit)
+    if (hit.imageEmoji) setEmoji(hit.imageEmoji)
+    const cat = hit.category && categories.find((c) => c.name.toLowerCase() === hit.category!.toLowerCase())
+    if (cat) setCategoryId(cat.id)
+  }
+
+  // Al escribir/escanear un código (creando), busca la ficha en el banco y
+  // autocompleta si el nombre aún está vacío. No pisa lo que el usuario ya escribió.
+  useEffect(() => {
+    const code = barcode.trim()
+    if (!bankOn || editing || name.trim() || code.length < 6) return
+    let cancel = false
+    const t = setTimeout(async () => {
+      const hit = await bankLookup(code)
+      if (cancel || !hit) return
+      prefillFromBank(hit)
+      toast('success', '✨ Autocompletado desde el banco de productos')
+    }, 450)
+    return () => { cancel = true; clearTimeout(t) }
+  }, [barcode, editing, name, bankOn])
 
   async function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -128,6 +157,11 @@ export function ProductForm({
         }
       }
     }
+    // Aporta la ficha al banco compartido (solo catálogo, sin precios) si tiene código.
+    if (p.barcode) {
+      const catName = categories.find((c) => c.id === categoryId)?.name
+      bankContribute({ barcode: p.barcode, name: p.name, brand: p.brand ?? null, category: catName ?? null, unit: p.unit, imageEmoji: p.imageEmoji ?? null })
+    }
     setSaving(false)
     toast('success', editing ? 'Producto actualizado' : 'Producto creado')
     onSaved?.(p)
@@ -162,6 +196,11 @@ export function ProductForm({
               <Icon name="scan" className="h-5 w-5" /> Escanear
             </button>
           </div>
+          {bankOn && (
+            <button type="button" onClick={() => setBankOpen(true)} className="mt-1.5 text-sm font-semibold text-brand-600">
+              🏦 Buscar en el banco de productos
+            </button>
+          )}
         </div>
 
         {/* Foto del producto (opcional) */}
@@ -343,6 +382,51 @@ export function ProductForm({
           toast('success', `Código ${code} capturado`)
         }}
       />
+
+      {bankOpen && (
+        <BankSearchSheet
+          onPick={(hit) => { prefillFromBank(hit); setBankOpen(false); toast('success', `"${hit.name}" traído del banco`) }}
+          onClose={() => setBankOpen(false)}
+        />
+      )}
+    </Sheet>
+  )
+}
+
+// Buscar una ficha en el banco compartido (por nombre o código) e importarla.
+function BankSearchSheet({ onPick, onClose }: { onPick: (p: BankProduct) => void; onClose: () => void }) {
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState<BankProduct[]>([])
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      if (q.trim().length < 2) { setResults([]); return }
+      setBusy(true)
+      setResults(await bankSearch(q.trim()))
+      setBusy(false)
+    }, 350)
+    return () => clearTimeout(t)
+  }, [q])
+  return (
+    <Sheet open onClose={onClose} title="Banco de productos">
+      <div className="space-y-3">
+        <p className="text-sm text-slate-500">Catálogo compartido por todas las tiendas. Encuentra el producto y tráelo ya con su nombre, marca y categoría (tú pones tu precio).</p>
+        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nombre o código de barras…" autoFocus />
+        {busy && <p className="text-xs text-slate-400">Buscando…</p>}
+        <div className="space-y-1">
+          {results.map((r) => (
+            <button key={r.barcode} onClick={() => onPick(r)} className="card flex w-full items-center gap-3 p-2.5 text-left active:scale-[0.99]">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-lg">{r.imageEmoji || '📦'}</span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-slate-700">{r.name}</p>
+                <p className="truncate text-xs text-slate-400">{[r.brand, r.category, r.barcode].filter(Boolean).join(' · ')}</p>
+              </div>
+              <span className="shrink-0 text-xs font-semibold text-brand-600">Traer</span>
+            </button>
+          ))}
+          {q.trim().length >= 2 && !busy && results.length === 0 && <p className="px-1 text-xs text-slate-400">Sin resultados en el banco.</p>}
+        </div>
+      </div>
     </Sheet>
   )
 }
