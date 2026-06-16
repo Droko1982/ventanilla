@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../db.js'
 import { authRequired, superAdminRequired, hash } from '../auth.js'
 import { uid } from '../util.js'
+import { seedTenantDefaults } from '../tenantDefaults.js'
 
 export const adminRouter = Router()
 adminRouter.use(authRequired, superAdminRequired)
@@ -28,6 +29,7 @@ adminRouter.post('/tenants', async (req, res) => {
   await prisma.user.create({
     data: { id: uid('u'), tenantId, name: String(ownerName), role: 'admin', email: String(email), passwordHash: hash(String(password)) },
   })
+  await seedTenantDefaults(tenantId, city ? String(city) : '')
   res.json({ ok: true, id: tenantId })
 })
 

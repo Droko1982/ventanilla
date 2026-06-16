@@ -4,6 +4,7 @@ import { prisma } from '../db.js'
 import { hash, verify, signToken, authRequired, type AuthedRequest } from '../auth.js'
 import { env } from '../env.js'
 import { uid } from '../util.js'
+import { seedTenantDefaults } from '../tenantDefaults.js'
 
 export const authRouter = Router()
 
@@ -51,6 +52,7 @@ authRouter.post('/register', async (req, res) => {
       passwordHash: hash(p.data.password),
     },
   })
+  await seedTenantDefaults(tenantId, p.data.city ?? '')
   const token = signToken({ userId, tenantId, role: 'admin', name: p.data.ownerName })
   res.json({ token, tenant: publicTenant(tenant), user: { id: userId, name: p.data.ownerName, role: 'admin' } })
 })
