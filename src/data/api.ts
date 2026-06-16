@@ -123,7 +123,7 @@ export async function cloudRegister(
   data: { businessName: string; ownerName: string; email: string; password: string; phone?: string; city?: string },
 ) {
   setApiUrl(url)
-  const d = await api<{ token: string }>('/auth/register', { method: 'POST', body: data, auth: false })
+  const d = await api<{ token: string; user?: { id: string; name: string; role: string } }>('/auth/register', { method: 'POST', body: data, auth: false })
   setToken(d.token)
   setRole('admin')
   return d

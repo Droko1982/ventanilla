@@ -734,3 +734,16 @@ export async function resetDemo(): Promise<void> {
   await db.open()
   await seedNow()
 }
+
+// Vacía la base local SIN resembrar el demo. Lo usa el alta de un cliente nuevo
+// en la nube para empezar con la app en cero (su cuenta recién creada está vacía).
+export async function clearLocalData(): Promise<void> {
+  await db.delete()
+  await db.open()
+  try {
+    localStorage.removeItem('ventanilla-last-pull') // forzar pull completo
+    localStorage.removeItem('ventanilla-dirty') // no subir nada del demo
+  } catch {
+    /* localStorage no disponible */
+  }
+}

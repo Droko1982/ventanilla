@@ -5,6 +5,7 @@ import { db } from '@/data/db'
 import { exportAllData, importAllData, requestMonthlyCheckout } from '@/data/repo'
 import { cloudLogin, cloudRegister, isCloudConfigured, getApiUrl, clearCloud } from '@/data/api'
 import { startCloud, stopCloud, syncNow } from '@/data/cloud'
+import { clearLocalData } from '@/data/seed'
 import { Sheet } from '@/components/Sheet'
 import { PageHeader } from '@/components/ui'
 import { Icon } from '@/components/icons'
@@ -543,13 +544,17 @@ function CloudSection() {
     try {
       if (mode === 'register') {
         if (!bizName.trim() || !ownerName.trim()) { toast('error', 'Completa el nombre del negocio y el dueño'); return }
-        await cloudRegister(url.trim(), { businessName: bizName.trim(), ownerName: ownerName.trim(), email: email.trim(), password })
+        const reg = await cloudRegister(url.trim(), { businessName: bizName.trim(), ownerName: ownerName.trim(), email: email.trim(), password })
+        // Cuenta nueva = empezar limpio: borrar el demo local antes de sincronizar.
+        await clearLocalData()
+        await startCloud() // trae su negocio y su usuario dueño desde el servidor
+        if (reg.user?.id) await useSession.getState().loginAs(reg.user.id)
         toast('success', 'Cuenta creada y conectada')
       } else {
         await cloudLogin(url.trim(), email.trim(), password)
+        await startCloud()
         toast('success', 'Conectado y sincronizando')
       }
-      await startCloud()
       setConnected(true)
     } catch (e: any) {
       toast('error', e?.message || 'No se pudo conectar')
