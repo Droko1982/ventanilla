@@ -15,6 +15,8 @@ import { resetDemo } from '@/data/seed'
 import { getTheme, toggleTheme } from '@/lib/theme'
 import { registerDevice } from '@/lib/device'
 import { requestMonthlyCheckout } from '@/data/repo'
+import { isCloudConfigured } from '@/data/api'
+import { db } from '@/data/db'
 import { daysUntil } from '@/lib/format'
 import { toast } from './Toast'
 
@@ -35,6 +37,7 @@ function TopBar() {
   const [menu, setMenu] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [dark, setDark] = useState(getTheme() === 'dark')
+  const [pinOpen, setPinOpen] = useState(false)
 
   const currentLocName =
     role === 'empleado'
@@ -132,6 +135,14 @@ function TopBar() {
           >
             {dark ? '☀️ Modo claro' : '🌙 Modo oscuro'}
           </button>
+          <button className="btn btn-secondary w-full" onClick={() => { setMenu(false); setPinOpen(true) }}>
+            🔑 Cambiar mi PIN
+          </button>
+          {role === 'admin' && (
+            <button className="btn btn-secondary w-full" onClick={() => { setMenu(false); navigate('/ajustes') }}>
+              ⚙️ Ajustes / Configuración
+            </button>
+          )}
           <a
             href="https://wa.me/573147555896?text=Hola%2C%20necesito%20soporte%20de%20Ventanilla"
             target="_blank"
@@ -140,19 +151,21 @@ function TopBar() {
           >
             💬 Soporte por WhatsApp
           </a>
-          <button
-            className="btn btn-secondary w-full"
-            disabled={resetting}
-            onClick={async () => {
-              setResetting(true)
-              await resetDemo()
-              toast('success', 'Demo reiniciado con datos nuevos')
-              setResetting(false)
-              setMenu(false)
-            }}
-          >
-            {resetting ? 'Reiniciando…' : '↺ Reiniciar datos del demo'}
-          </button>
+          {!isCloudConfigured() && (
+            <button
+              className="btn btn-secondary w-full"
+              disabled={resetting}
+              onClick={async () => {
+                setResetting(true)
+                await resetDemo()
+                toast('success', 'Demo reiniciado con datos nuevos')
+                setResetting(false)
+                setMenu(false)
+              }}
+            >
+              {resetting ? 'Reiniciando…' : '↺ Reiniciar datos del demo'}
+            </button>
+          )}
           <button
             className="btn btn-danger w-full"
             onClick={() => {
@@ -165,7 +178,46 @@ function TopBar() {
           </button>
         </div>
       </Sheet>
+
+      {pinOpen && user && <ChangePinSheet user={user} onClose={() => setPinOpen(false)} />}
     </header>
+  )
+}
+
+// Cambiar el PIN del usuario actual (cajero o dueño).
+function ChangePinSheet({ user, onClose }: { user: { id: string; name: string }; onClose: () => void }) {
+  const [pin, setPin] = useState('')
+  const [confirm, setConfirm] = useState('')
+  return (
+    <Sheet
+      open onClose={onClose} title="Cambiar mi PIN"
+      footer={
+        <button
+          className="btn btn-primary btn-lg w-full"
+          onClick={async () => {
+            if (pin.length !== 4) return toast('error', 'El PIN debe tener 4 dígitos')
+            if (pin !== confirm) return toast('error', 'Los PIN no coinciden')
+            await db.users.update(user.id, { pin })
+            toast('success', 'PIN actualizado')
+            onClose()
+          }}
+        >
+          Guardar PIN
+        </button>
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-slate-500">Elige un PIN de 4 dígitos para {user.name}.</p>
+        <div>
+          <label className="label">Nuevo PIN</label>
+          <input className="input text-center text-2xl tracking-widest" inputMode="numeric" maxLength={4} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" />
+        </div>
+        <div>
+          <label className="label">Confírmalo</label>
+          <input className="input text-center text-2xl tracking-widest" inputMode="numeric" maxLength={4} value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" />
+        </div>
+      </div>
+    </Sheet>
   )
 }
 

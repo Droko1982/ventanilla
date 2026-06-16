@@ -97,6 +97,17 @@ async function main() {
   if (!/Producto nuevo/.test(txt)) throw new Error('Inicio (POS) del Dueño no renderizó')
   console.log('✓ Inicio = POS (facturación + lista) para el Dueño')
 
+  // 2b) Menú de cuenta: cambiar PIN + acceso a Ajustes + reset solo en demo
+  ctx = 'menu-cuenta'
+  await page.evaluate(() => { const b = document.querySelector('button[aria-label="Perfil"]'); if (b) b.click() })
+  txt = await waitForText(page, 'Cambiar mi PIN', 4000)
+  if (!/Cambiar mi PIN/.test(txt) || !/Ajustes \/ Configuración/.test(txt) || !/Reiniciar datos del demo/.test(txt)) {
+    throw new Error('Menú de cuenta incompleto (PIN / Ajustes / reset)')
+  }
+  console.log('✓ Menú de cuenta (cambiar PIN, Ajustes, reset en demo)')
+  await page.keyboard.press('Escape')
+  await sleep(300)
+
   // 3) Recorrer todas las rutas del admin
   const routes = [
     ['#/pos', 'Producto nuevo'],
