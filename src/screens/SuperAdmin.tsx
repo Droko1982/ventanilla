@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { useSession } from '@/store/session'
@@ -9,30 +9,72 @@ import { toast } from '@/components/Toast'
 import { cop } from '@/lib/money'
 import { fmtDate, daysUntil } from '@/lib/format'
 import { monthlyTotal, billingBreakdown } from '@/lib/billing'
-import type { Tenant } from '@/types'
+import {
+  getApiUrl, superAdminLogin, adminListTenants, adminSetStatus, adminPay, adminSetLicense,
+  clearCloud, type CloudTenant,
+} from '@/data/api'
+import type { Tenant, AccountStatus } from '@/types'
+
+// URL del backend en producción (Render). El dueño solo escribe correo y clave.
+const PROD_API = 'https://ventanilla-api-vvzh.onrender.com'
+
+// Fila de cliente que entiende tanto el modo local (demo) como el modo nube.
+type Row = {
+  id: string
+  businessName: string
+  ownerName: string
+  email: string
+  city: string
+  status: AccountStatus
+  paidUntil: string
+  monthlyFeePerLocation: number
+  locationCount?: number
+  maxSeats?: number
+  maxDevices?: number
+  deviceCount?: number
+  phone?: string
+  nit?: string
+}
 
 // Consola del dueño de la plataforma (nosotros): ve todos los clientes,
 // activa/suspende cuentas, gestiona el cobro y mira métricas globales.
+// En modo DEMO usa datos locales; conectado a la nube controla a los clientes reales.
 export default function SuperAdmin() {
   const logout = useSession((s) => s.logout)
-  const tenants = useLiveQuery(() => db.tenants.toArray(), [])
+  const localTenants = useLiveQuery(() => db.tenants.toArray(), [])
+  const [cloud, setCloud] = useState<CloudTenant[] | null>(null) // null = modo local
   const [filter, setFilter] = useState<'todos' | 'activo' | 'suspendido' | 'mora'>('todos')
-  const [detail, setDetail] = useState<Tenant | null>(null)
+  const [detailId, setDetailId] = useState<string | null>(null)
+
+  async function refreshCloud() {
+    setCloud(await adminListTenants())
+  }
+
+  // Si este dispositivo ya tiene una sesión Super-Admin guardada, reconecta solo.
+  useEffect(() => {
+    if (!getApiUrl()) return
+    adminListTenants().then(setCloud).catch(() => {}) // si no es super-admin, sigue en local
+  }, [])
+
+  const rows: Row[] = cloud
+    ? cloud.map((t) => ({ ...t, status: t.status as AccountStatus }))
+    : (localTenants ?? [])
+
+  const detail = detailId ? rows.find((r) => r.id === detailId) ?? null : null
 
   const metrics = useMemo(() => {
-    const list = tenants ?? []
-    const active = list.filter((t) => t.status === 'activo')
+    const active = rows.filter((t) => t.status === 'activo')
     const mrr = active.reduce((s, t) => s + monthlyTotal(t.locationCount ?? 1, t.monthlyFeePerLocation), 0)
-    const overdue = list.filter((t) => daysUntil(t.paidUntil) < 0).length
-    return { total: list.length, active: active.length, mrr, overdue }
-  }, [tenants])
+    const overdue = rows.filter((t) => daysUntil(t.paidUntil) < 0).length
+    return { total: rows.length, active: active.length, mrr, overdue }
+  }, [rows])
 
   const list = useMemo(() => {
-    let l = tenants ?? []
+    let l = rows
     if (filter === 'mora') l = l.filter((t) => daysUntil(t.paidUntil) < 0)
     else if (filter !== 'todos') l = l.filter((t) => t.status === filter)
     return [...l].sort((a, b) => daysUntil(a.paidUntil) - daysUntil(b.paidUntil))
-  }, [tenants, filter])
+  }, [rows, filter])
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -41,7 +83,7 @@ export default function SuperAdmin() {
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600">🛡️</span>
           <div className="flex-1">
             <p className="font-bold leading-tight">Consola Super-Admin</p>
-            <p className="text-xs text-slate-400">Plataforma Ventanilla</p>
+            <p className="text-xs text-slate-400">{cloud ? 'Conectado a la nube' : 'Plataforma Ventanilla'}</p>
           </div>
           <button onClick={logout} className="flex h-9 w-9 items-center justify-center rounded-full text-slate-300 hover:bg-white/10">
             <Icon name="logout" className="h-5 w-5" />
@@ -50,6 +92,8 @@ export default function SuperAdmin() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-4">
+        <CloudPanel connected={!!cloud} count={cloud?.length ?? 0} onConnect={refreshCloud} onDisconnect={() => { clearCloud(); setCloud(null) }} onRefresh={refreshCloud} />
+
         <div className="mb-4 grid grid-cols-2 gap-2.5">
           <StatCard label="Clientes" value={metrics.total} sub={`${metrics.active} activos`} accent="text-brand-700" icon={<Icon name="users" className="h-5 w-5" />} />
           <StatCard label="Ingreso mensual (MRR)" value={<Money value={metrics.mrr} />} accent="text-emerald-600" icon={<Icon name="cash" className="h-5 w-5" />} />
@@ -75,12 +119,13 @@ export default function SuperAdmin() {
             const overdue = daysUntil(t.paidUntil) < 0
             const total = monthlyTotal(t.locationCount ?? 1, t.monthlyFeePerLocation)
             return (
-              <button key={t.id} onClick={() => setDetail(t)} className="card flex w-full items-center gap-3 p-3 text-left active:scale-[0.99]">
+              <button key={t.id} onClick={() => setDetailId(t.id)} className="card flex w-full items-center gap-3 p-3 text-left active:scale-[0.99]">
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-xl">🏪</span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-slate-700">{t.businessName}</p>
                   <p className="truncate text-xs text-slate-400">
                     {t.ownerName} · {t.city} · {t.locationCount ?? 1} local(es)
+                    {cloud && <span> · {t.deviceCount ?? 0} disp.</span>}
                   </p>
                   <p className="text-xs">
                     <span className={overdue ? 'text-rose-500' : 'text-slate-400'}>
@@ -93,11 +138,89 @@ export default function SuperAdmin() {
               </button>
             )
           })}
-          {list.length === 0 && <EmptyState emoji="🗂️" title="Sin clientes en este filtro" />}
+          {list.length === 0 && <EmptyState emoji="🗂️" title={cloud ? 'Aún no hay clientes en la nube' : 'Sin clientes en este filtro'} />}
         </div>
       </main>
 
-      {detail && <TenantDetail tenant={detail} onClose={() => setDetail(null)} />}
+      {detail && (
+        <TenantDetail
+          tenant={detail}
+          cloud={!!cloud}
+          onChanged={refreshCloud}
+          onClose={() => setDetailId(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// Panel para conectar la consola al backend real y controlar clientes en la nube.
+function CloudPanel({ connected, count, onConnect, onDisconnect, onRefresh }: {
+  connected: boolean
+  count: number
+  onConnect: () => Promise<void>
+  onDisconnect: () => void
+  onRefresh: () => Promise<void>
+}) {
+  const [open, setOpen] = useState(false)
+  const [url, setUrl] = useState(getApiUrl() || PROD_API)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  if (connected) {
+    return (
+      <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+        <span className="text-lg">☁️</span>
+        <div className="flex-1 text-sm">
+          <p className="font-semibold text-emerald-800">Conectado a la plataforma</p>
+          <p className="text-xs text-emerald-600">{count} cliente(s) reales · los cambios afectan sus cuentas</p>
+        </div>
+        <button onClick={onRefresh} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-lg text-emerald-700" title="Actualizar">↻</button>
+        <button onClick={onDisconnect} className="text-xs text-emerald-700 underline">Salir</button>
+      </div>
+    )
+  }
+
+  async function connect() {
+    if (!url || !email || !password) return toast('error', 'Completa URL, correo y clave')
+    setBusy(true)
+    try {
+      await superAdminLogin(url, email, password)
+      await onConnect()
+      setOpen(false)
+      setPassword('')
+      toast('success', 'Conectado a la nube')
+    } catch (e) {
+      toast('error', (e as Error).message || 'No se pudo conectar')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
+      {!open ? (
+        <button onClick={() => setOpen(true)} className="flex w-full items-center gap-3 text-left">
+          <span className="text-lg">☁️</span>
+          <div className="flex-1 text-sm">
+            <p className="font-semibold text-slate-700">Conectar a la plataforma (nube)</p>
+            <p className="text-xs text-slate-400">Estás viendo el demo local. Conéctate para ver y controlar a tus clientes reales.</p>
+          </div>
+          <span className="text-xl text-slate-300">›</span>
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-slate-700">Acceso Super-Admin de la plataforma</p>
+          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="URL del servidor" className="input w-full text-sm" />
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Correo Super-Admin" autoComplete="username" className="input w-full text-sm" />
+          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="Clave" autoComplete="current-password" className="input w-full text-sm" onKeyDown={(e) => e.key === 'Enter' && connect()} />
+          <div className="flex gap-2">
+            <button onClick={() => setOpen(false)} className="btn btn-ghost flex-1">Cancelar</button>
+            <button onClick={connect} disabled={busy} className="btn btn-primary flex-1">{busy ? 'Conectando…' : 'Conectar'}</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -112,28 +235,39 @@ function StatusChip({ status }: { status: Tenant['status'] }) {
   return <span className={`chip ${map[status]}`}>{label[status]}</span>
 }
 
-function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void }) {
+function TenantDetail({ tenant, cloud, onChanged, onClose }: {
+  tenant: Row
+  cloud: boolean
+  onChanged: () => Promise<void>
+  onClose: () => void
+}) {
   const billing = billingBreakdown(tenant.locationCount ?? 1, tenant.monthlyFeePerLocation)
   const overdue = daysUntil(tenant.paidUntil) < 0
+  // En la nube solo conocemos el conteo de dispositivos; en local, la lista completa.
   const devices = useLiveQuery(() => db.devices.where('tenantId').equals(tenant.id).toArray(), [tenant.id]) ?? []
   const seatsUsed = tenant.locationCount ?? 1
   const maxSeats = tenant.maxSeats ?? seatsUsed
   const maxDevices = tenant.maxDevices ?? 0
-  const devicesActive = devices.filter((d) => !d.blocked).length
+  const devicesActive = cloud ? (tenant.deviceCount ?? 0) : devices.filter((d) => !d.blocked).length
 
-  async function setStatus(status: Tenant['status']) {
-    await db.tenants.update(tenant.id, { status })
+  async function setStatus(status: AccountStatus) {
+    if (cloud) { await adminSetStatus(tenant.id, status); await onChanged() }
+    else await db.tenants.update(tenant.id, { status })
     toast('success', status === 'activo' ? 'Cuenta activada' : 'Cuenta suspendida')
     onClose()
   }
 
   async function setSeats(n: number) {
-    await db.tenants.update(tenant.id, { maxSeats: Math.max(1, n) })
-    toast('success', `Licencia: ${Math.max(1, n)} punto(s)`)
+    const v = Math.max(1, n)
+    if (cloud) { await adminSetLicense(tenant.id, { maxSeats: v }); await onChanged() }
+    else await db.tenants.update(tenant.id, { maxSeats: v })
+    toast('success', `Licencia: ${v} punto(s)`)
   }
   async function setDevices(n: number) {
-    await db.tenants.update(tenant.id, { maxDevices: Math.max(1, n) })
-    toast('success', `Licencia: ${Math.max(1, n)} dispositivo(s)`)
+    const v = Math.max(1, n)
+    if (cloud) { await adminSetLicense(tenant.id, { maxDevices: v }); await onChanged() }
+    else await db.tenants.update(tenant.id, { maxDevices: v })
+    toast('success', `Licencia: ${v} dispositivo(s)`)
   }
   async function releaseDevice(id: string) {
     await db.devices.delete(id)
@@ -141,9 +275,14 @@ function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void
   }
 
   async function markPaid() {
-    const base = Math.max(Date.now(), new Date(tenant.paidUntil).getTime())
-    const next = new Date(base + 30 * 86400000).toISOString()
-    await db.tenants.update(tenant.id, { paidUntil: next, status: 'activo' })
+    if (cloud) {
+      await adminPay(tenant.id)
+      await onChanged()
+    } else {
+      const base = Math.max(Date.now(), new Date(tenant.paidUntil).getTime())
+      const next = new Date(base + 30 * 86400000).toISOString()
+      await db.tenants.update(tenant.id, { paidUntil: next, status: 'activo' })
+    }
     toast('success', 'Pago registrado · +30 días')
     onClose()
   }
@@ -154,8 +293,8 @@ function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void
         <div className="flex items-center justify-between">
           <div className="text-sm text-slate-500">
             <p>{tenant.ownerName}</p>
-            <p>{tenant.email} · {tenant.phone}</p>
-            <p>NIT {tenant.nit} · {tenant.city}</p>
+            <p>{tenant.email}{tenant.phone ? ` · ${tenant.phone}` : ''}</p>
+            <p>{tenant.nit ? `NIT ${tenant.nit} · ` : ''}{tenant.city}</p>
           </div>
           <StatusChip status={tenant.status} />
         </div>
@@ -192,7 +331,7 @@ function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void
               <button onClick={() => setDevices(maxDevices + 1)} className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-brand-700"><Icon name="plus" className="h-4 w-4" /></button>
             </div>
           </div>
-          {devices.length > 0 && (
+          {!cloud && devices.length > 0 && (
             <div className="mt-2 space-y-1">
               {devices.map((d) => (
                 <div key={d.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs">
@@ -230,7 +369,7 @@ function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void
           )}
         </div>
         <p className="text-center text-xs text-slate-400">
-          En la v1 el cobro es manual. La estructura queda lista para integrar pasarela de pago después.
+          {cloud ? 'Los cambios se aplican en la cuenta real del cliente.' : 'Estás en el demo local. Conéctate a la nube para gestionar clientes reales.'}
         </p>
       </div>
     </Sheet>
