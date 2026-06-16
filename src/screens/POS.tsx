@@ -55,6 +55,7 @@ export default function POS() {
   const [payOpen, setPayOpen] = useState(false)
   const [quickAdd, setQuickAdd] = useState(false)
   const [scanCreateCode, setScanCreateCode] = useState<string | undefined>()
+  const [scanUnknown, setScanUnknown] = useState<string | null>(null)
   const [serviceOpen, setServiceOpen] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
   const [displayOpen, setDisplayOpen] = useState(false)
@@ -146,10 +147,9 @@ export default function POS() {
       if (found) {
         addToCart(found)
       } else if (canManage) {
-        // Código desconocido → crear el producto con ese código precargado
-        setScanCreateCode(code)
-        setQuickAdd(true)
-        toast('info', `Código nuevo: regístralo`)
+        // Código desconocido → preguntar si es un producto existente (asignarle el
+        // código) o crear uno nuevo. Evita duplicar un producto ya creado sin código.
+        setScanUnknown(code)
       } else {
         toast('error', `Código ${code} no está registrado`)
       }
@@ -167,7 +167,7 @@ export default function POS() {
         (products ?? []).find((p) => p.barcode === q || p.internalCode === q || p.internalCode?.toLowerCase() === ql) ??
         (products ?? []).find((p) => p.name.toLowerCase().includes(ql))
       if (!found) {
-        if (canManage) { setScanCreateCode(q); setQuickAdd(true) }
+        if (canManage) setScanUnknown(q)
         else toast('error', `"${q}" no está registrado`)
         return
       }
@@ -465,6 +465,21 @@ export default function POS() {
           defaultLocationId={locationId}
           initialBarcode={scanCreateCode}
           onSaved={(p) => { addToCart(p); setScanCreateCode(undefined) }}
+        />
+      )}
+
+      {scanUnknown && products && (
+        <ScanUnknownSheet
+          code={scanUnknown}
+          products={products}
+          onAssign={async (p) => {
+            await db.products.update(p.id, { barcode: scanUnknown })
+            setScanUnknown(null)
+            toast('success', `Código asignado a ${p.name}`)
+            addToCart(p)
+          }}
+          onCreateNew={() => { setScanCreateCode(scanUnknown); setScanUnknown(null); setQuickAdd(true) }}
+          onClose={() => setScanUnknown(null)}
         />
       )}
 
@@ -871,6 +886,46 @@ function CatChip({ active, onClick, label, emoji }: { active: boolean; onClick: 
 }
 
 // --- Venta por peso / granel ------------------------------------------------
+// Código escaneado que no existe: ¿asignarlo a un producto ya creado (p. ej. un
+// yogurt que se registró sin código) o crear uno nuevo? Así no se duplican.
+function ScanUnknownSheet({ code, products, onAssign, onCreateNew, onClose }: {
+  code: string
+  products: Product[]
+  onAssign: (p: Product) => void
+  onCreateNew: () => void
+  onClose: () => void
+}) {
+  const [q, setQ] = useState('')
+  const ql = q.trim().toLowerCase()
+  const matches = ql
+    ? products.filter((p) => p.active !== false && p.name.toLowerCase().includes(ql)).slice(0, 8)
+    : products.filter((p) => p.active !== false && !p.barcode).slice(0, 8)
+  return (
+    <Sheet open onClose={onClose} title="Código no registrado">
+      <div className="space-y-3">
+        <div className="rounded-xl bg-amber-50 p-3 text-center">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Código escaneado</p>
+          <p className="text-2xl font-bold text-amber-800">{code}</p>
+        </div>
+        <p className="text-sm text-slate-600">¿Es un producto que ya tienes? Búscalo y le pego este código para venderlo al instante.</p>
+        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar producto existente…" autoFocus />
+        <div className="space-y-1">
+          {matches.map((p) => (
+            <button key={p.id} onClick={() => onAssign(p)} className="card flex w-full items-center gap-3 p-2.5 text-left active:scale-[0.99]">
+              <ProductThumb photo={p.photo} emoji={p.imageEmoji} size={40} />
+              <span className="flex-1 truncate text-sm font-semibold text-slate-700">{p.name}</span>
+              <span className="shrink-0 text-xs font-semibold text-brand-600">Asignar código</span>
+            </button>
+          ))}
+          {ql && matches.length === 0 && <p className="px-1 text-xs text-slate-400">Sin coincidencias. Crea uno nuevo abajo.</p>}
+          {!ql && matches.length > 0 && <p className="px-1 text-xs text-slate-400">Productos sin código (toca uno para asignarle este).</p>}
+        </div>
+        <button onClick={onCreateNew} className="btn btn-secondary w-full">➕ Crear producto nuevo con este código</button>
+      </div>
+    </Sheet>
+  )
+}
+
 function WeightSheet({ product, onClose, onConfirm }: { product: Product; onClose: () => void; onConfirm: (kg: number) => void }) {
   const [grams, setGrams] = useState('')
   const [reading, setReading] = useState(false)
