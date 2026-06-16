@@ -1449,7 +1449,7 @@ function ReceiptSheet({ sale, onClose }: { sale: Sale; onClose: () => void }) {
       open
       onClose={onClose}
       title="¡Venta lista! 🎉"
-      footer={<button className="btn btn-primary btn-lg w-full" onClick={onClose}>Nueva venta</button>}
+      footer={<button autoFocus className="btn btn-primary btn-lg w-full" onClick={onClose}>Nueva venta (Enter)</button>}
     >
       <div className="space-y-4">
         <div className="rounded-2xl bg-emerald-50 p-4 text-center">
