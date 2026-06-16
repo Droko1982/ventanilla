@@ -11,7 +11,8 @@ import { fmtDate, daysUntil } from '@/lib/format'
 import { monthlyTotal, billingBreakdown } from '@/lib/billing'
 import {
   getApiUrl, getRole, superAdminLogin, adminListTenants, adminSetStatus, adminPay, adminSetLicense,
-  adminListDevices, adminReleaseDevice, adminDeleteTenant, clearCloud, type CloudTenant, type CloudDevice,
+  adminListDevices, adminReleaseDevice, adminDeleteTenant, adminCreateTenant, clearCloud,
+  type CloudTenant, type CloudDevice,
 } from '@/data/api'
 import type { Tenant, AccountStatus } from '@/types'
 
@@ -45,6 +46,7 @@ export default function SuperAdmin() {
   const [cloud, setCloud] = useState<CloudTenant[] | null>(null) // null = modo local
   const [filter, setFilter] = useState<'todos' | 'activo' | 'suspendido' | 'mora'>('todos')
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
 
   async function refreshCloud() {
     setCloud(await adminListTenants())
@@ -102,6 +104,13 @@ export default function SuperAdmin() {
           <StatCard label="Ticket promedio" value={<Money value={metrics.active ? Math.round(metrics.mrr / metrics.active) : 0} />} sub="por cliente activo" />
         </div>
 
+        <button
+          onClick={() => cloud ? setCreating(true) : toast('info', 'Conéctate a la plataforma (nube) para crear clientes reales')}
+          className="btn btn-primary mb-3 w-full"
+        >
+          <Icon name="plus" className="h-5 w-5" /> Crear cliente
+        </button>
+
         <div className="mb-4">
           <Segmented
             value={filter}
@@ -151,7 +160,53 @@ export default function SuperAdmin() {
           onClose={() => setDetailId(null)}
         />
       )}
+
+      {creating && <NewTenantSheet onCreated={refreshCloud} onClose={() => setCreating(false)} />}
     </div>
+  )
+}
+
+// Crear un cliente (negocio) desde la consola. El dueño define correo y clave,
+// se los entrega al cliente y este entra desde la app con esos datos.
+function NewTenantSheet({ onCreated, onClose }: { onCreated: () => Promise<void>; onClose: () => void }) {
+  const [businessName, setBusinessName] = useState('')
+  const [ownerName, setOwnerName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [city, setCity] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function save() {
+    if (!businessName.trim() || !ownerName.trim() || !email.trim() || password.length < 6) {
+      return toast('error', 'Completa negocio, dueño, correo y clave (mínimo 6).')
+    }
+    setBusy(true)
+    try {
+      await adminCreateTenant({ businessName: businessName.trim(), ownerName: ownerName.trim(), email: email.trim(), password, city: city.trim() })
+      await onCreated()
+      toast('success', 'Cliente creado · 15 días de prueba')
+      onClose()
+    } catch (e) {
+      toast('error', (e as Error).message || 'No se pudo crear')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Sheet open onClose={onClose} title="Crear cliente"
+      footer={<button onClick={save} disabled={busy} className="btn btn-primary btn-lg w-full">{busy ? 'Creando…' : 'Crear cliente'}</button>}
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-slate-500">Crea la cuenta del negocio. Le entregas el correo y la clave y el cliente entra desde la app.</p>
+        <div><label className="label">Nombre del negocio</label><input className="input" value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Tienda Don José" /></div>
+        <div><label className="label">Nombre del dueño</label><input className="input" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="José Pérez" /></div>
+        <div><label className="label">Ciudad</label><input className="input" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Armenia, Quindío" /></div>
+        <div><label className="label">Correo (su acceso)</label><input className="input" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="negocio@correo.com" /></div>
+        <div><label className="label">Clave (su acceso)</label><input className="input" type="text" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="mínimo 6 caracteres" /></div>
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">Anota el correo y la clave: son los datos con los que el cliente entra a su app.</p>
+      </div>
+    </Sheet>
   )
 }
 

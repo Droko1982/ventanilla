@@ -1,9 +1,35 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
-import { authRequired, superAdminRequired } from '../auth.js'
+import { authRequired, superAdminRequired, hash } from '../auth.js'
+import { uid } from '../util.js'
 
 export const adminRouter = Router()
 adminRouter.use(authRequired, superAdminRequired)
+
+// Crear un cliente (negocio) desde la consola del dueño de la plataforma.
+// Mismos valores que el auto-registro: 15 días de prueba + usuario dueño.
+adminRouter.post('/tenants', async (req, res) => {
+  const { businessName, ownerName, email, password, city, phone } = req.body ?? {}
+  if (!businessName || !ownerName || !email || !password || String(password).length < 6) {
+    return res.status(400).json({ error: 'Faltan datos: negocio, dueño, correo y clave (≥6).' })
+  }
+  const exists = await prisma.tenant.findUnique({ where: { email: String(email) } })
+  if (exists) return res.status(409).json({ error: 'Ya existe una cuenta con ese correo' })
+  const tenantId = uid('t')
+  await prisma.tenant.create({
+    data: {
+      id: tenantId, businessName: String(businessName), ownerName: String(ownerName),
+      email: String(email), passwordHash: hash(String(password)),
+      city: city ? String(city) : '', phone: phone ? String(phone) : '',
+      status: 'prueba', paidUntil: new Date(Date.now() + 15 * 86400000),
+      dian: { enabled: false, provider: 'ninguno', testMode: true },
+    },
+  })
+  await prisma.user.create({
+    data: { id: uid('u'), tenantId, name: String(ownerName), role: 'admin', email: String(email), passwordHash: hash(String(password)) },
+  })
+  res.json({ ok: true, id: tenantId })
+})
 
 // Lista todos los clientes del SaaS (consola Super-Admin), con nº de dispositivos.
 adminRouter.get('/tenants', async (_req, res) => {

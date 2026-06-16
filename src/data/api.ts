@@ -106,6 +106,11 @@ export async function adminPay(id: string): Promise<void> {
 export async function adminDeleteTenant(id: string): Promise<void> {
   await api(`/admin/tenants/${id}`, { method: 'DELETE' })
 }
+export async function adminCreateTenant(data: {
+  businessName: string; ownerName: string; email: string; password: string; city?: string; phone?: string
+}): Promise<{ ok: boolean; id: string }> {
+  return api(`/admin/tenants`, { method: 'POST', body: data })
+}
 export async function adminSetLicense(id: string, data: { maxSeats?: number; maxDevices?: number }): Promise<void> {
   await api(`/admin/tenants/${id}/license`, { method: 'POST', body: data })
 }

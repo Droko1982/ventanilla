@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from 'react'
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import {
   useActiveLocationId,
   useProducts,
@@ -1127,27 +1127,44 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
 
   const needsProof = ['nequi', 'tarjeta', 'transferencia'].includes(method)
 
+  // Confirmar la venta (guarda anti-doble, para que Enter o el botón no la repitan).
+  const submitting = useRef(false)
+  function confirmSale() {
+    if (submitting.current) return
+    const payments = buildPayments()
+    if (!payments) return
+    submitting.current = true
+    onConfirm(payments, {
+      customerId: customerId || undefined,
+      customerDoc: wantInvoice ? customerDoc : undefined,
+      transmitDian,
+      note: note.trim() || undefined,
+      redeemPoints: redeemPointsUsed || undefined,
+    })
+  }
+
+  // Cobrar con la tecla Enter (en vez de tener que tocar el botón). No dispara
+  // si el foco está en un menú desplegable (para no interferir al elegir cliente).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return
+      const tag = (document.activeElement?.tagName || '').toUpperCase()
+      if (tag === 'SELECT') return
+      e.preventDefault()
+      confirmSale()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   return (
     <Sheet
       open
       onClose={onClose}
       title="Cobrar"
       footer={
-        <button
-          className="btn btn-success btn-lg w-full"
-          onClick={() => {
-            const payments = buildPayments()
-            if (!payments) return
-            onConfirm(payments, {
-              customerId: customerId || undefined,
-              customerDoc: wantInvoice ? customerDoc : undefined,
-              transmitDian,
-              note: note.trim() || undefined,
-              redeemPoints: redeemPointsUsed || undefined,
-            })
-          }}
-        >
-          <Icon name="check" className="h-6 w-6" /> Recibí el pago · Cerrar venta
+        <button className="btn btn-success btn-lg w-full" onClick={confirmSale}>
+          <Icon name="check" className="h-6 w-6" /> Recibí el pago · Cerrar venta (Enter)
         </button>
       }
     >
@@ -1157,11 +1174,11 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
           {redeemValue > 0 ? (
             <>
               <p className="text-lg font-semibold text-slate-400 line-through">{cop(total)}</p>
-              <p className="text-4xl font-extrabold text-brand-700">{cop(chargeTotal)}</p>
+              <p className="text-6xl font-black leading-tight text-brand-700">{cop(chargeTotal)}</p>
               <p className="text-xs font-semibold text-emerald-600">− {cop(redeemValue)} con {redeemPointsUsed} puntos</p>
             </>
           ) : (
-            <p className="text-4xl font-extrabold text-brand-700">{cop(total)}</p>
+            <p className="text-6xl font-black leading-tight text-brand-700">{cop(total)}</p>
           )}
         </div>
 
@@ -1193,7 +1210,7 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
         {method === 'efectivo' && (
           <div className="space-y-2">
             <label className="label">¿Con cuánto paga?</label>
-            <input className="input text-center text-xl font-bold" inputMode="numeric" value={received} onChange={(e) => setReceived(e.target.value)} placeholder={cop(chargeTotal)} />
+            <input className="input text-center text-3xl font-bold" inputMode="numeric" autoFocus value={received} onChange={(e) => setReceived(e.target.value)} placeholder={cop(chargeTotal)} />
             <div className="grid grid-cols-4 gap-2">
               {[chargeTotal, 10000, 20000, 50000].map((b, i) => (
                 <button key={i} onClick={() => setReceived(String(b))} className="btn btn-secondary py-2 text-xs">
@@ -1203,8 +1220,8 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
             </div>
             {change > 0 && (
               <div className="rounded-xl bg-emerald-50 p-3 text-center">
-                <span className="text-sm text-emerald-600">Cambio / vuelto</span>
-                <p className="text-2xl font-bold text-emerald-700">{cop(change)}</p>
+                <span className="text-sm font-semibold uppercase tracking-wide text-emerald-600">Cambio / vuelto</span>
+                <p className="text-5xl font-black leading-tight text-emerald-700">{cop(change)}</p>
               </div>
             )}
           </div>
