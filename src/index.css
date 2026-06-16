@@ -119,3 +119,19 @@ html.dark .input::placeholder,
 html.dark input::placeholder,
 html.dark textarea::placeholder { color: #64748b; }
 html.dark select option { background-color: #1e293b; color: #e6edf5; }
+
+/* Acentos semánticos vivos también en OSCURO:
+   verde = ingreso · rojo = egreso · ámbar/amarillo = vueltas (cambio). */
+html.dark .text-emerald-700, html.dark .text-emerald-600 { color: #34d399; }
+html.dark .text-rose-700, html.dark .text-rose-600 { color: #fb7185; }
+html.dark .text-amber-800, html.dark .text-amber-700, html.dark .text-amber-600 { color: #fbbf24; }
+/* Sus fondos de pastilla/tarjeta en tintes oscuros translúcidos (para que el
+   texto vivo contraste; en claro siguen siendo pasteles). */
+html.dark .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.20); }
+html.dark .bg-rose-100 { background-color: rgba(244, 63, 94, 0.20); }
+html.dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.22); }
+html.dark .bg-emerald-50, html.dark .bg-emerald-50\/50 { background-color: rgba(16, 185, 129, 0.12); }
+html.dark .bg-rose-50 { background-color: rgba(244, 63, 94, 0.12); }
+html.dark .bg-amber-50, html.dark .bg-amber-50\/40, html.dark .bg-amber-50\/50 { background-color: rgba(245, 158, 11, 0.12); }
+html.dark .bg-brand-50, html.dark .bg-brand-50\/50 { background-color: rgba(20, 184, 166, 0.12); }
+html.dark .bg-brand-100 { background-color: rgba(20, 184, 166, 0.20); }
