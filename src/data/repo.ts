@@ -2,6 +2,7 @@ import { db } from './db'
 import { api, isCloudConfigured } from './api'
 import { uid } from '@/lib/id'
 import { startOfToday } from '@/lib/format'
+import { localYMD, saleDay } from '@/lib/businessDay'
 import { cop } from '@/lib/money'
 import type {
   Sale,
@@ -128,6 +129,13 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
   let crossedThreshold = false // ¿algún producto bajó del umbral en esta venta?
   const docType = input.docType ?? (input.customerDoc ? 'factura' : 'tiquete_pos')
   const docNumber = docType === 'factura' ? nextFacturaNumber() : nextDianNumber()
+  // Caja abierta del local → día contable (día de apertura). Si no hay caja
+  // abierta, el día contable es el de hoy (calendario).
+  const openSession = await db.cashSessions
+    .where('locationId').equals(input.locationId)
+    .and((c) => c.status === 'abierta')
+    .first()
+  const businessDate = openSession ? localYMD(openSession.openedAt) : localYMD(now)
 
   const sale: Sale = {
     id: uid('s'),
@@ -155,6 +163,8 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
     dianDocNumber: input.transmitDian ? docNumber : undefined,
     remisionId: input.remisionId,
     createdAt: now,
+    cashSessionId: openSession?.id,
+    businessDate,
     syncedAt: navigator.onLine ? now : undefined, // offline: queda sin sincronizar
   }
 
@@ -1170,9 +1180,6 @@ export async function generateZReport(
   userId: string,
   userName: string,
 ): Promise<ZReport> {
-  const day = new Date(`${dateStr}T00:00:00`)
-  const start = cumulative ? 0 : day.getTime()
-  const end = day.getTime() + 86400000
   const sales = await db.sales.where('locationId').equals(locationId).toArray()
 
   let count = 0, revenue = 0, base = 0, iva = 0, discounts = 0, returnsCount = 0
@@ -1180,8 +1187,10 @@ export async function generateZReport(
   const byDocType: Record<string, number> = {}
   const ivaAgg = new Map<number, { base: number; iva: number }>()
   for (const s of sales) {
-    const t = new Date(s.createdAt).getTime()
-    if (t < start || t >= end) continue
+    // Día contable (día de apertura de la caja), no la medianoche del reloj: así
+    // el cierre incluye las ventas de después de medianoche del mismo turno.
+    const sd = saleDay(s)
+    if (cumulative ? sd > dateStr : sd !== dateStr) continue
     if (s.status === 'anulada' || (s.returns && s.returns.length)) returnsCount++
     if (s.status !== 'completada') continue
     count++; revenue += s.total; discounts += s.discount

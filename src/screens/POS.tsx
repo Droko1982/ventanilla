@@ -758,6 +758,7 @@ function CounterEntry({
   const [code, setCode] = useState('')
   const [qty, setQty] = useState('1')
   const [results, setResults] = useState<Product[]>([])
+  const [pinVendor, setPinVendor] = useState<User | null>(null)
 
   function submit() {
     if (!code.trim()) return
@@ -787,12 +788,32 @@ function CounterEntry({
         </div>
         <div>
           <label className="label">Vendedor</label>
-          <select className="input" value={cart.meta.vendedorId ?? ''} onChange={(e) => { const v = vendedores.find((x) => x.id === e.target.value); cart.setMeta({ vendedorId: v?.id, vendedorName: v?.name }) }}>
+          <select
+            className="input"
+            value={cart.meta.vendedorId ?? ''}
+            onChange={(e) => {
+              const id = e.target.value
+              if (!id) { cart.setMeta({ vendedorId: undefined, vendedorName: undefined }); return }
+              const v = vendedores.find((x) => x.id === id)
+              if (!v) return
+              // Confirma con PIN que es realmente ese vendedor (si tiene PIN configurado).
+              if (v.pin) setPinVendor(v)
+              else cart.setMeta({ vendedorId: v.id, vendedorName: v.name })
+            }}
+          >
             <option value="">Seleccione…</option>
             {vendedores.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
           </select>
         </div>
       </div>
+
+      {pinVendor && (
+        <VendorPinSheet
+          vendor={pinVendor}
+          onConfirm={() => { cart.setMeta({ vendedorId: pinVendor.id, vendedorName: pinVendor.name }); toast('success', `Vendedor: ${pinVendor.name}`); setPinVendor(null) }}
+          onClose={() => setPinVendor(null)}
+        />
+      )}
 
       <div className="relative">
         <div className="flex gap-2">
@@ -886,6 +907,35 @@ function CatChip({ active, onClick, label, emoji }: { active: boolean; onClick: 
 }
 
 // --- Venta por peso / granel ------------------------------------------------
+// PIN del vendedor: confirma que la venta queda a nombre de quien realmente vende.
+function VendorPinSheet({ vendor, onConfirm, onClose }: { vendor: User; onConfirm: () => void; onClose: () => void }) {
+  const [pin, setPin] = useState('')
+  function check(p: string) {
+    const v = p.replace(/\D/g, '').slice(0, 4)
+    setPin(v)
+    if (v.length === 4) {
+      if (v === vendor.pin) onConfirm()
+      else { toast('error', 'PIN incorrecto'); setPin('') }
+    }
+  }
+  return (
+    <Sheet open onClose={onClose} title={`PIN de ${vendor.name}`}>
+      <div className="space-y-3">
+        <p className="text-sm text-slate-500">Ingresa tu PIN para que la venta quede registrada a tu nombre, {vendor.name}.</p>
+        <input
+          className="input text-center text-4xl tracking-[0.4em]"
+          inputMode="numeric"
+          maxLength={4}
+          autoFocus
+          value={pin}
+          onChange={(e) => check(e.target.value)}
+          placeholder="••••"
+        />
+      </div>
+    </Sheet>
+  )
+}
+
 // Código escaneado que no existe: ¿asignarlo a un producto ya creado (p. ej. un
 // yogurt que se registró sin código) o crear uno nuevo? Así no se duplican.
 function ScanUnknownSheet({ code, products, onAssign, onCreateNew, onClose }: {

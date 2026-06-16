@@ -1,4 +1,5 @@
 import type { Sale, PaymentMethod } from '@/types'
+import { saleDay } from './businessDay'
 
 // Cálculos de negocio sobre las ventas: ingresos, utilidad, por método,
 // más/menos vendidos, ventas por día. Lo usan el dashboard y los reportes.
@@ -86,8 +87,7 @@ export function salesByDay(sales: Sale[], days = 14): DayPoint[] {
   const byDay = new Map<string, { revenue: number; count: number }>()
   for (const s of sales) {
     if (s.status !== 'completada') continue
-    const d = new Date(s.createdAt)
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const key = saleDay(s) // día contable (día de apertura de la caja)
     const cur = byDay.get(key) ?? { revenue: 0, count: 0 }
     cur.revenue += s.total
     cur.count += 1

@@ -4,7 +4,8 @@ import { db } from '@/data/db'
 import { useActiveLocationId, useLocations, useCurrentUser, useTenant } from '@/hooks/data'
 import { openCashSession, closeCashSession, addCashMovement, audit, generateZReport } from '@/data/repo'
 import { openCashDrawer, drawerMessage } from '@/lib/cashDrawer'
-import { summarize, todayRange } from '@/lib/analytics'
+import { summarize } from '@/lib/analytics'
+import { localYMD, todayYMD, saleDay } from '@/lib/businessDay'
 import { Sheet } from '@/components/Sheet'
 import { StatCard, Money, EmptyState, PageHeader } from '@/components/ui'
 import { Icon } from '@/components/icons'
@@ -75,9 +76,16 @@ export default function Caja() {
     [locationId],
   )
 
+  // Ventas del DÍA CONTABLE: si hay caja abierta, el día es el de su apertura
+  // (aunque ya pasó medianoche); si no, el día calendario de hoy.
   const todaySales = useLiveQuery(
-    async () => (locationId ? todayRange(await db.sales.where('locationId').equals(locationId).toArray()) : []),
-    [locationId],
+    async () => {
+      if (!locationId) return []
+      const bizDay = session ? localYMD(session.openedAt) : todayYMD()
+      const all = await db.sales.where('locationId').equals(locationId).toArray()
+      return all.filter((s) => s.status === 'completada' && saleDay(s) === bizDay)
+    },
+    [locationId, session?.id],
   )
 
   const summary = useMemo(() => summarize(todaySales ?? []), [todaySales])
@@ -288,7 +296,7 @@ export default function Caja() {
                 toast(cs.difference === 0 ? 'success' : 'info', cs.difference === 0 ? 'Caja cuadrada ✓' : `Diferencia: ${cop(cs.difference!)}`)
               // Informe Z del día automático al cerrar (si está activado)
               if (cs && autoZ) {
-                try { await generateZReport(tenantId, locationId, new Date().toISOString().slice(0, 10), false, user!.id, user!.name); toast('success', 'Informe Z generado') } catch { /* no bloquea el cierre */ }
+                try { await generateZReport(tenantId, locationId, localYMD(session.openedAt), false, user!.id, user!.name); toast('success', 'Informe Z generado') } catch { /* no bloquea el cierre */ }
               }
               // Envía el resumen del cierre al dueño por WhatsApp (gesto del usuario → no se bloquea)
               if (cs && tenant?.phone) sendSummary({ counted: countedNum, diff: cs.difference ?? diff })

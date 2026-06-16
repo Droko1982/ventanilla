@@ -217,6 +217,11 @@ export interface Sale {
   debitNoteNumber?: string // nota débito (cargo adicional)
   debitNoteAmount?: number
   createdAt: string
+  // Día contable y caja (turno) a la que pertenece la venta. businessDate es el
+  // día en que se abrió la caja (YYYY-MM-DD): una caja que cruza medianoche
+  // mantiene todas sus ventas en el mismo día hasta que se cierra.
+  cashSessionId?: string
+  businessDate?: string
   syncedAt?: string // null mientras está sólo en local (offline)
 }
 
