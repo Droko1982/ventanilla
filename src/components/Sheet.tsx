@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 // Hoja inferior (bottom sheet) — patrón móvil para formularios y acciones.
 // Se desliza desde abajo, ocupa el ancho en celular y se centra en escritorio.
@@ -23,7 +24,10 @@ export function Sheet({
   }, [open, onClose])
 
   if (!open) return null
-  return (
+  // Portal a <body>: evita que un ancestro con backdrop-filter/transform (p. ej.
+  // el header con `backdrop-blur`) se convierta en el bloque contenedor del
+  // overlay `fixed` y lo atrape en una caja pequeña en vez de cubrir la pantalla.
+  return createPortal(
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="fixed inset-0 bg-slate-900/50 animate-fade-in" onClick={onClose} />
       {/* El contenedor desplaza si el contenido es más alto que la pantalla, así
@@ -45,6 +49,7 @@ export function Sheet({
           {footer && <div className="sticky bottom-0 border-t border-slate-100 bg-white px-5 py-4">{footer}</div>}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
