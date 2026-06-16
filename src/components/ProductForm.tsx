@@ -153,6 +153,17 @@ export function ProductForm({
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Gaseosa 1.5L" />
         </div>
 
+        {/* Código de barras (visible y arriba: así el producto queda escaneable) */}
+        <div>
+          <label className="label">Código de barras / QR <span className="text-brand-600">— escanéalo para vender</span></label>
+          <div className="flex gap-2">
+            <input className="input flex-1" value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Escribe o escanea el código" />
+            <button type="button" onClick={() => setScanOpen(true)} className="btn btn-primary px-4" aria-label="Escanear código">
+              <Icon name="scan" className="h-5 w-5" /> Escanear
+            </button>
+          </div>
+        </div>
+
         {/* Foto del producto (opcional) */}
         <div>
           <label className="label">Foto del producto (opcional)</label>
@@ -240,24 +251,13 @@ export function ProductForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label">IVA (DIAN)</label>
-            <select className="input" value={iva} onChange={(e) => setIva(Number(e.target.value))}>
-              <option value={0}>0% (excluido)</option>
-              <option value={5}>5%</option>
-              <option value={19}>19%</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Código de barras / QR</label>
-            <div className="flex gap-2">
-              <input className="input" value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Manual o escanear" />
-              <button type="button" onClick={() => setScanOpen(true)} className="btn btn-secondary px-3" aria-label="Escanear código">
-                <Icon name="scan" className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
+        <div>
+          <label className="label">IVA (DIAN)</label>
+          <select className="input" value={iva} onChange={(e) => setIva(Number(e.target.value))}>
+            <option value={0}>0% (excluido)</option>
+            <option value={5}>5%</option>
+            <option value={19}>19%</option>
+          </select>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
