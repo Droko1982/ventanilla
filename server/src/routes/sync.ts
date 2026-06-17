@@ -29,6 +29,12 @@ syncRouter.get('/', authRequired, async (req: AuthedRequest, res) => {
   if (!tenantId) return res.json({ serverTime: new Date().toISOString(), records: [] })
   const since = req.query.since ? new Date(String(req.query.since)) : new Date(0)
 
+  // Capturamos el cursor ANTES de consultar: si un registro se escribe mientras
+  // corre la consulta, su updatedAt será > serverTime y el próximo pull (gt) lo
+  // traerá. Generarlo después dejaría esos registros en una ventana ciega (se
+  // perderían entre dispositivos). A lo sumo se repite un registro (idempotente).
+  const serverTime = new Date().toISOString()
+
   const rows = await prisma.syncRecord.findMany({
     where: { tenantId, updatedAt: { gt: since } },
     orderBy: { updatedAt: 'asc' },
@@ -69,7 +75,7 @@ syncRouter.get('/', authRequired, async (req: AuthedRequest, res) => {
     })
   }
 
-  res.json({ serverTime: new Date().toISOString(), records })
+  res.json({ serverTime, records })
 })
 
 // --- PUSH: aplica los cambios locales del cliente --------------------------

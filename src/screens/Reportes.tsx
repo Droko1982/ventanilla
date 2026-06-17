@@ -5,6 +5,7 @@ import { useScopeSales, useScopeStock, useProducts, useLocations, useTenant } fr
 import { useScopeLocationIds } from '@/hooks/data'
 import { summarize, topProducts, bottomProducts, productStats, filterByRange } from '@/lib/analytics'
 import { ivaBreakdown } from '@/lib/documents'
+import { saleDay } from '@/lib/businessDay'
 import { StatCard, Money, Segmented, PageHeader, EmptyState } from '@/components/ui'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
@@ -51,7 +52,7 @@ export default function Reportes() {
       .map((s) => {
         const t = ivaBreakdown(s.items, s.discount)
         const metodo = s.payments.map((p) => p.method).join('|')
-        const fecha = new Date(s.createdAt).toISOString().slice(0, 10)
+        const fecha = saleDay(s) // día contable local (no UTC), consistente con caja/Z
         return `${fecha},${s.dianDocNumber ?? ''},${s.dianDocType},"${s.customerName ?? ''}",${t.base},${t.iva},${s.total},${metodo}`
       })
     const csv = [header, ...rows].join('\n')

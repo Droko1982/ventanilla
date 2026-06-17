@@ -399,9 +399,11 @@ function ProductDetailSheet({
           )}
           <button
             onClick={async () => {
-              if (!confirm(`¿Eliminar "${product.name}" definitivamente? Se borra el producto y su stock. Esto no se puede deshacer.`)) return
+              if (!confirm(`¿Eliminar "${product.name}" definitivamente? Se borra el producto, su stock y su historial de movimientos. Esto no se puede deshacer.`)) return
               await db.products.delete(product.id)
               await db.stock.where('productId').equals(product.id).delete()
+              // Limpia el Kardex del producto para no dejar movimientos huérfanos.
+              await db.stockMovements.where('productId').equals(product.id).delete()
               toast('success', 'Producto eliminado')
               onClose()
             }}

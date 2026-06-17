@@ -3,6 +3,11 @@ import { hash } from './auth.js'
 
 // Crea un negocio de ejemplo para probar el API (mismo de la app demo).
 async function main() {
+  // Seguridad: nunca sembrar datos demo (con clave conocida) en producción.
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SEED !== '1') {
+    console.error('⛔ Seed bloqueado en producción. Usa ALLOW_SEED=1 sólo si de verdad lo quieres.')
+    return
+  }
   const email = 'laesquina@demo.co'
   const existing = await prisma.tenant.findUnique({ where: { email } })
   if (existing) {
