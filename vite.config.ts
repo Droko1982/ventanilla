@@ -3,10 +3,13 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'node:path'
 
-// Repositorio de GitHub Pages: https://droko1982.github.io/ventanilla/
-// En el build servimos bajo /ventanilla/. En desarrollo, bajo /.
+// Hoy en GitHub Pages: https://droko1982.github.io/ventanilla/ (base /ventanilla/).
+// Con DOMINIO PROPIO la app va en la raíz → construir con VITE_BASE=/ :
+//   PowerShell:  $env:VITE_BASE='/'; npm run deploy
+//   bash:        VITE_BASE=/ npm run deploy
+// En desarrollo siempre bajo /.
 export default defineConfig(({ command }) => ({
-  base: command === 'build' ? '/ventanilla/' : '/',
+  base: command === 'build' ? (process.env.VITE_BASE || '/ventanilla/') : '/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
