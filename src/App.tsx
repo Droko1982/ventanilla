@@ -42,6 +42,14 @@ const Ajustes = lazy(() => import('@/screens/Ajustes'))
 const Auditoria = lazy(() => import('@/screens/Auditoria'))
 const SuperAdmin = lazy(() => import('@/screens/SuperAdmin'))
 
+// Guard de ruta: solo el DUEÑO (admin) entra. Un empleado que escriba la URL de
+// una pantalla sensible es redirigido al POS. Defensa además del ocultar enlaces.
+function RequireAdmin({ children }: { children: React.ReactNode }) {
+  const role = useSession((s) => s.role)
+  if (role !== 'admin') return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
 export default function App() {
   const role = useSession((s) => s.role)
   const { pathname } = useLocation()
@@ -82,30 +90,32 @@ export default function App() {
         ) : (
           <AppLayout>
             <Routes>
-              {/* La pantalla inicial es el POS (facturación + lista), estilo supermercado */}
+              {/* Accesibles para cajero y dueño */}
               <Route path="/" element={<POS />} />
               <Route path="/pos" element={<POS />} />
-              <Route path="/resumen" element={<Dashboard />} />
-              <Route path="/ventanillas" element={<Ventanillas />} />
               <Route path="/autoservicio" element={<Autoservicio />} />
               <Route path="/inventario" element={<Inventory />} />
               <Route path="/caja" element={<Caja />} />
               <Route path="/mas" element={<Mas />} />
-              <Route path="/proveedores" element={<Proveedores />} />
-              <Route path="/clientes" element={<Clientes />} />
-              <Route path="/ventas" element={<Ventas />} />
-            <Route path="/documentos" element={<Documentos />} />
-            <Route path="/compras" element={<Compras />} />
-            <Route path="/reporte-inventario" element={<ReporteInventario />} />
-            <Route path="/informe-z" element={<InformeZ />} />
-            <Route path="/cartera" element={<Cartera />} />
-            <Route path="/ajustes-inventario" element={<AjustesInventario />} />
-            <Route path="/eventos-recepcion" element={<EventosRecepcion />} />
-            <Route path="/domicilios" element={<Domicilios />} />
-              <Route path="/reportes" element={<Reportes />} />
+              <Route path="/domicilios" element={<Domicilios />} />
               <Route path="/notificaciones" element={<Notificaciones />} />
-              <Route path="/ajustes" element={<Ajustes />} />
-              <Route path="/auditoria" element={<Auditoria />} />
+              {/* SOLO DUEÑO: reportes, dinero, configuración y datos sensibles.
+                  El guard evita que un empleado entre escribiendo la URL/hash. */}
+              <Route path="/resumen" element={<RequireAdmin><Dashboard /></RequireAdmin>} />
+              <Route path="/ventanillas" element={<RequireAdmin><Ventanillas /></RequireAdmin>} />
+              <Route path="/proveedores" element={<RequireAdmin><Proveedores /></RequireAdmin>} />
+              <Route path="/clientes" element={<RequireAdmin><Clientes /></RequireAdmin>} />
+              <Route path="/ventas" element={<RequireAdmin><Ventas /></RequireAdmin>} />
+              <Route path="/documentos" element={<RequireAdmin><Documentos /></RequireAdmin>} />
+              <Route path="/compras" element={<RequireAdmin><Compras /></RequireAdmin>} />
+              <Route path="/reporte-inventario" element={<RequireAdmin><ReporteInventario /></RequireAdmin>} />
+              <Route path="/informe-z" element={<RequireAdmin><InformeZ /></RequireAdmin>} />
+              <Route path="/cartera" element={<RequireAdmin><Cartera /></RequireAdmin>} />
+              <Route path="/ajustes-inventario" element={<RequireAdmin><AjustesInventario /></RequireAdmin>} />
+              <Route path="/eventos-recepcion" element={<RequireAdmin><EventosRecepcion /></RequireAdmin>} />
+              <Route path="/reportes" element={<RequireAdmin><Reportes /></RequireAdmin>} />
+              <Route path="/ajustes" element={<RequireAdmin><Ajustes /></RequireAdmin>} />
+              <Route path="/auditoria" element={<RequireAdmin><Auditoria /></RequireAdmin>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </AppLayout>

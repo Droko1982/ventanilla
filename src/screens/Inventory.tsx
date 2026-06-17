@@ -427,9 +427,11 @@ function ProductDetailSheet({
         {dExp !== null && dExp <= 30 && (
           <div className="flex items-center justify-between rounded-xl bg-rose-50 p-3">
             <span className="text-sm text-rose-700">Vence en {dExp} días</span>
-            <button onClick={applyDiscount} className="btn btn-danger px-3 py-1.5 text-xs">
-              Aplicar -15% promoción
-            </button>
+            {canManage && (
+              <button onClick={applyDiscount} className="btn btn-danger px-3 py-1.5 text-xs">
+                Aplicar -15% promoción
+              </button>
+            )}
           </div>
         )}
 

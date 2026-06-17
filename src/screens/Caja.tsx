@@ -175,9 +175,13 @@ export default function Caja() {
           <div className="mb-2 text-4xl">🔒</div>
           <p className="font-semibold text-slate-700">La caja está cerrada</p>
           <p className="mb-4 text-sm text-slate-500">Ábrela con la base inicial para empezar a vender.</p>
-          <button onClick={() => setOpenSheet(true)} className="btn btn-primary btn-lg w-full">
-            Abrir caja
-          </button>
+          {isOwner ? (
+            <button onClick={() => setOpenSheet(true)} className="btn btn-primary btn-lg w-full">
+              Abrir caja
+            </button>
+          ) : (
+            <p className="text-xs text-slate-400">El dueño abre y cierra la caja.</p>
+          )}
         </div>
       ) : (
         <div className="card mb-4 p-5">
@@ -186,9 +190,11 @@ export default function Caja() {
               <p className="font-semibold text-slate-700">Caja abierta 🟢</p>
               <p className="text-xs text-slate-400">Desde {fmtTime(session.openedAt)}</p>
             </div>
-            <button onClick={() => setCloseSheet(true)} className="btn btn-danger px-4 py-2 text-sm">
-              Cerrar caja
-            </button>
+            {isOwner && (
+              <button onClick={() => setCloseSheet(true)} className="btn btn-danger px-4 py-2 text-sm">
+                Cerrar caja
+              </button>
+            )}
           </div>
           <div className="space-y-1.5 text-sm">
             <Row label="Base inicial" value={cop(session.openingFloat)} />

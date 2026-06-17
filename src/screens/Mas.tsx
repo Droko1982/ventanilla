@@ -3,11 +3,17 @@ import { Icon } from '@/components/icons'
 import { PageHeader } from '@/components/ui'
 import { useTenant } from '@/hooks/data'
 import { moduleEnabled } from '@/lib/modules'
+import { useSession } from '@/store/session'
+
+// Secciones que un cajero (empleado) sí puede ver en el menú "Más". El resto son
+// solo del dueño (reportes, dinero, configuración) y además están gateadas por ruta.
+const CASHIER_PATHS = new Set(['/domicilios', '/tienda', '/autoservicio', '/notificaciones'])
 
 // Menú "Más": accesos a las secciones que no caben en la barra inferior.
 export default function Mas() {
   const navigate = useNavigate()
   const tenant = useTenant()
+  const role = useSession((s) => s.role)
   const allItems: { to: string; icon: any; label: string; desc: string; color: string; mod?: string }[] = [
     { to: '/ventanillas', icon: 'building', label: 'Mis ventanillas', desc: 'Administra todos tus locales de un vistazo', color: 'bg-brand-100 text-brand-700', mod: 'ventanillas' },
     { to: '/ventas', icon: 'doc', label: 'Ventas y DIAN', desc: 'Historial, documentos POS, pendientes', color: 'bg-blue-100 text-blue-700', mod: 'ventas' },
@@ -28,7 +34,9 @@ export default function Mas() {
     { to: '/auditoria', icon: 'shield', label: 'Auditoría', desc: 'Quién hizo o cambió cada cosa', color: 'bg-slate-200 text-slate-700', mod: 'auditoria' },
     { to: '/ajustes', icon: 'gear', label: 'Ajustes', desc: 'Locales, empleados, módulos, DIAN, plan', color: 'bg-slate-100 text-slate-600' },
   ]
-  const items = allItems.filter((it) => !it.mod || moduleEnabled(tenant, it.mod))
+  const items = allItems.filter(
+    (it) => (!it.mod || moduleEnabled(tenant, it.mod)) && (role === 'admin' || CASHIER_PATHS.has(it.to)),
+  )
   return (
     <div>
       <PageHeader title="Más" subtitle="Todas las herramientas de tu negocio" />
