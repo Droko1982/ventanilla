@@ -111,7 +111,7 @@ export default function Ventas() {
   )
 }
 
-function SaleDetail({
+export function SaleDetail({
   sale, locName, tenantName, onClose, onTransmit, onVoid,
 }: {
   sale: Sale; locName: string; tenantName: string; onClose: () => void; onTransmit: () => void; onVoid: () => void

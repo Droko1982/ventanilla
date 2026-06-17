@@ -26,6 +26,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { receiptText, printReceipt } from '@/lib/receipt'
 import { btPrint, btPrintSupported } from '@/lib/btprint'
+import { DaySalesSheet } from '@/components/DaySalesSheet'
 import { openCashDrawer } from '@/lib/cashDrawer'
 import { readWeightOnce, scaleMessage } from '@/lib/scale'
 import { publishCartView } from '@/lib/customerScreen'
@@ -39,6 +40,8 @@ import type { Payment, PaymentMethod, Product, Sale, Customer, User } from '@/ty
 
 export default function POS() {
   const tenantId = useSession((s) => s.tenantId)!
+  const role = useSession((s) => s.role)
+  const [daySalesOpen, setDaySalesOpen] = useState(false)
   const locationId = useActiveLocationId()
   const products = useProducts()
   const categories = useCategories()
@@ -295,6 +298,15 @@ export default function POS() {
         >
           💱 Cambio: {cop(changeOwed?.amount ?? 0)}
         </button>
+        {role === 'admin' && (
+          <button
+            onClick={() => setDaySalesOpen(true)}
+            className="chip shrink-0 bg-brand-100 font-semibold text-brand-700"
+            title="Ventas de hoy: resumen, sincronización y devoluciones"
+          >
+            📋 Hoy
+          </button>
+        )}
         <a
           href={`${import.meta.env.BASE_URL}ayuda.html#vender`}
           target="_blank"
@@ -305,6 +317,7 @@ export default function POS() {
           ?
         </a>
       </div>
+      {daySalesOpen && <DaySalesSheet onClose={() => setDaySalesOpen(false)} />}
 
       {mode === 'counter' ? (
         <CounterEntry
