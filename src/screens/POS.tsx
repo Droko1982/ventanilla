@@ -148,6 +148,7 @@ export default function POS() {
       const found = (products ?? []).find((p) => p.barcode === code || p.internalCode === code)
       setScanOpen(false)
       if (found) {
+        if (found.active === false) { toast('error', `${found.name} está inactivo`); return }
         addToCart(found)
       } else if (canManage) {
         // Código desconocido → preguntar si es un producto existente (asignarle el
@@ -168,12 +169,13 @@ export default function POS() {
       const ql = q.toLowerCase()
       const found =
         (products ?? []).find((p) => p.barcode === q || p.internalCode === q || p.internalCode?.toLowerCase() === ql) ??
-        (products ?? []).find((p) => p.name.toLowerCase().includes(ql))
+        (products ?? []).find((p) => p.active !== false && p.name.toLowerCase().includes(ql))
       if (!found) {
         if (canManage) setScanUnknown(q)
         else toast('error', `"${q}" no está registrado`)
         return
       }
+      if (found.active === false) { toast('error', `${found.name} está inactivo`); return }
       if ((stockMap.get(found.id) ?? 0) <= 0 && found.allowNegative === false) {
         toast('error', `${found.name} sin existencias`)
         return

@@ -213,7 +213,7 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
 
       // Fiado: aumenta saldo del cliente (suma TODAS las parcialidades fiado del
       // pago mixto, no solo la primera).
-      const earned = Math.round(total / 1000) * (loyaltyOn ? perThousand : 1)
+      const earned = loyaltyOn ? Math.floor(total / 1000) * perThousand : 0
       const fiadoAmount = input.payments.filter((p) => p.method === 'fiado').reduce((a, p) => a + p.amount, 0)
       if (fiadoAmount > 0 && input.customerId) {
         const c = await db.customers.get(input.customerId)

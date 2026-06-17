@@ -1,5 +1,5 @@
 import type { Sale, PaymentMethod } from '@/types'
-import { saleDay } from './businessDay'
+import { saleDay, localYMD } from './businessDay'
 
 // Cálculos de negocio sobre las ventas: ingresos, utilidad, por método,
 // más/menos vendidos, ventas por día. Lo usan el dashboard y los reportes.
@@ -102,10 +102,10 @@ export function salesByDay(sales: Sale[], days = 14): DayPoint[] {
   return out
 }
 
-/** Filtra ventas por rango temporal en días (0 = hoy). */
+/** Filtra ventas de los últimos N días por DÍA CONTABLE (consistente con caja/Z). */
 export function filterByRange(sales: Sale[], days: number): Sale[] {
-  const since = Date.now() - days * 86400000
-  return sales.filter((s) => new Date(s.createdAt).getTime() >= since)
+  const sinceDay = localYMD(Date.now() - Math.max(0, days - 1) * 86400000)
+  return sales.filter((s) => saleDay(s) >= sinceDay)
 }
 
 export function todayRange(sales: Sale[]): Sale[] {

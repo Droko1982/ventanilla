@@ -4,7 +4,11 @@
 // WhatsApp Business API se conecta después.
 
 export function waLink(phone: string, message: string): string {
-  const clean = phone.replace(/[^\d]/g, '')
+  let clean = phone.replace(/[^\d]/g, '')
+  // Celular colombiano de 10 dígitos (3XXXXXXXXX) → anteponer el indicativo 57,
+  // que wa.me exige en formato internacional. Si ya trae 57… o no es celular,
+  // se deja como está. Sin número (vacío) → wa.me/ pide elegir contacto.
+  if (clean.length === 10 && clean.startsWith('3')) clean = '57' + clean
   return `https://wa.me/${clean}?text=${encodeURIComponent(message)}`
 }
 

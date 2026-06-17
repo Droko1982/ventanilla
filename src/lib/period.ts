@@ -1,4 +1,5 @@
 import type { Sale } from '@/types'
+import { saleDay, localYMD } from './businessDay'
 
 // Períodos históricos para el dashboard: día, semana, mes y año, con
 // navegación a períodos anteriores (offset 0 = actual, 1 = anterior, …).
@@ -57,11 +58,13 @@ export function makePeriod(granularity: Granularity, offset: number): Period {
   return { granularity, start: start.getTime(), end: end.getTime(), label: `${year}` }
 }
 
-/** Ventas dentro del período. */
+/** Ventas dentro del período, por DÍA CONTABLE (consistente con caja/Z). */
 export function salesInPeriod(sales: Sale[], p: Period): Sale[] {
+  const startDay = localYMD(p.start)
+  const endDay = localYMD(p.end - 1)
   return sales.filter((s) => {
-    const t = new Date(s.createdAt).getTime()
-    return t >= p.start && t < p.end && s.status !== 'anulada'
+    const d = saleDay(s)
+    return d >= startDay && d <= endDay && s.status !== 'anulada'
   })
 }
 
