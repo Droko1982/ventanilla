@@ -648,12 +648,20 @@ function ImportSheet({
         perishable: false, imageEmoji: '📦', active: true,
         createdAt: new Date().toISOString(),
       })
+      const nowIso = new Date().toISOString()
       for (const loc of locations) {
+        const locQty = loc.id === locationId ? (parseInt(stockQty || '0', 10) || 0) : 0
         await db.stock.put({
           id: `${loc.id}:${pid}`, tenantId, locationId: loc.id, productId: pid,
-          quantity: loc.id === locationId ? (parseInt(stockQty || '0', 10) || 0) : 0,
-          reorderThreshold: 4, reorderTarget: 12, updatedAt: new Date().toISOString(),
+          quantity: locQty,
+          reorderThreshold: 4, reorderTarget: 12, updatedAt: nowIso,
         })
+        if (locQty > 0) {
+          await db.stockMovements.put({
+            id: uid('mv'), tenantId, locationId: loc.id, productId: pid,
+            type: 'inicial', qty: locQty, userId: '', createdAt: nowIso,
+          })
+        }
       }
       imported++
     }

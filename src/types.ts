@@ -387,6 +387,7 @@ export interface PurchaseOrder {
 export type StockMovementType =
   | 'venta'
   | 'entrada'
+  | 'inicial'
   | 'traslado_salida'
   | 'traslado_entrada'
   | 'ajuste'

@@ -111,7 +111,9 @@ syncRouter.post('/', authRequired, licenseActive, async (req: AuthedRequest, res
       const existing = await prisma.syncRecord.findUnique({ where })
       const data = (rec.data ?? {}) as any
       if (!existing) {
-        await prisma.syncRecord.create({ data: { tenantId, table: 'stock', recordId: rec.recordId, data, deletedAt: rec.deleted ? new Date() : null } })
+        // Nace en 0: la cantidad la construyen los movimientos (incluido el
+        // "inicial"). Evita el doble-conteo create + movimiento del mismo producto.
+        await prisma.syncRecord.create({ data: { tenantId, table: 'stock', recordId: rec.recordId, data: { ...data, quantity: 0 }, deletedAt: rec.deleted ? new Date() : null } })
       } else {
         const prev = (existing.data ?? {}) as any
         const merged = { ...data, quantity: prev.quantity ?? data.quantity }
@@ -165,7 +167,8 @@ syncRouter.post('/', authRequired, licenseActive, async (req: AuthedRequest, res
       const existing = await prisma.syncRecord.findUnique({ where })
       const data = (rec.data ?? {}) as any
       if (!existing) {
-        await prisma.syncRecord.create({ data: { tenantId, table: 'customers', recordId: rec.recordId, data, deletedAt: rec.deleted ? new Date() : null } })
+        // Nace en 0: el saldo lo construyen los movimientos de crédito.
+        await prisma.syncRecord.create({ data: { tenantId, table: 'customers', recordId: rec.recordId, data: { ...data, creditBalance: 0 }, deletedAt: rec.deleted ? new Date() : null } })
       } else {
         const prev = (existing.data ?? {}) as any
         const merged = { ...data, creditBalance: prev.creditBalance ?? data.creditBalance }

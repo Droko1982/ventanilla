@@ -153,20 +153,30 @@ export function ProductForm({
     // Al crear, generamos el registro de stock en cada local
     if (!editing) {
       const qty = parseInt(initialQty || '0', 10) || 0
+      const now = new Date().toISOString()
       for (const loc of locations) {
         const stockId = `${loc.id}:${p.id}`
         const exists = await db.stock.get(stockId)
         if (!exists) {
+          const locQty = loc.id === defaultLocationId ? qty : 0
           await db.stock.put({
             id: stockId,
             tenantId,
             locationId: loc.id,
             productId: p.id,
-            quantity: loc.id === defaultLocationId ? qty : 0,
+            quantity: locQty,
             reorderThreshold: 4,
             reorderTarget: 12,
-            updatedAt: new Date().toISOString(),
+            updatedAt: now,
           })
+          // Movimiento "inicial": el servidor reconstruye la cantidad sumando
+          // movimientos, así que el stock inicial debe quedar registrado como uno.
+          if (locQty > 0) {
+            await db.stockMovements.put({
+              id: uid('mv'), tenantId, locationId: loc.id, productId: p.id,
+              type: 'inicial', qty: locQty, userId: '', createdAt: now,
+            })
+          }
         }
       }
     }
