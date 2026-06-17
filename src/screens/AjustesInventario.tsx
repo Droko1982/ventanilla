@@ -34,7 +34,7 @@ export default function AjustesInventario() {
 
   return (
     <div>
-      <PageHeader title="Ajustes de inventario" subtitle="Entradas, salidas, precio, sección y vencimientos" />
+      <PageHeader help="inventario" title="Ajustes de inventario" subtitle="Entradas, salidas, precio, sección y vencimientos" />
       <div className="mb-4">
         <Segmented
           value={mode}

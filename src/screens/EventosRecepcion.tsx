@@ -34,7 +34,7 @@ export default function EventosRecepcion() {
 
   return (
     <div>
-      <PageHeader title="Eventos Recepción" subtitle="Acuses DIAN de facturas de compra recibidas" />
+      <PageHeader help="ventas" title="Eventos Recepción" subtitle="Acuses DIAN de facturas de compra recibidas" />
       <p className="mb-3 rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-700">
         Por cada factura electrónica que te envía un proveedor debes transmitir a la DIAN el acuse de recibo, el recibo del bien y la aceptación. (Simulado en el demo.)
       </p>

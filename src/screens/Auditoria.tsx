@@ -21,7 +21,7 @@ export default function Auditoria() {
 
   return (
     <div>
-      <PageHeader title="Auditoría" subtitle="Cada acción sensible queda firmada" />
+      <PageHeader help="reportes" title="Auditoría" subtitle="Cada acción sensible queda firmada" />
       {(logs?.length ?? 0) === 0 ? (
         <EmptyState emoji="🛡️" title="Sin movimientos aún" hint="Aquí se registra quién hace o cambia cada cosa." />
       ) : (

@@ -33,7 +33,7 @@ export default function Ventas() {
 
   return (
     <div>
-      <PageHeader title="Ventas y DIAN" subtitle="Historial y documentos electrónicos" />
+      <PageHeader help="ventas" title="Ventas y DIAN" subtitle="Historial y documentos electrónicos" />
 
       {oldPending.length > 0 && (
         <div className="mb-3 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3">

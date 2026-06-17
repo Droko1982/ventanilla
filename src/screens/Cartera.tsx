@@ -41,7 +41,7 @@ export default function Cartera() {
 
   return (
     <div>
-      <PageHeader title="Cartera" subtitle="Cuentas por cobrar (crédito y fiado)" />
+      <PageHeader help="fiado" title="Cartera" subtitle="Cuentas por cobrar (crédito y fiado)" />
 
       <div className="mb-4 grid grid-cols-2 gap-2.5">
         <StatCard label="Remisiones a crédito" value={<Money value={totalRem} />} accent="text-rose-600" />

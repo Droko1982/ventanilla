@@ -142,7 +142,7 @@ export default function Reportes() {
 
   return (
     <div>
-      <PageHeader
+      <PageHeader help="reportes"
         title="Reportes"
         subtitle="Rentabilidad real de tu negocio"
         right={

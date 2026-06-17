@@ -145,6 +145,14 @@ function TopBar() {
             </button>
           )}
           <a
+            href={`${import.meta.env.BASE_URL}ayuda.html`}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-secondary w-full"
+          >
+            📖 Manual de ayuda
+          </a>
+          <a
             href="https://wa.me/573147555896?text=Hola%2C%20necesito%20soporte%20de%20Ventanilla"
             target="_blank"
             rel="noreferrer"

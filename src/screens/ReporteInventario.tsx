@@ -78,7 +78,7 @@ export default function ReporteInventario() {
 
   return (
     <div>
-      <PageHeader
+      <PageHeader help="reportes"
         title="Inventario General"
         subtitle={activeLoc?.name}
         right={

@@ -27,7 +27,7 @@ export default function Clientes() {
 
   return (
     <div>
-      <PageHeader
+      <PageHeader help="fiado"
         title="Clientes"
         subtitle="Fiado, historial y abonos"
         right={

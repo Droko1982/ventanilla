@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manual de Ayuda · Ventanilla</title>
+  <meta name="description" content="Manual completo de Ventanilla: cómo entrar, vender, manejar inventario, caja, fiado, reportes y configuración. Para dueños y cajeros." />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <style>
+    :root{--brand:#0d9488;--ink:#0f172a;--muted:#475569;--bg:#f8fafc}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--ink);line-height:1.6;background:#fff}
+    .wrap{max-width:860px;margin:0 auto;padding:32px 20px 64px}
+    header{background:linear-gradient(160deg,#0d9488,#115e59);color:#fff;padding:36px 0}
+    header .wrap{padding-top:0;padding-bottom:0}
+    h1{font-size:30px;font-weight:800}
+    h2{font-size:21px;font-weight:800;margin:34px 0 8px;color:#0f766e;scroll-margin-top:16px;border-top:2px solid #ccfbf1;padding-top:18px}
+    h3{font-size:16.5px;font-weight:700;margin:16px 0 4px;color:#0f172a}
+    p,li{color:var(--muted);font-size:15.5px;margin:6px 0}
+    ul,ol{margin:6px 0 6px 22px}
+    a{color:var(--brand)}
+    b{color:#334155}
+    .meta{color:#ccfbf1;font-size:14px;margin-top:6px}
+    .who{display:inline-block;background:#ecfeff;border:1px solid #a5f3fc;color:#0e7490;border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600;margin:4px 0}
+    .tip{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:12px;padding:10px 14px;font-size:14px;margin:10px 0}
+    .warn{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:10px 14px;font-size:14px;margin:10px 0}
+    .toc{background:var(--bg);border:1px solid #e2e8f0;border-radius:16px;padding:16px 20px;margin:20px 0}
+    .toc h2{border:0;margin:0 0 8px;padding:0;font-size:16px;color:#0f172a}
+    .toc ol{columns:2;column-gap:24px;margin-left:18px}
+    .toc a{text-decoration:none}
+    footer{border-top:1px solid #e2e8f0;margin-top:36px;padding-top:16px;font-size:13px;color:#94a3b8}
+    .back{display:inline-block;margin-bottom:8px;color:#ccfbf1;text-decoration:none;font-size:14px}
+    @media(max-width:620px){.toc ol{columns:1}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <a class="back" href="./">← Volver a Ventanilla</a>
+      <h1>📖 Manual de Ayuda</h1>
+      <p class="meta">Ventanilla · Ventas e inventario para tu tienda</p>
+      <p class="meta">Todo lo que la plataforma puede hacer, explicado fácil.</p>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <p>Esta guía explica <b>cómo entrar</b> y <b>cómo usar cada pestaña</b> de Ventanilla, paso a paso. Está pensada para que cualquier persona —dueño o cajero— entienda todo en pocos minutos. En cada sección verás una etiqueta de <span class="who">quién puede usarla</span>.</p>
+
+    <div class="toc">
+      <h2>Contenido</h2>
+      <ol>
+        <li><a href="#funciona">Cómo funciona (sin internet)</a></li>
+        <li><a href="#acceso">Acceso y usuarios</a></li>
+        <li><a href="#vender">Vender (POS)</a></li>
+        <li><a href="#caja">Caja y arqueo</a></li>
+        <li><a href="#inventario">Inventario</a></li>
+        <li><a href="#fiado">Clientes y fiado</a></li>
+        <li><a href="#ventas">Ventas, facturas y DIAN</a></li>
+        <li><a href="#compras">Compras y proveedores</a></li>
+        <li><a href="#reportes">Reportes y auditoría</a></li>
+        <li><a href="#mas">Más herramientas</a></li>
+        <li><a href="#ajustes">Ajustes (configuración)</a></li>
+        <li><a href="#superadmin">Super-Admin (plataforma)</a></li>
+        <li><a href="#seguridad">Permisos y seguridad</a></li>
+        <li><a href="#limites">Qué funciona y qué se activa después</a></li>
+        <li><a href="#soporte">Soporte</a></li>
+      </ol>
+    </div>
+
+    <h2 id="funciona">1. Cómo funciona (sin internet)</h2>
+    <p>Ventanilla es una <b>app que se instala</b> en el celular o el computador y funciona <b>aunque se caiga el wifi</b>: sigues vendiendo y, cuando vuelve la conexión, <b>sincroniza sola</b>. Puedes usar <b>varias cajas a la vez</b> sin descuadrar el inventario.</p>
+    <h3>Instalar la app</h3>
+    <ul>
+      <li><b>Celular:</b> abre el enlace en el navegador → menú (⋮) → <b>"Instalar app"</b> o <b>"Agregar a pantalla de inicio"</b>.</li>
+      <li><b>Computador:</b> ícono de instalar (⊕) en la barra de direcciones.</li>
+    </ul>
+    <div class="tip">Cuando hay una versión nueva, aparece arriba el aviso <b>"Hay una versión nueva · Actualizar"</b>. Tócalo para tener lo último.</div>
+
+    <h2 id="acceso">2. Acceso y usuarios</h2>
+    <p>Hay tres tipos de usuario. Cada uno ve y puede hacer cosas distintas:</p>
+    <h3>🧑‍💼 Dueño de la tienda</h3>
+    <span class="who">Acceso total</span>
+    <ul>
+      <li>Entra con su <b>PIN</b> (toca "Dueño de la tienda") o con <b>correo y clave</b> de su cuenta en la nube ("¿Dueño con cuenta en la nube?").</li>
+      <li>Ve y maneja <b>todo</b>: ventas, inventario, caja, reportes, clientes, configuración y empleados.</li>
+    </ul>
+    <h3>🧑‍🦰 Cajero / Empleado</h3>
+    <span class="who">Solo vender (y lo que el dueño le permita)</span>
+    <ul>
+      <li>Entra con su <b>PIN de 4 dígitos</b> (toca "Cajero / Empleado").</li>
+      <li>Solo ve <b>su local</b> y la pantalla de <b>vender</b> (y caja para registrar movimientos). <b>No</b> puede entrar a reportes, ajustes, anular ventas, cerrar caja ni borrar inventario, salvo que el dueño le dé ese permiso.</li>
+    </ul>
+    <h3>🛡️ Super-Admin (plataforma)</h3>
+    <span class="who">Solo el dueño de la plataforma</span>
+    <ul>
+      <li>Es para administrar <b>los clientes que rentan la plataforma</b> (no la tienda). Entra con <b>correo y clave</b> especiales. Un cajero o dueño normal no puede entrar aquí.</li>
+    </ul>
+    <h3>Cambiar tu PIN o clave</h3>
+    <ul>
+      <li>Toca tu <b>inicial (arriba a la derecha) → 🔑 Cambiar mi PIN</b>. Puedes escribir uno o tocar <b>"🎲 Generar un PIN seguro"</b>.</li>
+      <li>Cada persona debe tener un <b>PIN distinto</b> (la app no deja repetirlo). Evita 0000, 1111 o 1234 en producción.</li>
+    </ul>
+
+    <h2 id="vender">3. Vender (POS)</h2>
+    <span class="who">Dueño y cajero</span>
+    <p>Es la pantalla principal. Tiene tres formas de vender; elige la que más te sirva:</p>
+    <ul>
+      <li><b>Fichas:</b> botones grandes con los productos (rápido para lo más vendido).</li>
+      <li><b>Lista:</b> buscador + lista (ideal con muchos productos).</li>
+      <li><b>Mostrador:</b> tecleas cantidades; <b>Mostrador 1 = Remisión</b> (nota de entrega), <b>Mostrador 2 = Factura electrónica</b>.</li>
+    </ul>
+    <h3>Agregar productos</h3>
+    <ul>
+      <li><b>Escanea</b> el código de barras, o <b>busca</b> por nombre, o toca la ficha.</li>
+      <li>Si el código no está registrado, te ofrece <b>asignarlo</b> a un producto o crear uno nuevo (la app intenta autocompletar el nombre desde una base mundial).</li>
+      <li>Para productos por <b>peso</b> (granel), pones los kilos.</li>
+    </ul>
+    <h3>Cobrar</h3>
+    <ul>
+      <li>Métodos: <b>efectivo</b> (calcula las vueltas), <b>Nequi</b>, <b>tarjeta</b>, <b>transferencia</b>, <b>pago mixto</b> (varios a la vez) y <b>fiado</b>.</li>
+      <li>El botón <b>💵 Efectivo</b> hace el cobro exacto rápido. La tecla <b>Enter</b> también cobra y abre una <b>venta nueva</b>.</li>
+      <li><b>Fiado:</b> debes elegir el <b>cliente</b> (queda debiendo ese valor).</li>
+      <li><b>Puntos:</b> si la fidelización está activa, el cliente puede <b>canjear puntos</b> como descuento (requiere elegir el cliente).</li>
+    </ul>
+    <h3>Recibo / tirilla</h3>
+    <ul>
+      <li>Al terminar puedes <b>Imprimir</b> (cualquier impresora), enviar por <b>WhatsApp</b> o <b>correo</b>, o <b>Imprimir en impresora Bluetooth</b> (térmica de 58mm).</li>
+    </ul>
+    <div class="tip">La venta se guarda <b>antes</b> de imprimir: si la impresora falla, la venta NO se pierde.</div>
+
+    <h2 id="caja">4. Caja y arqueo</h2>
+    <span class="who">Abrir/cerrar: solo dueño · Movimientos: con permiso</span>
+    <ul>
+      <li><b>Abrir caja:</b> el dueño declara la <b>base inicial</b> (efectivo con el que empieza).</li>
+      <li><b>Ingresos/egresos:</b> registra dinero que entra o sale del cajón (con permiso). Si marcas un egreso como <b>gasto</b>, también baja la utilidad.</li>
+      <li><b>Vueltas debidas ("Cambio Anterior"):</b> si te quedas debiendo vueltas, regístralo; el arqueo lo tiene en cuenta para que cuadre.</li>
+      <li><b>Cerrar caja (arqueo):</b> cuentas el efectivo real y la app lo compara con lo esperado (sobrante/faltante). Genera el <b>Informe Z</b> del día.</li>
+      <li><b>Resumen al dueño:</b> envía por WhatsApp el resumen del día (solo lo ve/manda el dueño).</li>
+    </ul>
+    <div class="tip">El <b>día contable</b> respeta tu turno: una venta de la 1 a.m. cuenta para el día en que <b>abriste la caja</b>, aunque cruce la medianoche.</div>
+
+    <h2 id="inventario">5. Inventario</h2>
+    <span class="who">Ver: todos · Crear/editar/borrar/ajustar: con permiso</span>
+    <ul>
+      <li><b>Productos:</b> nombre, precio, costo, IVA, categoría, código de barras, foto/emoji, unidad o peso.</li>
+      <li><b>Precio y rentabilidad:</b> puedes fijar el <b>% de utilidad</b> y el precio se ajusta solo (costo ↔ precio ↔ margen están enlazados).</li>
+      <li><b>Existencias:</b> entradas, salidas y ajustes; alertas de <b>stock bajo</b> y <b>por vencer</b>.</li>
+      <li><b>Inactivar / Reactivar / Eliminar:</b> un producto inactivo se ve gris y no se vende; puedes reactivarlo o borrarlo.</li>
+      <li><b>Etiquetas con código de barras:</b> en <b>Ajustes de inventario → 🏷️ Etiquetas</b> generas códigos internos a los productos sin código y los imprimes (código real escaneable).</li>
+      <li><b>Importar:</b> carga muchos productos desde un archivo Excel/CSV.</li>
+      <li><b>Banco de productos y códigos en línea:</b> al escanear un código, la app intenta traer el nombre desde tu banco compartido y desde una base mundial.</li>
+    </ul>
+
+    <h2 id="fiado">6. Clientes y fiado</h2>
+    <span class="who">Clientes/Cartera: dueño · Fiar en una venta: cajero</span>
+    <ul>
+      <li><b>Clientes:</b> datos, historial de compras, total gastado y puntos.</li>
+      <li><b>Fiado (Cartera):</b> ves quién te debe y cuánto. Registras <b>abonos</b> y la deuda baja.</li>
+      <li><b>Recordatorio por WhatsApp:</b> con un toque le mandas al cliente su saldo, o a todos los que deben.</li>
+    </ul>
+    <div class="tip">Si <b>anulas o devuelves</b> una venta que fue a fiado, la deuda del cliente <b>se corrige sola</b>.</div>
+
+    <h2 id="ventas">7. Ventas, facturas y DIAN</h2>
+    <span class="who">Solo dueño (o cajero con permiso para anular)</span>
+    <ul>
+      <li><b>Ventas:</b> historial con buscador; reimprimir, ver detalle, transmitir a la DIAN.</li>
+      <li><b>Anular / Devolución parcial:</b> genera nota crédito y devuelve el inventario (acción sensible: requiere permiso).</li>
+      <li><b>Documentos:</b> <b>factura electrónica</b> y <b>remisiones</b> (notas de entrega). Una remisión a crédito se puede convertir luego en factura.</li>
+      <li><b>Tiquete POS:</b> documento equivalente para el día a día.</li>
+    </ul>
+    <div class="warn">⚠️ La <b>facturación electrónica DIAN</b> con valor legal (CUFE) se activa con tu NIT, resolución y proveedor autorizado. Ver la sección "Qué se activa después".</div>
+
+    <h2 id="compras">8. Compras y proveedores</h2>
+    <span class="who">Solo dueño</span>
+    <ul>
+      <li><b>Compras:</b> registras facturas de compra; el sistema calcula el <b>costo promedio</b> y suma el stock.</li>
+      <li><b>Proveedores:</b> directorio, deuda, y <b>pedidos de reabastecimiento</b> (sugiere qué pedir y manda el pedido por WhatsApp/correo).</li>
+    </ul>
+
+    <h2 id="reportes">9. Reportes y auditoría</h2>
+    <span class="who">Solo dueño</span>
+    <ul>
+      <li><b>Reportes:</b> ventas del día/semana/mes/año, productos más y menos vendidos, <b>utilidad</b>, stock muerto, y <b>exportar</b> a Excel/contable.</li>
+      <li><b>Informe Z:</b> cierre fiscal diario.</li>
+      <li><b>Auditoría:</b> registro de quién hizo o cambió cada cosa (para control).</li>
+    </ul>
+
+    <h2 id="mas">10. Más herramientas</h2>
+    <ul>
+      <li><b>Domicilios:</b> entregas con estado, repartidor, mapa y aviso por WhatsApp.</li>
+      <li><b>Tienda online:</b> un catálogo público para compartir; el cliente pide por WhatsApp.</li>
+      <li><b>Autoservicio:</b> el cliente escanea, ve el total y paga solo.</li>
+      <li><b>Pantalla del cliente:</b> un segundo monitor que muestra lo que se va vendiendo.</li>
+    </ul>
+
+    <h2 id="ajustes">11. Ajustes (configuración)</h2>
+    <span class="who">Solo dueño</span>
+    <ul>
+      <li><b>Locales / Ventanillas:</b> agrega tus puntos de venta.</li>
+      <li><b>Empleados:</b> crea cajeros, asígnales <b>PIN</b> (o genéralo) y define sus <b>permisos</b> (vender, descuentos, inventario, caja, anular…). Anular viene <b>apagado</b> por defecto.</li>
+      <li><b>Facturación electrónica (DIAN), Pagos Bre-B, Programa de puntos, Recordatorios de fiado, Cajón monedero, Báscula:</b> actívalos según tu negocio.</li>
+      <li><b>Nube (multi-dispositivo):</b> conecta este equipo a tu cuenta para sincronizar y usar varias cajas.</li>
+      <li><b>Datos y respaldo:</b> exporta o respalda tu información.</li>
+      <li><b>Seguridad (PIN) y Acerca de:</b> cómo cambiar el PIN y los datos de la plataforma.</li>
+    </ul>
+
+    <h2 id="superadmin">12. Super-Admin (plataforma)</h2>
+    <span class="who">Solo el dueño de la plataforma</span>
+    <p>Es la consola para administrar <b>los negocios que usan/rentan Ventanilla</b>: crear y editar clientes, cambiar sus datos de acceso, ver y liberar dispositivos, activar/suspender, y registrar pagos. <b>No es para la operación de la tienda</b> y solo entra con credenciales especiales validadas por el servidor.</p>
+
+    <h2 id="seguridad">13. Permisos y seguridad</h2>
+    <ul>
+      <li>Cada persona entra con su <b>PIN</b> y queda registrada en la auditoría.</li>
+      <li>El <b>cajero</b> está limitado: solo su local y vender. No entra a reportes, ajustes, anular, cerrar caja ni borrar inventario (a menos que el dueño se lo permita).</li>
+      <li>Los datos de cada tienda están <b>aislados</b>: una tienda nunca ve la información de otra.</li>
+      <li><b>Recomendación:</b> cada quien con su propio PIN, cámbialo cada cierto tiempo, y no compartas las claves.</li>
+    </ul>
+
+    <h2 id="limites">14. Qué funciona y qué se activa después</h2>
+    <h3>✅ Funciona completo</h3>
+    <p>Vender (con o sin internet), inventario, caja y arqueo, fiado, reportes, varias cajas a la vez, etiquetas con código de barras, impresión normal y Bluetooth, recordatorios de fiado por WhatsApp (con un toque).</p>
+    <h3>⏳ Se activa con trámites/llaves externas</h3>
+    <ul>
+      <li><b>Factura electrónica DIAN (legal):</b> necesita NIT, resolución de numeración, certificado y proveedor autorizado. Mientras tanto, usa el <b>tiquete POS</b>.</li>
+      <li><b>Pagos automáticos (Bre-B / datáfono):</b> el QR se muestra, pero la confirmación la hace el cajero a la vista.</li>
+      <li><b>WhatsApp y correo automáticos:</b> sin las llaves quedan en modo demostración; el <b>WhatsApp con un toque</b> sí funciona.</li>
+    </ul>
+    <div class="warn">Importante: estas funciones existen en la app pero pueden mostrar "enviado/transmitido" sin hacerlo de verdad hasta que se conecten las llaves correspondientes. No son errores, es configuración externa.</div>
+
+    <h2 id="soporte">15. Soporte</h2>
+    <p>¿Dudas? Escríbenos por <b>WhatsApp</b>: <a href="https://wa.me/573147555896" target="_blank" rel="noreferrer">+57 314 755 5896</a> · Correo: <a href="mailto:dapovedag@gmail.com">dapovedag@gmail.com</a></p>
+
+    <footer>
+      <p>📖 Manual de Ayuda de Ventanilla. Plataforma desarrollada por el <b>Dr. Mauricio Rodríguez Herrera</b>.</p>
+      <p>© 2026 Dr. Mauricio Rodríguez Herrera · <a href="./terminos.html">Términos</a> · <a href="./privacidad.html">Privacidad</a> · <a href="./">Inicio</a></p>
+    </footer>
+  </div>
+</body>
+</html>

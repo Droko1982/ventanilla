@@ -90,6 +90,7 @@ export default function SuperAdmin() {
             <p className="font-bold leading-tight">Consola Super-Admin</p>
             <p className="text-xs text-slate-400">{cloud ? 'Conectado a la nube' : 'Plataforma Ventanilla'}</p>
           </div>
+          <a href={`${import.meta.env.BASE_URL}ayuda.html#superadmin`} target="_blank" rel="noreferrer" className="flex h-9 w-9 items-center justify-center rounded-full text-base font-bold text-slate-300 hover:bg-white/10" title="Manual de ayuda">?</a>
           <button onClick={() => { const t = toggleTheme(); setDark(t === 'dark') }} className="flex h-9 w-9 items-center justify-center rounded-full text-lg text-slate-300 hover:bg-white/10" title="Modo claro / oscuro">
             {dark ? '☀️' : '🌙'}
           </button>

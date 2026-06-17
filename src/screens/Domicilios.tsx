@@ -47,7 +47,7 @@ export default function Domicilios() {
 
   return (
     <div>
-      <PageHeader title="Domicilios" subtitle={`${pendientes} entrega(s) en curso`} />
+      <PageHeader help="mas" title="Domicilios" subtitle={`${pendientes} entrega(s) en curso`} />
 
       <button onClick={() => setNewOpen(true)} className="btn btn-primary mb-3 w-full">
         <Icon name="plus" className="h-5 w-5" /> Nuevo domicilio

@@ -48,7 +48,7 @@ export default function InformeZ() {
 
   return (
     <div>
-      <PageHeader title="Informe Z" subtitle="Cierre fiscal diario (Zetas)" />
+      <PageHeader help="caja" title="Informe Z" subtitle="Cierre fiscal diario (Zetas)" />
 
       <div className="card mb-4 p-4">
         <label className="label">Fecha del informe</label>

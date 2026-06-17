@@ -45,7 +45,7 @@ export default function Documentos() {
 
   return (
     <div>
-      <PageHeader title="Facturas y remisiones" subtitle="Documentos electrónicos y notas de entrega" />
+      <PageHeader help="ventas" title="Facturas y remisiones" subtitle="Documentos electrónicos y notas de entrega" />
 
       <div className="mb-4">
         <Segmented

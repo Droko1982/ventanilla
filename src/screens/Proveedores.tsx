@@ -59,7 +59,7 @@ export default function Proveedores() {
 
   return (
     <div>
-      <PageHeader title="Proveedores" subtitle={activeLoc?.name} />
+      <PageHeader help="compras" title="Proveedores" subtitle={activeLoc?.name} />
 
       <div className="mb-4">
         <Segmented

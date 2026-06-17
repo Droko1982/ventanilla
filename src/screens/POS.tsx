@@ -295,6 +295,15 @@ export default function POS() {
         >
           💱 Cambio: {cop(changeOwed?.amount ?? 0)}
         </button>
+        <a
+          href={`${import.meta.env.BASE_URL}ayuda.html#vender`}
+          target="_blank"
+          rel="noreferrer"
+          title="Ayuda para vender"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-500 hover:bg-slate-200"
+        >
+          ?
+        </a>
       </div>
 
       {mode === 'counter' ? (

@@ -39,7 +39,7 @@ export default function Mas() {
   )
   return (
     <div>
-      <PageHeader title="Más" subtitle="Todas las herramientas de tu negocio" />
+      <PageHeader help="mas" title="Más" subtitle="Todas las herramientas de tu negocio" />
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {items.map((it) => (
           <button

@@ -25,7 +25,7 @@ export default function Notificaciones() {
 
   return (
     <div>
-      <PageHeader
+      <PageHeader help="mas"
         title="Notificaciones"
         subtitle="Stock, vencimientos, caja y DIAN en un solo lugar"
         right={

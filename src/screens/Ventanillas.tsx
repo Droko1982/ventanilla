@@ -44,7 +44,7 @@ export default function Ventanillas() {
 
   return (
     <div>
-      <PageHeader title="Mis ventanillas" subtitle={`${rows.length} local(es) · administra todo desde aquí`} />
+      <PageHeader help="ajustes" title="Mis ventanillas" subtitle={`${rows.length} local(es) · administra todo desde aquí`} />
 
       {/* Consolidado del día */}
       <div className="mb-4 grid grid-cols-3 gap-2.5">

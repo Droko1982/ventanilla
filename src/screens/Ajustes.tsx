@@ -75,7 +75,7 @@ export default function Ajustes() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Ajustes" subtitle={tenant.businessName} />
+      <PageHeader help="ajustes" title="Ajustes" subtitle={tenant.businessName} />
 
       {/* Locales */}
       <Section title={`Locales / Ventanillas (${usedSeats}/${maxSeats})`} action={<AddBtn onClick={addLocation} />}>
@@ -220,8 +220,11 @@ export default function Ajustes() {
       </Section>
 
       {/* Legal */}
-      <Section title="Legal">
-        <div className="grid grid-cols-2 gap-2">
+      <Section title="Ayuda y legal">
+        <a href={`${import.meta.env.BASE_URL}ayuda.html`} target="_blank" rel="noreferrer" className="btn btn-primary w-full text-sm">
+          📖 Manual de ayuda (cómo usar cada sección)
+        </a>
+        <div className="mt-2 grid grid-cols-2 gap-2">
           <a href={`${import.meta.env.BASE_URL}privacidad.html`} target="_blank" rel="noreferrer" className="btn btn-secondary text-sm">Privacidad</a>
           <a href={`${import.meta.env.BASE_URL}terminos.html`} target="_blank" rel="noreferrer" className="btn btn-secondary text-sm">Términos</a>
         </div>

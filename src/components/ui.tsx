@@ -116,10 +116,13 @@ export function PageHeader({
   title,
   subtitle,
   right,
+  help,
 }: {
   title: string
   subtitle?: string
   right?: ReactNode
+  /** Ancla del manual (ayuda.html#ancla) → muestra un botón "?" de ayuda de la sección. */
+  help?: string
 }) {
   return (
     <div className="mb-4 flex items-end justify-between gap-3">
@@ -127,7 +130,20 @@ export function PageHeader({
         <h1 className="text-xl font-bold text-slate-800">{title}</h1>
         {subtitle && <p className="text-sm text-slate-500">{subtitle}</p>}
       </div>
-      {right}
+      <div className="flex shrink-0 items-center gap-2">
+        {right}
+        {help && (
+          <a
+            href={`${import.meta.env.BASE_URL}ayuda.html#${help}`}
+            target="_blank"
+            rel="noreferrer"
+            title="Ayuda de esta sección"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-base font-bold text-slate-500 hover:bg-slate-200"
+          >
+            ?
+          </a>
+        )}
+      </div>
     </div>
   )
 }

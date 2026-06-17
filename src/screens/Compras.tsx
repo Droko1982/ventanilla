@@ -30,7 +30,7 @@ export default function Compras() {
 
   return (
     <div>
-      <PageHeader title="Compras" subtitle="Facturas de compra / entradas de mercancía" />
+      <PageHeader help="compras" title="Compras" subtitle="Facturas de compra / entradas de mercancía" />
 
       <div className="mb-3 flex gap-2">
         <button onClick={() => setNewOpen(true)} className="btn btn-primary flex-1">

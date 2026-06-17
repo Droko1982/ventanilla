@@ -138,7 +138,7 @@ export default function Caja() {
 
   return (
     <div>
-      <PageHeader title="Caja" subtitle={activeLoc?.name} />
+      <PageHeader help="caja" title="Caja" subtitle={activeLoc?.name} />
 
       {/* Resumen del día (conciliación) — solo el dueño ve los totales del negocio */}
       {isOwner && (

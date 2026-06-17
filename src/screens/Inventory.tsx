@@ -78,7 +78,7 @@ export default function Inventory() {
 
   return (
     <div>
-      <PageHeader
+      <PageHeader help="inventario"
         title="Inventario"
         subtitle={`${activeLoc?.name ?? ''}`}
         right={
