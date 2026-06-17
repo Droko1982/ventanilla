@@ -11,10 +11,11 @@ const PROD_API = 'https://ventanilla-api-vvzh.onrender.com'
 // Pantalla de entrada del demo: elegir rol con un toque. Pensada para que
 // cualquier persona entienda en segundos qué puede probar.
 export default function Login() {
-  const loginAs = useSession((s) => s.loginAs)
   const loginByPin = useSession((s) => s.loginEmployeeByPin)
+  const loginAdminByPin = useSession((s) => s.loginAdminByPin)
   const loginSuperAdmin = useSession((s) => s.loginSuperAdmin)
   const [mode, setMode] = useState<'menu' | 'pin' | 'super'>('menu')
+  const [pinRole, setPinRole] = useState<'admin' | 'empleado'>('empleado')
   const [pin, setPin] = useState('')
   const [saEmail, setSaEmail] = useState('')
   const [saPass, setSaPass] = useState('')
@@ -41,7 +42,7 @@ export default function Login() {
       setPin(next)
       return
     }
-    const user = await loginByPin(next)
+    const user = pinRole === 'admin' ? await loginAdminByPin(next) : await loginByPin(next)
     if (user) {
       toast('success', `Hola, ${user.name.split(' ')[0]}`)
     } else {
@@ -68,21 +69,21 @@ export default function Login() {
             Entrar al demo como…
           </p>
           <button
-            onClick={() => loginAs('u_admin')}
+            onClick={() => { setPinRole('admin'); setPin(''); setMode('pin') }}
             className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left text-slate-800 shadow-lg active:scale-[0.99]"
           >
             <span className="text-3xl">🧑‍💼</span>
             <span className="flex-1">
               <span className="block font-bold">Dueño de la tienda</span>
               <span className="block text-sm text-slate-500">
-                Dashboard, todos los locales, reportes
+                Entra con PIN · dashboard, todos los locales
               </span>
             </span>
             <Icon name="arrow-left" className="h-5 w-5 rotate-180 text-slate-300" />
           </button>
 
           <button
-            onClick={() => setMode('pin')}
+            onClick={() => { setPinRole('empleado'); setPin(''); setMode('pin') }}
             className="flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left text-slate-800 shadow-lg active:scale-[0.99]"
           >
             <span className="text-3xl">🧑‍🦰</span>
@@ -145,8 +146,8 @@ export default function Login() {
         <PinPad
           pin={pin}
           tone="brand"
-          label="Ingresa tu PIN de 4 dígitos"
-          hint="Demo: Centro 1234 · Norte 2345 · Pereira 3456"
+          label={pinRole === 'admin' ? 'PIN del dueño' : 'Ingresa tu PIN de 4 dígitos'}
+          hint={pinRole === 'admin' ? 'Demo: 1234' : 'Demo: Centro 1234 · Norte 2345 · Pereira 3456'}
           onDigit={(d) => submitPin(pin + d)}
           onBack={() => setPin(pin.slice(0, -1))}
           onCancel={() => {

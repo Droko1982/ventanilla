@@ -90,12 +90,20 @@ async function main() {
     console.log(`✓ Código de barras Code 128 escaneable (${rects} barras)`)
   }
 
-  // 2) Entrar como Dueño
+  // 2) Entrar como Dueño (ahora con PIN; en el demo es 1234)
   ctx = 'login-admin'
   await clickText(page, 'Dueño de la tienda')
+  await sleep(600)
+  for (const d of ['1', '2', '3', '4']) {
+    await page.evaluate((digit) => {
+      const b = [...document.querySelectorAll('button')].find((x) => x.textContent?.trim() === digit)
+      if (b) b.click()
+    }, d)
+    await sleep(150)
+  }
   txt = await waitForText(page, 'Producto nuevo', 9000)
-  if (!/Producto nuevo/.test(txt)) throw new Error('Inicio (POS) del Dueño no renderizó')
-  console.log('✓ Inicio = POS (facturación + lista) para el Dueño')
+  if (!/Producto nuevo/.test(txt)) throw new Error('Inicio (POS) del Dueño no renderizó tras el PIN')
+  console.log('✓ Dueño entra con PIN → POS (facturación + lista)')
 
   // 2b) Menú de cuenta: cambiar PIN + acceso a Ajustes + reset solo en demo
   ctx = 'menu-cuenta'
@@ -745,7 +753,12 @@ async function main() {
     await page.goto(BASE, { waitUntil: 'networkidle2' })
     await sleep(1200)
     await clickText(page, 'Dueño de la tienda')
-    await sleep(1500)
+    await sleep(600)
+    for (const d of ['1', '2', '3', '4']) {
+      await page.evaluate((digit) => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent?.trim() === digit); if (b) b.click() }, d)
+      await sleep(150)
+    }
+    await sleep(1200)
     await page.evaluate(() => { location.hash = '#/ajustes' })
     await sleep(1000)
     await page.evaluate(({ url, email, pass }) => {

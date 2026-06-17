@@ -21,6 +21,7 @@ interface SessionState {
 
   loginAs: (userId: string) => Promise<boolean>
   loginEmployeeByPin: (pin: string) => Promise<User | null>
+  loginAdminByPin: (pin: string) => Promise<User | null>
   loginSuperAdmin: () => void
   setLocationFilter: (id: string) => void
   logout: () => void
@@ -62,6 +63,24 @@ export const useSession = create<SessionState>()(
           tenantId: user.tenantId,
           employeeLocationId: user.locationId ?? null,
           locationFilter: user.locationId ?? 'all',
+        })
+        return user
+      },
+
+      // Dueño/Admin por PIN (entrada del dueño en el equipo).
+      async loginAdminByPin(pin) {
+        const user = await db.users
+          .where('pin')
+          .equals(pin)
+          .and((u) => u.role === 'admin' && u.active)
+          .first()
+        if (!user) return null
+        set({
+          userId: user.id,
+          role: 'admin',
+          tenantId: user.tenantId,
+          employeeLocationId: null,
+          locationFilter: 'all',
         })
         return user
       },
