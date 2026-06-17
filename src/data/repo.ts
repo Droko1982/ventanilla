@@ -223,6 +223,11 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
           c.totalSpent += total
           c.points = Math.max(0, (c.points ?? 0) - redeemPoints + earned)
           await db.customers.put(c)
+          // Libro de crédito: el servidor reconstruye el saldo sumando estos deltas.
+          await db.creditMovements.put({
+            id: uid('cm'), tenantId: input.tenantId, customerId: c.id, delta: fiadoAmount,
+            type: 'fiado', refId: sale.id, userId: input.userId, createdAt: now,
+          })
         }
       } else if (input.customerId) {
         const c = await db.customers.get(input.customerId)
@@ -930,7 +935,14 @@ export async function generateDebitNote(saleId: string, amount: number, reason: 
   await db.sales.put(sale)
   if (sale.customerId) {
     const c = await db.customers.get(sale.customerId)
-    if (c) { c.creditBalance += amount; await db.customers.put(c) }
+    if (c) {
+      c.creditBalance += amount
+      await db.customers.put(c)
+      await db.creditMovements.put({
+        id: uid('cm'), tenantId: sale.tenantId, customerId: c.id, delta: amount,
+        type: 'nota', refId: sale.id, userId, createdAt: new Date().toISOString(),
+      })
+    }
   }
   await audit({
     tenantId: sale.tenantId, locationId: sale.locationId, userId, userName,
@@ -1330,9 +1342,17 @@ export async function maybeFiadoReminders(tenantId: string): Promise<void> {
 export async function payCredit(customerId: string, amount: number): Promise<Customer | null> {
   const c = await db.customers.get(customerId)
   if (!c) return null
+  const before = c.creditBalance
   c.creditBalance = Math.max(0, c.creditBalance - amount)
   if (c.creditBalance === 0) { c.creditSince = undefined; c.lastReminder = undefined } // saldó: reinicia antigüedad
   await db.customers.put(c)
+  const delta = Number((c.creditBalance - before).toFixed(2)) // negativo (lo que se abonó)
+  if (delta !== 0) {
+    await db.creditMovements.put({
+      id: uid('cm'), tenantId: c.tenantId, customerId: c.id, delta,
+      type: 'abono', userId: '', createdAt: new Date().toISOString(),
+    })
+  }
   return c
 }
 

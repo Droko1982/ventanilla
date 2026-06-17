@@ -11,7 +11,7 @@ const SYNC_TABLES = new Set([
   'categories', 'locations', 'products', 'stock', 'sales', 'customers',
   'suppliers', 'purchaseOrders', 'stockMovements', 'cashSessions',
   'auditLogs', 'notifications', 'expenses', 'remisiones', 'cashMovements',
-  'changeOwed', 'purchases', 'zReports', 'domicilios', 'devices',
+  'changeOwed', 'purchases', 'zReports', 'domicilios', 'devices', 'creditMovements',
 ])
 
 interface SyncIn {
@@ -151,6 +151,49 @@ syncRouter.post('/', authRequired, licenseActive, async (req: AuthedRequest, res
               },
             }).catch(() => { /* carrera: otro push lo creó; el incremento ya quedó */ })
           }
+        }
+      }
+      applied++
+      continue
+    }
+
+    // CLIENTES: el SALDO de fiado (creditBalance) lo gobierna el servidor (suma de
+    // movimientos de crédito), no el valor que empuja cada caja. Los demás campos
+    // (nombre, puntos, antigüedad…) se actualizan normal.
+    if (rec.table === 'customers') {
+      const where = { tenantId_table_recordId: { tenantId, table: 'customers', recordId: rec.recordId } }
+      const existing = await prisma.syncRecord.findUnique({ where })
+      const data = (rec.data ?? {}) as any
+      if (!existing) {
+        await prisma.syncRecord.create({ data: { tenantId, table: 'customers', recordId: rec.recordId, data, deletedAt: rec.deleted ? new Date() : null } })
+      } else {
+        const prev = (existing.data ?? {}) as any
+        const merged = { ...data, creditBalance: prev.creditBalance ?? data.creditBalance }
+        await prisma.syncRecord.update({ where, data: { data: merged, deletedAt: rec.deleted ? new Date() : null } })
+      }
+      applied++
+      continue
+    }
+
+    // MOVIMIENTOS DE CRÉDITO: al llegar uno NUEVO, ajusta el saldo del cliente de
+    // forma ATÓMICA (suma en SQL). Idempotente (solo la primera vez).
+    if (rec.table === 'creditMovements') {
+      const where = { tenantId_table_recordId: { tenantId, table: 'creditMovements', recordId: rec.recordId } }
+      const existed = await prisma.syncRecord.findUnique({ where })
+      await prisma.syncRecord.upsert({
+        where,
+        create: { tenantId, table: 'creditMovements', recordId: rec.recordId, data: rec.data as object, deletedAt: rec.deleted ? new Date() : null },
+        update: { data: rec.data as object, deletedAt: rec.deleted ? new Date() : null },
+      })
+      if (!existed && !rec.deleted) {
+        const d = (rec.data ?? {}) as any
+        const delta = Number(d.delta)
+        if (Number.isFinite(delta) && delta !== 0 && d.customerId) {
+          await prisma.$executeRaw`
+            UPDATE "SyncRecord"
+            SET data = jsonb_set(data, '{creditBalance}', to_jsonb(ROUND((COALESCE((data->>'creditBalance')::numeric, 0) + ${delta})::numeric, 2)), true),
+                "updatedAt" = NOW()
+            WHERE "tenantId" = ${tenantId} AND "table" = 'customers' AND "recordId" = ${String(d.customerId)}`
         }
       }
       applied++

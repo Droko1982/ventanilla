@@ -22,6 +22,7 @@ import type {
   ZReport,
   Domicilio,
   Device,
+  CreditMovement,
 } from '@/types'
 
 // ============================================================================
@@ -56,6 +57,7 @@ export class VentanillaDB extends Dexie {
   zReports!: Table<ZReport, string>
   domicilios!: Table<Domicilio, string>
   devices!: Table<Device, string>
+  creditMovements!: Table<CreditMovement, string>
 
   constructor() {
     super('ventanilla')
@@ -103,6 +105,10 @@ export class VentanillaDB extends Dexie {
     // v8: devices (control de licencia por dispositivo)
     this.version(8).stores({
       devices: 'id, tenantId, lastSeen',
+    })
+    // v9: movimientos de crédito (fiado) — el saldo lo gobierna el servidor
+    this.version(9).stores({
+      creditMovements: 'id, tenantId, customerId, createdAt',
     })
   }
 }

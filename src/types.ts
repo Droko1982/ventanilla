@@ -405,6 +405,19 @@ export interface StockMovement {
   createdAt: string
 }
 
+// Movimiento de crédito (fiado): el saldo del cliente se reconstruye sumando
+// estos deltas en el servidor, para que dos cajas no se pisen el saldo.
+export interface CreditMovement {
+  id: string
+  tenantId: string
+  customerId: string
+  delta: number // positivo: fía más; negativo: abona/paga
+  type: 'fiado' | 'abono' | 'nota'
+  refId?: string // venta / nota débito relacionada
+  userId: string
+  createdAt: string
+}
+
 // --- Caja --------------------------------------------------------------------
 export interface CashSession {
   id: string
