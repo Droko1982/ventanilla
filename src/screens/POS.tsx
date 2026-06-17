@@ -187,7 +187,7 @@ export default function POS() {
   )
 
   // Lector físico USB/Bluetooth siempre activo en el POS
-  useBarcodeWedge(handleScan, !!locationId)
+  useBarcodeWedge(handleScan, !!locationId && !scanOpen)
 
   const total = cartTotal(cart.lines, cart.globalDiscount)
   const count = cartCount(cart.lines)

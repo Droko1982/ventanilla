@@ -65,14 +65,16 @@ export function ProductForm({
   const bankOn = isCloudConfigured()
 
   // Rellena el formulario con una ficha del banco (sin tocar precio/costo).
-  function prefillFromBank(hit: BankProduct) {
+  // gentle=true (autocompletar al escanear): no pisa categoría/unidad que el
+  // usuario ya eligió; solo completa lo que está vacío/por defecto.
+  function prefillFromBank(hit: BankProduct, gentle = false) {
     setName(hit.name)
     if (hit.barcode) setBarcode(hit.barcode)
-    if (hit.brand) setBrand(hit.brand)
-    if (hit.unit === 'peso' || hit.unit === 'unidad') setUnit(hit.unit)
-    if (hit.imageEmoji) setEmoji(hit.imageEmoji)
+    if (hit.brand && (!gentle || !brand.trim())) setBrand(hit.brand)
+    if ((hit.unit === 'peso' || hit.unit === 'unidad') && (!gentle || unit === 'unidad')) setUnit(hit.unit)
+    if (hit.imageEmoji && (!gentle || emoji === '📦')) setEmoji(hit.imageEmoji)
     const cat = hit.category && categories.find((c) => c.name.toLowerCase() === hit.category!.toLowerCase())
-    if (cat) setCategoryId(cat.id)
+    if (cat && (!gentle || categoryId === (categories[0]?.id ?? ''))) setCategoryId(cat.id)
   }
 
   // Al escribir/escanear un código (creando), busca la ficha en el banco y
@@ -84,7 +86,7 @@ export function ProductForm({
     const t = setTimeout(async () => {
       const hit = await bankLookup(code)
       if (cancel || !hit) return
-      prefillFromBank(hit)
+      prefillFromBank(hit, true)
       toast('success', '✨ Autocompletado desde el banco de productos')
     }, 450)
     return () => { cancel = true; clearTimeout(t) }

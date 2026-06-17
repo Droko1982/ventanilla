@@ -362,7 +362,7 @@ function FacturaDetail({ sale, onClose }: { sale: Sale; onClose: () => void }) {
         <div className="grid grid-cols-3 gap-2">
           <button onClick={() => printFactura(sale, tenant, location)} className="btn btn-secondary flex-col py-3 text-xs"><Icon name="print" className="h-6 w-6" /> Imprimir</button>
           <a href={mailtoLink(sale.customerEmail ?? '', `Factura ${sale.dianDocNumber ?? ''}`, text)} className="btn btn-secondary flex-col py-3 text-xs"><Icon name="mail" className="h-6 w-6" /> Correo</a>
-          <a href={waLink('57', text)} target="_blank" rel="noreferrer" className="btn btn-secondary flex-col py-3 text-xs"><Icon name="whatsapp" className="h-6 w-6" /> WhatsApp</a>
+          <a href={waLink('', text)} target="_blank" rel="noreferrer" className="btn btn-secondary flex-col py-3 text-xs"><Icon name="whatsapp" className="h-6 w-6" /> WhatsApp</a>
         </div>
 
         {sale.status === 'completada' && (
@@ -412,7 +412,7 @@ function RemisionDetail({ rem, onClose }: { rem: Remision; onClose: () => void }
         <div className="grid grid-cols-3 gap-2">
           <button onClick={() => printRemision(rem, tenant, location)} className="btn btn-secondary flex-col py-3 text-xs"><Icon name="print" className="h-6 w-6" /> Imprimir</button>
           <a href={mailtoLink('', `Remisión ${rem.number}`, text)} className="btn btn-secondary flex-col py-3 text-xs"><Icon name="mail" className="h-6 w-6" /> Correo</a>
-          <a href={waLink('57', text)} target="_blank" rel="noreferrer" className="btn btn-secondary flex-col py-3 text-xs"><Icon name="whatsapp" className="h-6 w-6" /> WhatsApp</a>
+          <a href={waLink('', text)} target="_blank" rel="noreferrer" className="btn btn-secondary flex-col py-3 text-xs"><Icon name="whatsapp" className="h-6 w-6" /> WhatsApp</a>
         </div>
 
         {rem.status === 'emitida' && (

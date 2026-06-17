@@ -1194,7 +1194,7 @@ export async function generateZReport(
     if (s.status === 'anulada' || (s.returns && s.returns.length)) returnsCount++
     if (s.status !== 'completada') continue
     count++; revenue += s.total; discounts += s.discount
-    byDocType[s.dianDocType] = (byDocType[s.dianDocType] || 0) + s.total
+    byDocType[s.dianDocType ?? 'tiquete_pos'] = (byDocType[s.dianDocType ?? 'tiquete_pos'] || 0) + s.total
     for (const p of s.payments) byMethod[p.method] = (byMethod[p.method] || 0) + p.amount
     const br = ivaBreakdown(s.items, s.discount)
     base += br.base; iva += br.iva
