@@ -10,9 +10,11 @@ import { toast } from '@/components/Toast'
 import { cop, parseCop, kg } from '@/lib/money'
 import { daysUntil } from '@/lib/format'
 import { useSession } from '@/store/session'
+import { printLabels } from '@/lib/label'
+import { internalCode } from '@/lib/id'
 import type { Product, Stock } from '@/types'
 
-type Mode = 'entrada' | 'salida' | 'precio' | 'seccion' | 'vence'
+type Mode = 'entrada' | 'salida' | 'precio' | 'seccion' | 'vence' | 'etiquetas'
 
 export default function AjustesInventario() {
   const tenantId = useSession((s) => s.tenantId)!
@@ -43,9 +45,12 @@ export default function AjustesInventario() {
             { value: 'precio', label: '💲 Precio' },
             { value: 'seccion', label: '📍 Sección' },
             { value: 'vence', label: '⏳ Vence' },
+            { value: 'etiquetas', label: '🏷️ Etiquetas' },
           ]}
         />
       </div>
+
+      {mode === 'etiquetas' && <LabelPanel products={(products ?? []).filter((p) => p.active)} tenantId={tenantId} />}
 
       {(mode === 'entrada' || mode === 'salida') && user && (
         <MoveForm
@@ -81,6 +86,67 @@ export default function AjustesInventario() {
           locationId={locationId}
         />
       )}
+    </div>
+  )
+}
+
+// --- Etiquetas con código de barras (impresión en lote) --------------------
+function LabelPanel({ products, tenantId }: { products: Product[]; tenantId: string }) {
+  const tenant = useTenant()
+  const [copies, setCopies] = useState('1')
+  const [busy, setBusy] = useState(false)
+  const sinCodigo = products.filter((p) => !p.barcode && !p.internalCode)
+  const biz = tenant?.businessName ?? 'Ventanilla'
+
+  async function generarCodigos() {
+    if (!sinCodigo.length) return toast('info', 'Todos los productos ya tienen código')
+    setBusy(true)
+    try {
+      for (const p of sinCodigo) {
+        await db.products.update(p.id, { internalCode: internalCode() })
+      }
+      await audit({ tenantId, locationId: '', userId: '', userName: 'sistema', action: 'generó códigos internos', entity: 'producto', entityId: '', detail: `${sinCodigo.length} productos` })
+      toast('success', `${sinCodigo.length} producto(s) ahora tienen código`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function imprimir(list: Product[]) {
+    const n = Math.max(1, parseInt(copies || '1', 10) || 1)
+    const expanded: Product[] = []
+    for (const p of list) for (let i = 0; i < n; i++) expanded.push(p)
+    if (!expanded.length) return toast('info', 'No hay productos para imprimir')
+    printLabels(expanded, biz)
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-slate-500">
+        Imprime etiquetas con <b>código de barras real</b> (Code 128). Los productos sin
+        código de barras reciben un código interno para poder escanearlos.
+      </p>
+      {sinCodigo.length > 0 && (
+        <div className="rounded-xl bg-amber-50 p-3 text-sm">
+          <p className="font-semibold text-amber-700">{sinCodigo.length} producto(s) sin código.</p>
+          <button onClick={generarCodigos} disabled={busy} className="btn btn-secondary mt-2 text-sm">
+            {busy ? 'Generando…' : '🔢 Generar códigos internos faltantes'}
+          </button>
+        </div>
+      )}
+      <label className="flex items-center gap-2 text-sm text-slate-600">
+        Copias por producto:
+        <input value={copies} onChange={(e) => setCopies(e.target.value)} inputMode="numeric" className="input w-20" />
+      </label>
+      <button onClick={() => imprimir(products)} className="btn btn-primary w-full">
+        🖨️ Imprimir etiquetas de todos los activos ({products.length})
+      </button>
+      <button onClick={() => imprimir(products.filter((p) => !p.barcode && p.internalCode))} className="btn btn-secondary w-full text-sm">
+        Solo los que usan código interno
+      </button>
+      <p className="text-xs text-slate-400">
+        Se abre la ventana de impresión: elige tu impresora de etiquetas o una térmica.
+      </p>
     </div>
   )
 }

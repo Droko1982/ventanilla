@@ -25,6 +25,7 @@ import { recordSale, adjustChangeOwed, createRemision } from '@/data/repo'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { receiptText, printReceipt } from '@/lib/receipt'
+import { btPrint, btPrintSupported } from '@/lib/btprint'
 import { openCashDrawer } from '@/lib/cashDrawer'
 import { readWeightOnce, scaleMessage } from '@/lib/scale'
 import { publishCartView } from '@/lib/customerScreen'
@@ -1535,6 +1536,17 @@ function ReceiptSheet({ sale, onClose }: { sale: Sale; onClose: () => void }) {
             <Icon name="whatsapp" className="h-6 w-6" /> WhatsApp
           </a>
         </div>
+        {btPrintSupported() && (
+          <button
+            onClick={async () => {
+              try { await btPrint(text); toast('success', 'Enviado a la impresora Bluetooth') }
+              catch (e) { toast('error', (e as Error).message || 'No se pudo imprimir por Bluetooth') }
+            }}
+            className="btn btn-secondary w-full text-sm"
+          >
+            🖨️ Imprimir en impresora Bluetooth (térmica)
+          </button>
+        )}
         <input className="input" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Celular para WhatsApp (ej. 3001234567)" />
 
         <details className="rounded-xl bg-slate-50 p-3 text-sm">
