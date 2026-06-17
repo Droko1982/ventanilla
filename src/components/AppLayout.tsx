@@ -245,23 +245,23 @@ function BottomNav() {
   const items = role === 'empleado' ? empItems : adminItems
 
   return (
-    <nav className="sticky bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto flex max-w-3xl items-stretch justify-around">
+    <nav className="sticky bottom-0 z-30 border-t border-slate-200 bg-white/95 shadow-[0_-4px_20px_rgba(15,23,42,0.10)] backdrop-blur">
+      <div className="mx-auto flex max-w-3xl items-stretch justify-around gap-1 p-1.5">
         {items.map((it) => (
           <NavLink
             key={it.to}
             to={it.to}
             end={'end' in it ? it.end : false}
             className={({ isActive }) =>
-              `relative flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition ${
-                isActive ? 'text-brand-600' : 'text-slate-400'
+              `relative flex flex-1 flex-col items-center gap-1 rounded-2xl py-2.5 text-xs font-semibold transition ${
+                isActive ? 'bg-brand-100 text-brand-700' : 'text-slate-400'
               }`
             }
           >
-            <Icon name={it.icon as any} className="h-6 w-6" />
+            <Icon name={it.icon as any} className="h-7 w-7" />
             {it.label}
             {'badge' in it && it.badge ? (
-              <span className="absolute right-1/4 top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
+              <span className="absolute right-1/4 top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
                 {it.badge}
               </span>
             ) : null}

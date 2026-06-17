@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useSession } from '@/store/session'
 import { AppLayout } from '@/components/AppLayout'
 import { ToastContainer } from '@/components/Toast'
+import { UpdateBanner } from '@/components/UpdateBanner'
 import { Spinner } from '@/components/ui'
 
 // El POS y el Login se cargan de una vez (lo primero que usa un cajero).
@@ -63,6 +64,7 @@ export default function App() {
   return (
     <>
       <ToastContainer />
+      <UpdateBanner />
       <Suspense fallback={<Spinner label="Cargando…" />}>
         {!role ? (
           <Login />
