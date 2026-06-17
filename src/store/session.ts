@@ -21,6 +21,7 @@ interface SessionState {
 
   loginAs: (userId: string) => Promise<boolean>
   loginEmployeeByPin: (pin: string) => Promise<User | null>
+  loginSuperAdmin: () => void
   setLocationFilter: (id: string) => void
   logout: () => void
 }
@@ -63,6 +64,12 @@ export const useSession = create<SessionState>()(
           locationFilter: user.locationId ?? 'all',
         })
         return user
+      },
+
+      // Super-Admin de la plataforma: NO es un usuario local; solo se activa tras
+      // validar el correo y la clave contra el backend (superAdminLogin).
+      loginSuperAdmin() {
+        set({ userId: 'superadmin', role: 'superadmin', tenantId: null, employeeLocationId: null, locationFilter: 'all' })
       },
 
       setLocationFilter(id) {

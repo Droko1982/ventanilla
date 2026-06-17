@@ -664,25 +664,21 @@ async function main() {
   await page.evaluate(() => { location.hash = '#/' })
   await sleep(600)
 
-  // 5) Cerrar sesión y entrar como Super-Admin
+  // 5) Super-Admin: el demo NO puede entrar — exige correo y clave reales.
   ctx = 'login-super'
   await page.evaluate(() => { localStorage.removeItem('ventanilla-session') })
   await page.goto(BASE, { waitUntil: 'networkidle2' })
   await sleep(1200)
   await clickText(page, 'Super-Admin (plataforma)')
-  await sleep(1400)
-  txt = await bodyText(page)
-  if (!txt.includes('Consola Super-Admin')) throw new Error('Consola Super-Admin no renderizó')
-  console.log('✓ Consola Super-Admin renderiza')
-
-  // 5b) Licencia: el Super-Admin abre un cliente y ve control de puntos/dispositivos
-  ctx = 'licencia-superadmin'
-  await clickText(page, 'Tienda La Esquina')
-  txt = await waitForText(page, 'Licencia', 4000)
-  if (!/Licencia/.test(txt) || !/Puntos \(ventanillas\)/.test(txt) || !/Dispositivos/.test(txt)) throw new Error('Panel de licencia no renderizó')
-  console.log('✓ Super-Admin: licencia (puntos + dispositivos)')
-  await page.keyboard.press('Escape')
-  await sleep(300)
+  txt = await waitForText(page, 'Acceso Super-Admin', 4000)
+  if (!/Acceso Super-Admin/.test(txt)) throw new Error('La barrera de Super-Admin (correo+clave) no apareció')
+  // No debe haber entrado a la consola sin credenciales
+  if (/Consola Super-Admin/.test(await bodyText(page))) throw new Error('El demo entró a la consola sin credenciales')
+  // El botón "Entrar" exige correo + clave (no se prueba contra el backend aquí
+  // para no hacer red a producción desde el smoke; la validación de credenciales
+  // se verifica por separado contra el servidor).
+  if (!/Entrar/.test(txt) || !/Cancelar/.test(txt)) throw new Error('El formulario de Super-Admin (Entrar/Cancelar) no está completo')
+  console.log('✓ Super-Admin: el demo no entra sin credenciales (barrera correo+clave)')
 
   // 6) Cajero con PIN
   ctx = 'login-cajero'

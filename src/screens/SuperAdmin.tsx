@@ -93,7 +93,7 @@ export default function SuperAdmin() {
           <button onClick={() => { const t = toggleTheme(); setDark(t === 'dark') }} className="flex h-9 w-9 items-center justify-center rounded-full text-lg text-slate-300 hover:bg-white/10" title="Modo claro / oscuro">
             {dark ? '☀️' : '🌙'}
           </button>
-          <button onClick={logout} className="flex h-9 w-9 items-center justify-center rounded-full text-slate-300 hover:bg-white/10">
+          <button onClick={() => { clearCloud(); logout() }} className="flex h-9 w-9 items-center justify-center rounded-full text-slate-300 hover:bg-white/10" title="Salir">
             <Icon name="logout" className="h-5 w-5" />
           </button>
         </div>

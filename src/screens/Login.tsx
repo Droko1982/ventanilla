@@ -3,14 +3,38 @@ import { useSession } from '@/store/session'
 import { toast } from '@/components/Toast'
 import { Icon } from '@/components/icons'
 import { PinPad } from '@/components/PinPad'
+import { superAdminLogin, getApiUrl } from '@/data/api'
+
+// Backend de producción (por si el build no trae VITE_API_URL configurada).
+const PROD_API = 'https://ventanilla-api-vvzh.onrender.com'
 
 // Pantalla de entrada del demo: elegir rol con un toque. Pensada para que
 // cualquier persona entienda en segundos qué puede probar.
 export default function Login() {
   const loginAs = useSession((s) => s.loginAs)
   const loginByPin = useSession((s) => s.loginEmployeeByPin)
-  const [mode, setMode] = useState<'menu' | 'pin'>('menu')
+  const loginSuperAdmin = useSession((s) => s.loginSuperAdmin)
+  const [mode, setMode] = useState<'menu' | 'pin' | 'super'>('menu')
   const [pin, setPin] = useState('')
+  const [saEmail, setSaEmail] = useState('')
+  const [saPass, setSaPass] = useState('')
+  const [saBusy, setSaBusy] = useState(false)
+
+  // Super-Admin de la plataforma: SOLO entra con el correo y la clave reales,
+  // validados contra el backend. El demo no lo permite (no tiene credenciales).
+  async function submitSuper() {
+    if (!saEmail.trim() || !saPass) return toast('error', 'Ingresa el correo y la clave')
+    setSaBusy(true)
+    try {
+      await superAdminLogin(getApiUrl() || PROD_API, saEmail.trim(), saPass)
+      loginSuperAdmin()
+      toast('success', 'Bienvenido, Super-Admin')
+    } catch (e) {
+      toast('error', (e as Error).message || 'Acceso denegado')
+    } finally {
+      setSaBusy(false)
+    }
+  }
 
   async function submitPin(next: string) {
     if (next.length < 4) {
@@ -70,14 +94,14 @@ export default function Login() {
           </button>
 
           <button
-            onClick={() => loginAs('u_super')}
+            onClick={() => setMode('super')}
             className="flex w-full items-center gap-3 rounded-2xl bg-white/10 p-4 text-left text-white backdrop-blur active:scale-[0.99]"
           >
             <span className="text-3xl">🛡️</span>
             <span className="flex-1">
               <span className="block font-bold">Super-Admin (plataforma)</span>
               <span className="block text-sm text-brand-100">
-                Ver clientes, activar/suspender, cobro
+                Solo el dueño de la plataforma · requiere clave
               </span>
             </span>
             <Icon name="arrow-left" className="h-5 w-5 rotate-180 text-brand-200" />
@@ -85,6 +109,36 @@ export default function Login() {
 
           <p className="pt-4 text-center text-xs text-brand-200">
             Es un demo: los datos son de ejemplo y viven en tu dispositivo.
+          </p>
+        </div>
+      ) : mode === 'super' ? (
+        <div className="w-full max-w-sm space-y-3">
+          <p className="text-center text-sm font-semibold text-brand-100">🛡️ Acceso Super-Admin de la plataforma</p>
+          <input
+            value={saEmail}
+            onChange={(e) => setSaEmail(e.target.value)}
+            placeholder="Correo"
+            autoComplete="username"
+            inputMode="email"
+            className="w-full rounded-2xl bg-white/15 px-4 py-3 text-white placeholder:text-brand-200 outline-none backdrop-blur"
+          />
+          <input
+            value={saPass}
+            onChange={(e) => setSaPass(e.target.value)}
+            type="password"
+            placeholder="Clave"
+            autoComplete="current-password"
+            onKeyDown={(e) => e.key === 'Enter' && submitSuper()}
+            className="w-full rounded-2xl bg-white/15 px-4 py-3 text-white placeholder:text-brand-200 outline-none backdrop-blur"
+          />
+          <button onClick={submitSuper} disabled={saBusy} className="w-full rounded-2xl bg-white py-3 font-bold text-brand-700 shadow-lg active:scale-[0.99] disabled:opacity-60">
+            {saBusy ? 'Verificando…' : 'Entrar'}
+          </button>
+          <button onClick={() => { setMode('menu'); setSaEmail(''); setSaPass('') }} className="w-full text-center text-sm text-brand-200">
+            Cancelar
+          </button>
+          <p className="pt-2 text-center text-xs text-brand-200">
+            Solo para el dueño de la plataforma. El demo no tiene acceso aquí.
           </p>
         </div>
       ) : (
