@@ -21,7 +21,7 @@ import { toast } from '@/components/Toast'
 import { EmptyState, ProductThumb } from '@/components/ui'
 import { cop, kg, parseCop } from '@/lib/money'
 import { uid } from '@/lib/id'
-import { recordSale, adjustChangeOwed } from '@/data/repo'
+import { recordSale, adjustChangeOwed, createRemision } from '@/data/repo'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { receiptText, printReceipt } from '@/lib/receipt'
@@ -57,6 +57,8 @@ export default function POS() {
   const [quickAdd, setQuickAdd] = useState(false)
   const [scanCreateCode, setScanCreateCode] = useState<string | undefined>()
   const [scanUnknown, setScanUnknown] = useState<string | null>(null)
+  // Tipo de documento del mostrador: tiquete (normal), remisión o factura electrónica.
+  const [docMode, setDocMode] = useState<'tiquete' | 'remision' | 'factura'>('tiquete')
   const [serviceOpen, setServiceOpen] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
   const [displayOpen, setDisplayOpen] = useState(false)
@@ -202,6 +204,7 @@ export default function POS() {
   }, [cart.lines, total, tenant])
 
   // Cierra la venta (reutilizado por el cobro normal y el cobro rápido).
+  // Según docMode (mostrador) genera: tiquete normal, factura electrónica o remisión.
   async function completeSale(payments: Payment[], opts: PayOpts, showReceipt = true) {
     if (!locationId || !user) return
     const items = cart.lines.map((l) => ({
@@ -209,18 +212,40 @@ export default function POS() {
       unitPrice: l.unitPrice, lineDiscount: l.lineDiscount + (l.promoSaving ?? 0),
       ivaRate: l.ivaRate, cost: l.cost,
     }))
+    const customerId = opts.customerId ?? cart.meta.customerId
+    // El tipo de documento solo aplica en el modo Mostrador; Fichas/Lista = tiquete.
+    const effectiveDoc = mode === 'counter' ? docMode : 'tiquete'
+
+    // Mostrador 1 → Remisión (nota de entrega, no DIAN; descuenta stock; fiado si aplica).
+    if (effectiveDoc === 'remision') {
+      const cust = customers?.find((c) => c.id === customerId)
+      const onCredit = payments.some((p) => p.method === 'fiado')
+      const rem = await createRemision({
+        tenantId, locationId, userId: user.id, userName: user.name,
+        customerName: cust?.name ?? 'Consumidor Final', customerId: cust?.id,
+        customerDoc: opts.customerDoc ?? cust?.idNumber, customerAddress: cust?.address,
+        items, discount: cart.globalDiscount, note: opts.note, onCredit,
+      })
+      cart.clear()
+      setPayOpen(false)
+      toast('success', `Remisión ${rem.number} creada`)
+      return
+    }
+
+    // Mostrador 2 → Factura electrónica (DIAN). Tiquete = comportamiento normal.
     const sale = await recordSale({
       tenantId, locationId, userId: user.id, userName: user.name,
       items, discount: cart.globalDiscount, payments,
-      customerId: opts.customerId ?? cart.meta.customerId,
-      customerDoc: opts.customerDoc, transmitDian: opts.transmitDian,
+      customerId,
+      customerDoc: opts.customerDoc, transmitDian: effectiveDoc === 'factura' ? true : opts.transmitDian,
+      docType: effectiveDoc === 'factura' ? 'factura' : undefined,
       vendedorId: cart.meta.vendedorId, vendedorName: cart.meta.vendedorName,
       discountReason: cart.meta.discountReason, note: opts.note, redeemPoints: opts.redeemPoints,
     })
     cart.clear()
     setPayOpen(false)
     if (showReceipt) setReceipt(sale)
-    toast('success', 'Venta registrada ✓')
+    toast('success', effectiveDoc === 'factura' ? 'Factura electrónica registrada ✓' : 'Venta registrada ✓')
     if (tenant?.autoOpenDrawer && payments.some((p) => p.method === 'efectivo')) {
       openCashDrawer().catch(() => { /* sin cajón en este dispositivo */ })
     }
@@ -256,6 +281,8 @@ export default function POS() {
           customers={customers ?? []}
           vendedores={vendedores ?? []}
           canDiscount={canDiscount}
+          docMode={docMode}
+          setDocMode={setDocMode}
           onAddCode={(code, qty) => addByCode(code, qty)}
           onAddProduct={(p, qty) => (p.unit === 'peso' ? setWeightProduct(p) : cart.addProduct(p, qty))}
           onPay={() => setPayOpen(true)}
@@ -740,13 +767,15 @@ function ManualItemSheet({ onClose, onAdd }: { onClose: () => void; onAdd: (line
 
 // --- Modo mostrador (formulario clásico tipo SEITEM) -----------------------
 function CounterEntry({
-  products, allProducts, customers, vendedores, canDiscount, onAddCode, onAddProduct, onPay, onScan, onManual,
+  products, allProducts, customers, vendedores, canDiscount, docMode, setDocMode, onAddCode, onAddProduct, onPay, onScan, onManual,
 }: {
   products: Product[]
   allProducts: Product[]
   customers: Customer[]
   vendedores: User[]
   canDiscount: boolean
+  docMode: 'tiquete' | 'remision' | 'factura'
+  setDocMode: (m: 'tiquete' | 'remision' | 'factura') => void
   onAddCode: (code: string, qty: number) => void
   onAddProduct: (p: Product, qty: number) => void
   onPay: () => void
@@ -779,6 +808,32 @@ function CounterEntry({
 
   return (
     <div className="space-y-3">
+      {/* Tipo de documento del mostrador: tiquete / remisión / factura electrónica */}
+      <div className="grid grid-cols-3 gap-1.5">
+        {([
+          ['tiquete', '🎫 Tiquete'],
+          ['remision', '📦 Remisión'],
+          ['factura', '🧾 Factura E.'],
+        ] as const).map(([m, label]) => (
+          <button
+            key={m}
+            onClick={() => setDocMode(m)}
+            className={`rounded-xl border py-2 text-xs font-semibold ${
+              docMode === m ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-500'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {docMode !== 'tiquete' && (
+        <p className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-700">
+          {docMode === 'remision'
+            ? 'Mostrador 1 · Remisión: nota de entrega (descuenta inventario; puede ser a crédito/fiado). Elige el cliente.'
+            : 'Mostrador 2 · Factura electrónica (DIAN). Elige el cliente y su documento al cobrar.'}
+        </p>
+      )}
+
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="label">Cliente</label>
