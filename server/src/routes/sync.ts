@@ -102,6 +102,61 @@ syncRouter.post('/', authRequired, licenseActive, async (req: AuthedRequest, res
       }
     }
 
+    // STOCK: la CANTIDAD la gobierna el servidor (suma de movimientos), no el
+    // valor absoluto que empuja cada caja. Así dos cajas que venden a la vez no
+    // se pisan. Al crear, se toma la cantidad inicial del cliente; al actualizar,
+    // se conservan los demás campos (umbral, vencimiento…) pero NO la cantidad.
+    if (rec.table === 'stock') {
+      const where = { tenantId_table_recordId: { tenantId, table: 'stock', recordId: rec.recordId } }
+      const existing = await prisma.syncRecord.findUnique({ where })
+      const data = (rec.data ?? {}) as any
+      if (!existing) {
+        await prisma.syncRecord.create({ data: { tenantId, table: 'stock', recordId: rec.recordId, data, deletedAt: rec.deleted ? new Date() : null } })
+      } else {
+        const prev = (existing.data ?? {}) as any
+        const merged = { ...data, quantity: prev.quantity ?? data.quantity }
+        await prisma.syncRecord.update({ where, data: { data: merged, deletedAt: rec.deleted ? new Date() : null } })
+      }
+      applied++
+      continue
+    }
+
+    // MOVIMIENTOS DE STOCK: al llegar uno NUEVO, ajusta la cantidad del stock de
+    // forma ATÓMICA (incremento en SQL → no se pierde ante cajas concurrentes).
+    // Idempotente: solo ajusta cuando el movimiento no existía aún.
+    if (rec.table === 'stockMovements') {
+      const where = { tenantId_table_recordId: { tenantId, table: 'stockMovements', recordId: rec.recordId } }
+      const existed = await prisma.syncRecord.findUnique({ where })
+      await prisma.syncRecord.upsert({
+        where,
+        create: { tenantId, table: 'stockMovements', recordId: rec.recordId, data: rec.data as object, deletedAt: rec.deleted ? new Date() : null },
+        update: { data: rec.data as object, deletedAt: rec.deleted ? new Date() : null },
+      })
+      if (!existed && !rec.deleted) {
+        const d = (rec.data ?? {}) as any
+        const qty = Number(d.qty)
+        if (Number.isFinite(qty) && qty !== 0 && d.productId && d.locationId) {
+          const stockId = `${d.locationId}:${d.productId}`
+          const affected = await prisma.$executeRaw`
+            UPDATE "SyncRecord"
+            SET data = jsonb_set(data, '{quantity}', to_jsonb(ROUND((COALESCE((data->>'quantity')::numeric, 0) + ${qty})::numeric, 3)), true),
+                "updatedAt" = NOW()
+            WHERE "tenantId" = ${tenantId} AND "table" = 'stock' AND "recordId" = ${stockId}`
+          if (!affected) {
+            // El stock aún no existe (producto recién creado): lo crea con la cantidad del movimiento.
+            await prisma.syncRecord.create({
+              data: {
+                tenantId, table: 'stock', recordId: stockId,
+                data: { id: stockId, tenantId, locationId: d.locationId, productId: d.productId, quantity: Number(qty.toFixed(3)) },
+              },
+            }).catch(() => { /* carrera: otro push lo creó; el incremento ya quedó */ })
+          }
+        }
+      }
+      applied++
+      continue
+    }
+
     if (SYNC_TABLES.has(rec.table)) {
       await prisma.syncRecord.upsert({
         where: { tenantId_table_recordId: { tenantId, table: rec.table, recordId: rec.recordId } },
