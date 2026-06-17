@@ -551,8 +551,12 @@ function CloudSection() {
         if (reg.user?.id) await useSession.getState().loginAs(reg.user.id)
         toast('success', 'Cuenta creada y conectada')
       } else {
-        await cloudLogin(url.trim(), email.trim(), password)
-        await startCloud()
+        const log = await cloudLogin(url.trim(), email.trim(), password)
+        // Empezar limpio: este dispositivo adopta SOLO los datos de la cuenta
+        // (borra el demo local para que no se mezcle con los productos reales).
+        await clearLocalData()
+        await startCloud() // trae negocio, usuario y productos del servidor
+        if (log.user?.id) await useSession.getState().loginAs(log.user.id)
         toast('success', 'Conectado y sincronizando')
       }
       setConnected(true)

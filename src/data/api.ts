@@ -67,7 +67,7 @@ export async function api<T = any>(path: string, opts: ApiOpts = {}): Promise<T>
 // Conecta este dispositivo a una cuenta del backend (dueño).
 export async function cloudLogin(url: string, email: string, password: string) {
   setApiUrl(url)
-  const d = await api<{ token: string; user?: { role?: string } }>('/auth/login', {
+  const d = await api<{ token: string; user?: { id: string; name: string; role: string } }>('/auth/login', {
     method: 'POST',
     body: { email, password },
     auth: false,
