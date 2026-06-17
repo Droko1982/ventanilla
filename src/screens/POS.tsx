@@ -298,11 +298,11 @@ export default function POS() {
         >
           💱 Cambio: {cop(changeOwed?.amount ?? 0)}
         </button>
-        {role === 'admin' && (
+        {(role === 'admin' || role === 'empleado') && (
           <button
             onClick={() => setDaySalesOpen(true)}
             className="chip shrink-0 bg-brand-100 font-semibold text-brand-700"
-            title="Ventas de hoy: resumen, sincronización y devoluciones"
+            title={role === 'admin' ? 'Ventas de hoy: resumen, sincronización y devoluciones' : 'Mis ventas de hoy y sincronización'}
           >
             📋 Hoy
           </button>

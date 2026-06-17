@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { useScopeSales, useTenant, useLocations, useActiveLocationId, useCurrentUser } from '@/hooks/data'
+import { useSession } from '@/store/session'
 import { saleDay, todayYMD } from '@/lib/businessDay'
 import { cloudStatus, syncNow } from '@/data/cloud'
 import { isCloudConfigured } from '@/data/api'
@@ -27,11 +28,17 @@ export function DaySalesSheet({ onClose }: { onClose: () => void }) {
   const locations = useLocations()
   const locationId = useActiveLocationId()
   const user = useCurrentUser()
+  const role = useSession((s) => s.role)
+  const isOwner = role === 'admin'
   const [detail, setDetail] = useState<Sale | null>(null)
   const [syncing, setSyncing] = useState(false)
 
   const today = todayYMD()
-  const todaySales = (sales ?? []).filter((s) => saleDay(s) === today).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  // El dueño ve todas las ventas del día; el cajero ve SOLO las suyas (para
+  // confirmar que sus transacciones se registraron y subieron).
+  const todaySales = (sales ?? [])
+    .filter((s) => saleDay(s) === today && (isOwner || s.userId === user?.id))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   const valid = todaySales.filter((s) => s.status !== 'anulada')
   const total = valid.reduce((a, s) => a + s.total, 0)
   const anuladas = todaySales.filter((s) => s.status === 'anulada').length
@@ -66,19 +73,29 @@ export function DaySalesSheet({ onClose }: { onClose: () => void }) {
   const locName = locations?.find((l) => l.id === locationId)?.name ?? ''
 
   return (
-    <Sheet open onClose={onClose} title="Ventas de hoy">
+    <Sheet open onClose={onClose} title={isOwner ? 'Ventas de hoy' : 'Mis ventas de hoy'}>
       <div className="space-y-3">
-        {/* Resumen */}
+        {/* Resumen: el dueño ve el total del negocio; el cajero solo el conteo. */}
         <div className="rounded-2xl bg-brand-50 p-4 text-center">
-          <p className="text-sm text-brand-600">Vendido hoy ({valid.length} ventas)</p>
-          <p className="text-3xl font-extrabold text-brand-700">{cop(total)}</p>
+          {isOwner ? (
+            <>
+              <p className="text-sm text-brand-600">Vendido hoy ({valid.length} ventas)</p>
+              <p className="text-3xl font-extrabold text-brand-700">{cop(total)}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-brand-600">Tus ventas de hoy</p>
+              <p className="text-3xl font-extrabold text-brand-700">{valid.length}</p>
+              <p className="text-xs text-brand-600">venta(s) registrada(s)</p>
+            </>
+          )}
           {(anuladas > 0 || devueltas > 0) && (
             <p className="mt-1 text-xs text-slate-500">{anuladas} anuladas · {devueltas} con devolución</p>
           )}
         </div>
 
-        {/* Desglose por método */}
-        {Object.keys(byMethod).length > 0 && (
+        {/* Desglose por método (solo dueño) */}
+        {isOwner && Object.keys(byMethod).length > 0 && (
           <div className="rounded-2xl border border-slate-100 p-3">
             <div className="space-y-1">
               {Object.entries(byMethod).map(([m, v]) => (
@@ -91,8 +108,8 @@ export function DaySalesSheet({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {/* Efectivo esperado en caja (para cuadrar) */}
-        {expectedCash !== null && (
+        {/* Efectivo esperado en caja (para cuadrar) — solo dueño */}
+        {isOwner && expectedCash !== null && (
           <div className="flex items-center justify-between rounded-2xl bg-emerald-50 p-3">
             <div>
               <p className="text-sm font-semibold text-emerald-700">Efectivo esperado en caja</p>
