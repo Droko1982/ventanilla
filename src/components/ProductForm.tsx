@@ -8,7 +8,7 @@ import { uid, internalCode } from '@/lib/id'
 import { parseCop } from '@/lib/money'
 import { PriceMarginEditor } from './PriceMarginEditor'
 import { fileToCompressedDataUrl } from '@/lib/image'
-import { bankLookup, bankSearch, bankContribute, isCloudConfigured, type BankProduct } from '@/data/api'
+import { bankLookup, bankSearch, bankContribute, externalBarcodeLookup, isCloudConfigured, type BankProduct } from '@/data/api'
 import type { Category, Location, Product, Supplier } from '@/types'
 
 // Formulario de producto reutilizable: crear (con stock inicial) o editar.
@@ -77,17 +77,27 @@ export function ProductForm({
     if (cat && (!gentle || categoryId === (categories[0]?.id ?? ''))) setCategoryId(cat.id)
   }
 
-  // Al escribir/escanear un código (creando), busca la ficha en el banco y
-  // autocompleta si el nombre aún está vacío. No pisa lo que el usuario ya escribió.
+  // Al escribir/escanear un código (creando), busca la ficha: primero en el banco
+  // compartido (instantáneo) y, si no está, en la base mundial Open Food Facts.
+  // No pisa lo que el usuario ya escribió. Lo que llega de internet se aporta al
+  // banco para que la próxima vez sea instantáneo y lo aprovechen otras tiendas.
   useEffect(() => {
     const code = barcode.trim()
-    if (!bankOn || editing || name.trim() || code.length < 6) return
+    if (editing || name.trim() || code.length < 6) return
     let cancel = false
     const t = setTimeout(async () => {
-      const hit = await bankLookup(code)
-      if (cancel || !hit) return
-      prefillFromBank(hit, true)
-      toast('success', '✨ Autocompletado desde el banco de productos')
+      const hit = bankOn ? await bankLookup(code) : null
+      if (cancel) return
+      if (hit) {
+        prefillFromBank(hit, true)
+        toast('success', '✨ Autocompletado desde el banco de productos')
+        return
+      }
+      const ext = await externalBarcodeLookup(code)
+      if (cancel || !ext) return
+      prefillFromBank(ext, true)
+      bankContribute({ barcode: ext.barcode, name: ext.name, brand: ext.brand ?? null })
+      toast('success', '🌐 Autocompletado desde la base mundial de productos')
     }, 450)
     return () => { cancel = true; clearTimeout(t) }
   }, [barcode, editing, name, bankOn])

@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useSession } from '@/store/session'
+import { getToken, getRole } from '@/data/api'
 import { AppLayout } from '@/components/AppLayout'
 import { ToastContainer } from '@/components/Toast'
 import { UpdateBanner } from '@/components/UpdateBanner'
@@ -69,7 +70,10 @@ export default function App() {
         {!role ? (
           <Login />
         ) : role === 'superadmin' ? (
-          <SuperAdmin />
+          // Defensa en profundidad: la consola solo se muestra si además hay un
+          // token de super-admin real (de superAdminLogin). Sin él (p. ej. si se
+          // manipuló la sesión local), se exige volver a autenticarse.
+          getToken() && getRole() === 'superadmin' ? <SuperAdmin /> : <Login />
         ) : (
           <AppLayout>
             <Routes>

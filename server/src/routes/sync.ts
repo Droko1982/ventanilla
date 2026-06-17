@@ -89,6 +89,19 @@ syncRouter.post('/', authRequired, licenseActive, async (req: AuthedRequest, res
   for (const rec of incoming) {
     if (!rec?.table || !rec?.recordId) continue
 
+    // Tope de dispositivos de la licencia: no registrar equipos NUEVOS por encima
+    // del máximo (los equipos ya registrados y el resto de datos siguen igual).
+    if (rec.table === 'devices' && !rec.deleted) {
+      const exists = await prisma.syncRecord.findUnique({
+        where: { tenantId_table_recordId: { tenantId, table: 'devices', recordId: rec.recordId } },
+      })
+      if (!exists) {
+        const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { maxDevices: true } })
+        const count = await prisma.syncRecord.count({ where: { tenantId, table: 'devices', deletedAt: null } })
+        if (tenant?.maxDevices && count >= tenant.maxDevices) continue // límite alcanzado
+      }
+    }
+
     if (SYNC_TABLES.has(rec.table)) {
       await prisma.syncRecord.upsert({
         where: { tenantId_table_recordId: { tenantId, table: rec.table, recordId: rec.recordId } },

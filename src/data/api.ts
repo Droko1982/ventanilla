@@ -147,6 +147,35 @@ export async function bankContribute(p: BankProduct): Promise<void> {
   try { await api('/bank', { method: 'POST', body: p }) } catch { /* silencioso */ }
 }
 
+// Búsqueda EXTERNA de un código en Open Food Facts: base mundial gratuita de
+// productos empacados (muchos con EAN de Colombia: gaseosas, mecato, enlatados,
+// aseo, etc.). Solo lectura, sin llave, con CORS. Devuelve null si no hay red,
+// el código es inválido o el producto no existe. Complementa al banco propio.
+export async function externalBarcodeLookup(barcode: string): Promise<BankProduct | null> {
+  if (!navigator.onLine) return null
+  const code = barcode.replace(/\D/g, '')
+  if (code.length < 8) return null // EAN-8/13, UPC-A
+  try {
+    const res = await fetch(
+      `https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,product_name_es,brands,quantity`,
+      { headers: { Accept: 'application/json' } },
+    )
+    if (!res.ok) return null
+    const d = (await res.json()) as any
+    if (d.status !== 1 || !d.product) return null
+    const p = d.product
+    let name = String(p.product_name_es || p.product_name || '').trim()
+    if (!name) return null
+    if (p.quantity && !name.toLowerCase().includes(String(p.quantity).toLowerCase())) {
+      name = `${name} ${p.quantity}`.trim()
+    }
+    const brand = String(p.brands || '').split(',')[0]?.trim() || null
+    return { barcode: code, name, brand }
+  } catch {
+    return null
+  }
+}
+
 // Crea una cuenta nueva (negocio) en la nube y conecta este dispositivo.
 export async function cloudRegister(
   url: string,

@@ -3,7 +3,9 @@ import { useSession } from '@/store/session'
 import { toast } from '@/components/Toast'
 import { Icon } from '@/components/icons'
 import { PinPad } from '@/components/PinPad'
-import { superAdminLogin, getApiUrl } from '@/data/api'
+import { superAdminLogin, cloudLogin, getApiUrl } from '@/data/api'
+import { startCloud } from '@/data/cloud'
+import { clearLocalData } from '@/data/seed'
 
 // Backend de producción (por si el build no trae VITE_API_URL configurada).
 const PROD_API = 'https://ventanilla-api-vvzh.onrender.com'
@@ -14,12 +16,34 @@ export default function Login() {
   const loginByPin = useSession((s) => s.loginEmployeeByPin)
   const loginAdminByPin = useSession((s) => s.loginAdminByPin)
   const loginSuperAdmin = useSession((s) => s.loginSuperAdmin)
-  const [mode, setMode] = useState<'menu' | 'pin' | 'super'>('menu')
+  const [mode, setMode] = useState<'menu' | 'pin' | 'super' | 'owner-cloud'>('menu')
   const [pinRole, setPinRole] = useState<'admin' | 'empleado'>('empleado')
   const [pin, setPin] = useState('')
   const [saEmail, setSaEmail] = useState('')
   const [saPass, setSaPass] = useState('')
   const [saBusy, setSaBusy] = useState(false)
+  const [ocEmail, setOcEmail] = useState('')
+  const [ocPass, setOcPass] = useState('')
+  const [ocBusy, setOcBusy] = useState(false)
+
+  // Dueño con cuenta en la nube: entra con correo y clave (mismo flujo que
+  // Ajustes → Nube). Útil para el cliente real que cerró sesión y necesita
+  // volver a entrar sin depender de un PIN local.
+  async function submitOwnerCloud() {
+    if (!ocEmail.trim() || !ocPass) return toast('error', 'Ingresa el correo y la clave')
+    setOcBusy(true)
+    try {
+      const log = await cloudLogin(getApiUrl() || PROD_API, ocEmail.trim(), ocPass)
+      await clearLocalData()
+      await startCloud()
+      if (log.user?.id) await useSession.getState().loginAs(log.user.id)
+      toast('success', 'Conectado y sincronizando')
+    } catch (e) {
+      toast('error', (e as Error).message || 'No se pudo entrar')
+    } finally {
+      setOcBusy(false)
+    }
+  }
 
   // Super-Admin de la plataforma: SOLO entra con el correo y la clave reales,
   // validados contra el backend. El demo no lo permite (no tiene credenciales).
@@ -142,19 +166,59 @@ export default function Login() {
             Solo para el dueño de la plataforma. El demo no tiene acceso aquí.
           </p>
         </div>
+      ) : mode === 'owner-cloud' ? (
+        <div className="w-full max-w-sm space-y-3">
+          <p className="text-center text-sm font-semibold text-brand-100">🧑‍💼 Dueño · entrar con correo y clave</p>
+          <input
+            value={ocEmail}
+            onChange={(e) => setOcEmail(e.target.value)}
+            placeholder="Correo del negocio"
+            autoComplete="username"
+            inputMode="email"
+            className="w-full rounded-2xl bg-white/15 px-4 py-3 text-white placeholder:text-brand-200 outline-none backdrop-blur"
+          />
+          <input
+            value={ocPass}
+            onChange={(e) => setOcPass(e.target.value)}
+            type="password"
+            placeholder="Clave"
+            autoComplete="current-password"
+            onKeyDown={(e) => e.key === 'Enter' && submitOwnerCloud()}
+            className="w-full rounded-2xl bg-white/15 px-4 py-3 text-white placeholder:text-brand-200 outline-none backdrop-blur"
+          />
+          <button onClick={submitOwnerCloud} disabled={ocBusy} className="w-full rounded-2xl bg-white py-3 font-bold text-brand-700 shadow-lg active:scale-[0.99] disabled:opacity-60">
+            {ocBusy ? 'Conectando…' : 'Entrar'}
+          </button>
+          <button onClick={() => { setMode('menu'); setOcEmail(''); setOcPass('') }} className="w-full text-center text-sm text-brand-200">
+            Cancelar
+          </button>
+          <p className="pt-2 text-center text-xs text-brand-200">
+            Tu cuenta en la nube (la misma que usas en Ajustes → Nube).
+          </p>
+        </div>
       ) : (
-        <PinPad
-          pin={pin}
-          tone="brand"
-          label={pinRole === 'admin' ? 'PIN del dueño' : 'Ingresa tu PIN de 4 dígitos'}
-          hint={pinRole === 'admin' ? 'Demo: 1234' : 'Demo: Centro 1234 · Norte 2345 · Pereira 3456'}
-          onDigit={(d) => submitPin(pin + d)}
-          onBack={() => setPin(pin.slice(0, -1))}
-          onCancel={() => {
-            setMode('menu')
-            setPin('')
-          }}
-        />
+        <div className="w-full max-w-sm space-y-3">
+          <PinPad
+            pin={pin}
+            tone="brand"
+            label={pinRole === 'admin' ? 'PIN del dueño' : 'Ingresa tu PIN de 4 dígitos'}
+            hint={pinRole === 'admin' ? 'Demo: 1234' : 'Demo: Centro 1234 · Norte 2345 · Pereira 3456'}
+            onDigit={(d) => submitPin(pin + d)}
+            onBack={() => setPin(pin.slice(0, -1))}
+            onCancel={() => {
+              setMode('menu')
+              setPin('')
+            }}
+          />
+          {pinRole === 'admin' && (
+            <button
+              onClick={() => { setMode('owner-cloud'); setPin('') }}
+              className="w-full text-center text-sm text-brand-200 underline"
+            >
+              ¿Dueño con cuenta en la nube? Entrar con correo y clave
+            </button>
+          )}
+        </div>
       )}
     </div>
   )
