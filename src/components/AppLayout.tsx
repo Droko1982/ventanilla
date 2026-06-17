@@ -17,6 +17,7 @@ import { registerDevice } from '@/lib/device'
 import { requestMonthlyCheckout } from '@/data/repo'
 import { isCloudConfigured } from '@/data/api'
 import { db } from '@/data/db'
+import { randomPin } from '@/lib/id'
 import { daysUntil } from '@/lib/format'
 import { toast } from './Toast'
 
@@ -216,6 +217,12 @@ function ChangePinSheet({ user, onClose }: { user: { id: string; name: string };
           <label className="label">Confírmalo</label>
           <input className="input text-center text-2xl tracking-widest" inputMode="numeric" maxLength={4} value={confirm} onChange={(e) => setConfirm(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" />
         </div>
+        <button className="btn btn-secondary w-full text-sm" onClick={() => { const p = randomPin(); setPin(p); setConfirm(p) }}>
+          🎲 Generar un PIN seguro
+        </button>
+        <p className="text-xs text-slate-400">
+          Tip de seguridad: usa un PIN que solo tú conozcas y cámbialo cada cierto tiempo. Evita 0000, 1111 o 1234.
+        </p>
       </div>
     </Sheet>
   )

@@ -13,7 +13,7 @@ import { toast } from '@/components/Toast'
 import { cop } from '@/lib/money'
 import { fmtDate } from '@/lib/format'
 import { billingBreakdown } from '@/lib/billing'
-import { uid } from '@/lib/id'
+import { uid, randomPin } from '@/lib/id'
 import { useSession } from '@/store/session'
 import { drawerSupported, drawerLinked, connectDrawer, unlinkDrawer, openCashDrawer, drawerMessage } from '@/lib/cashDrawer'
 import { scaleSupported, scaleLinked, connectScale, unlinkScale, readWeightOnce, scaleMessage } from '@/lib/scale'
@@ -226,6 +226,25 @@ export default function Ajustes() {
           <a href={`${import.meta.env.BASE_URL}terminos.html`} target="_blank" rel="noreferrer" className="btn btn-secondary text-sm">Términos</a>
         </div>
         <p className="text-xs text-slate-400">Tratamiento de datos conforme a la Ley 1581 de 2012 (Colombia).</p>
+      </Section>
+
+      <Section title="Seguridad (PIN)">
+        <p className="text-sm text-slate-600">
+          Para cambiar tu PIN de acceso: toca tu <b>inicial (arriba a la derecha) → 🔑 Cambiar mi PIN</b>.
+          Puedes escribir uno o tocar <b>“🎲 Generar un PIN seguro”</b>.
+        </p>
+        <p className="text-xs text-slate-400">
+          Los PIN de los cajeros se crean y editan en la sección <b>Empleados</b> (también con “Generar”).
+          Evita 0000, 1111 o 1234 en producción.
+        </p>
+      </Section>
+
+      <Section title="Acerca de Ventanilla">
+        <div className="space-y-1 text-sm text-slate-600">
+          <p className="font-semibold text-slate-800">Ventanilla — Ventas e Inventario</p>
+          <p>Plataforma desarrollada por el <b>Dr. Mauricio Rodríguez Herrera</b>.</p>
+          <p className="text-xs text-slate-400">© {new Date().getFullYear()} Dr. Mauricio Rodríguez Herrera. Todos los derechos reservados.</p>
+        </div>
       </Section>
 
       {/* Sheets */}
@@ -689,7 +708,13 @@ function EmployeeForm({ employee, tenantId, locations, onClose }: { employee?: U
     >
       <div className="space-y-3">
         <div><label className="label">Nombre</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></div>
-        <div><label className="label">PIN (4 dígitos)</label><input className="input text-center text-xl tracking-widest" inputMode="numeric" maxLength={4} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="1234" /></div>
+        <div>
+          <label className="label">PIN (4 dígitos)</label>
+          <div className="flex gap-2">
+            <input className="input flex-1 text-center text-xl tracking-widest" inputMode="numeric" maxLength={4} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" />
+            <button type="button" className="btn btn-secondary text-sm" onClick={() => setPin(randomPin())}>🎲 Generar</button>
+          </div>
+        </div>
         <div>
           <label className="label">Local asignado</label>
           <select className="input" value={locationId} onChange={(e) => setLocationId(e.target.value)}>

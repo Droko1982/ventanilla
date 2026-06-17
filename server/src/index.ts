@@ -1,3 +1,8 @@
+/**
+ * Ventanilla — API de la plataforma SaaS de ventas e inventario.
+ * Desarrollada por el Dr. Mauricio Rodríguez Herrera.
+ * © Dr. Mauricio Rodríguez Herrera. Todos los derechos reservados.
+ */
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'

@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Ventanilla — Plataforma SaaS de ventas e inventario para ventanillas y tiendas pequeñas en Colombia.",
+  "author": "Dr. Mauricio Rodríguez Herrera",
+  "license": "UNLICENSED",
+  "copyright": "© Dr. Mauricio Rodríguez Herrera. Todos los derechos reservados.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",

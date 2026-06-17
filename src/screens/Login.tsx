@@ -202,7 +202,7 @@ export default function Login() {
             pin={pin}
             tone="brand"
             label={pinRole === 'admin' ? 'PIN del dueño' : 'Ingresa tu PIN de 4 dígitos'}
-            hint={pinRole === 'admin' ? 'Demo: 1234' : 'Demo: Centro 1234 · Norte 2345 · Pereira 3456'}
+            hint={pinRole === 'admin' ? 'Demo: 1111' : 'Demo: Centro 1234 · Norte 2345 · Pereira 3456'}
             onDigit={(d) => submitPin(pin + d)}
             onBack={() => setPin(pin.slice(0, -1))}
             onCancel={() => {
@@ -220,6 +220,10 @@ export default function Login() {
           )}
         </div>
       )}
+
+      <p className="mt-8 text-center text-[11px] text-brand-200/80">
+        Plataforma desarrollada por el Dr. Mauricio Rodríguez Herrera
+      </p>
     </div>
   )
 }

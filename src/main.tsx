@@ -1,3 +1,8 @@
+/**
+ * Ventanilla — Plataforma SaaS de ventas e inventario para tiendas en Colombia.
+ * Desarrollada por el Dr. Mauricio Rodríguez Herrera.
+ * © Dr. Mauricio Rodríguez Herrera. Todos los derechos reservados.
+ */
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'

@@ -123,7 +123,7 @@ const users: User[] = [
     tenantId: TENANT_ID,
     name: 'Marcela Ríos (Dueña)',
     role: 'admin',
-    pin: '1234', // demo: el dueño entra con PIN (de prueba, igual al de caja)
+    pin: '1111', // PIN del dueño (de prueba). Se cambia en Cuenta → "Cambiar mi PIN".
     email: 'laesquina@demo.co',
     active: true,
   },
@@ -639,7 +639,7 @@ function mkTenant(
 // ---------------------------------------------------------------------------
 // Al subir una versión nueva del modelo de demo, se recarga automáticamente
 // para que cualquier visitante vea los datos/precios más recientes.
-const SEED_VERSION = '16-dueno-pin'
+const SEED_VERSION = '17-dueno-1111'
 const SEED_KEY = 'ventanilla-seed-version'
 
 export async function seedIfEmpty(): Promise<void> {

@@ -1,3 +1,8 @@
+/**
+ * Ventanilla — Plataforma SaaS de ventas e inventario.
+ * Desarrollada por el Dr. Mauricio Rodríguez Herrera.
+ * © Dr. Mauricio Rodríguez Herrera. Todos los derechos reservados.
+ */
 import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useSession } from '@/store/session'

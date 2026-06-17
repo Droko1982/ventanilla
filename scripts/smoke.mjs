@@ -90,11 +90,11 @@ async function main() {
     console.log(`✓ Código de barras Code 128 escaneable (${rects} barras)`)
   }
 
-  // 2) Entrar como Dueño (ahora con PIN; en el demo es 1234)
+  // 2) Entrar como Dueño (ahora con PIN; en el demo es 1111)
   ctx = 'login-admin'
   await clickText(page, 'Dueño de la tienda')
   await sleep(600)
-  for (const d of ['1', '2', '3', '4']) {
+  for (const d of ['1', '1', '1', '1']) {
     await page.evaluate((digit) => {
       const b = [...document.querySelectorAll('button')].find((x) => x.textContent?.trim() === digit)
       if (b) b.click()
@@ -754,7 +754,7 @@ async function main() {
     await sleep(1200)
     await clickText(page, 'Dueño de la tienda')
     await sleep(600)
-    for (const d of ['1', '2', '3', '4']) {
+    for (const d of ['1', '1', '1', '1']) {
       await page.evaluate((digit) => { const b = [...document.querySelectorAll('button')].find((x) => x.textContent?.trim() === digit); if (b) b.click() }, d)
       await sleep(150)
     }

@@ -16,3 +16,13 @@ export function internalCode(): string {
   const n = Math.floor(100000 + Math.random() * 899999)
   return `VEN-${n}`
 }
+
+/** PIN de 4 dígitos al azar (para sugerir uno seguro). Evita los muy obvios. */
+export function randomPin(): string {
+  const obvios = new Set(['0000', '1111', '1234', '2222', '4321', '0123'])
+  let pin = ''
+  do {
+    pin = String(Math.floor(1000 + Math.random() * 9000))
+  } while (obvios.has(pin))
+  return pin
+}
