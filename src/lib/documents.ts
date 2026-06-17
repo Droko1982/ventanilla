@@ -41,7 +41,14 @@ export function ivaBreakdown(items: SaleItem[], globalDiscount = 0): DocTotals {
     .map(([rate, v]) => ({ rate, base: Math.round(v.base), iva: Math.round(v.iva) }))
     .sort((a, b) => a.rate - b.rate)
   const base = lines.reduce((s, l) => s + l.base, 0)
-  const iva = lines.reduce((s, l) => s + l.iva, 0)
+  let iva = lines.reduce((s, l) => s + l.iva, 0)
   const total = Math.max(0, Math.round(grossTotal - globalDiscount))
+  // Cuadre de centavo: base + IVA debe ser EXACTAMENTE el total (la DIAN lo exige).
+  // El descuadre por redondeo se absorbe en el IVA de la última tarifa.
+  const diff = total - (base + iva)
+  if (diff !== 0 && lines.length > 0) {
+    lines[lines.length - 1].iva += diff
+    iva += diff
+  }
   return { lines, base, iva, total }
 }

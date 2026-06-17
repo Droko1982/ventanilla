@@ -300,9 +300,11 @@ export default function Caja() {
               const cs = await closeCashSession({ sessionId: session.id, countedCash: countedNum, userId: user!.id, userName: user!.name })
               if (cs)
                 toast(cs.difference === 0 ? 'success' : 'info', cs.difference === 0 ? 'Caja cuadrada ✓' : `Diferencia: ${cop(cs.difference!)}`)
-              // Informe Z del día automático al cerrar (si está activado)
+              // Informe Z del día automático al cerrar (si está activado).
+              // Si falla, AVISA (no se traga el error): el cierre quedó sin Z.
               if (cs && autoZ) {
-                try { await generateZReport(tenantId, locationId, localYMD(session.openedAt), false, user!.id, user!.name); toast('success', 'Informe Z generado') } catch { /* no bloquea el cierre */ }
+                try { await generateZReport(tenantId, locationId, localYMD(session.openedAt), false, user!.id, user!.name); toast('success', 'Informe Z generado') }
+                catch (e) { console.error('Z falló', e); toast('error', 'La caja cerró, pero el Informe Z no se generó. Genéralo manualmente.') }
               }
               // Envía el resumen del cierre al dueño por WhatsApp (gesto del usuario → no se bloquea)
               if (cs && tenant?.phone) sendSummary({ counted: countedNum, diff: cs.difference ?? diff })

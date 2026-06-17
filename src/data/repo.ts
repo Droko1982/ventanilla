@@ -175,9 +175,25 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
     syncedAt: navigator.onLine ? now : undefined, // offline: queda sin sincronizar
   }
 
+  // Bloqueo de stock negativo: si un producto NO permite negativos y no alcanza,
+  // se rechaza la venta antes de tocar nada (no se vende lo que no hay).
+  if (!input.skipStock) {
+    for (const it of input.items) {
+      if (it.productId.startsWith('srv:') || it.productId.startsWith('man:')) continue
+      const prod = await db.products.get(it.productId)
+      if (prod && prod.allowNegative === false) {
+        const st = await db.stock.get(`${input.locationId}:${it.productId}`)
+        const have = st?.quantity ?? 0
+        if (have < it.qty) {
+          throw new Error(`No hay suficiente "${it.name}" (disponible ${have}). No permite venta en negativo.`)
+        }
+      }
+    }
+  }
+
   await db.transaction(
     'rw',
-    [db.sales, db.stock, db.stockMovements, db.customers, db.notifications, db.auditLogs],
+    [db.sales, db.stock, db.stockMovements, db.customers, db.creditMovements, db.notifications, db.auditLogs],
     async () => {
       await db.sales.put(sale)
 
@@ -1182,20 +1198,23 @@ export async function addCashMovement(args: {
     userId: args.userId,
     createdAt: now,
   }
-  await db.cashMovements.put(mov)
-  // Si es un egreso marcado como gasto del negocio, también afecta la utilidad
-  if (args.type === 'egreso' && args.isExpense) {
-    const exp: Expense = {
-      id: uid('e'),
-      tenantId: args.tenantId,
-      locationId: args.locationId,
-      category: args.reason || 'Gasto de caja',
-      amount: args.amount,
-      note: 'Pagado en efectivo desde caja',
-      date: now,
+  // Movimiento de caja y (si aplica) el gasto, en una sola transacción.
+  await db.transaction('rw', [db.cashMovements, db.expenses], async () => {
+    await db.cashMovements.put(mov)
+    // Si es un egreso marcado como gasto del negocio, también afecta la utilidad
+    if (args.type === 'egreso' && args.isExpense) {
+      const exp: Expense = {
+        id: uid('e'),
+        tenantId: args.tenantId,
+        locationId: args.locationId,
+        category: args.reason || 'Gasto de caja',
+        amount: args.amount,
+        note: 'Pagado en efectivo desde caja',
+        date: now,
+      }
+      await db.expenses.put(exp)
     }
-    await db.expenses.put(exp)
-  }
+  })
   await audit({
     tenantId: args.tenantId,
     locationId: args.locationId,
@@ -1223,6 +1242,20 @@ export async function adjustChangeOwed(args: {
   await db.changeOwed.put({
     id: args.locationId, tenantId: args.tenantId, locationId: args.locationId, amount, updatedAt: now,
   })
+  // Espejo en caja: el efectivo retenido por vueltas debidas SÍ está en el cajón.
+  // Sin esto el arqueo marcaría "sobrante" (entra) o "faltante" (al pagarlas).
+  const realDelta = amount - (existing?.amount ?? 0) // respeta el tope en 0
+  if (realDelta !== 0) {
+    const session = await db.cashSessions.where('locationId').equals(args.locationId).and((c) => c.status === 'abierta').first()
+    if (session) {
+      await db.cashMovements.put({
+        id: uid('mov'), tenantId: args.tenantId, locationId: args.locationId, sessionId: session.id,
+        type: realDelta > 0 ? 'ingreso' : 'egreso', amount: Math.abs(realDelta),
+        reason: realDelta > 0 ? 'Vueltas debidas (efectivo retenido)' : 'Pago de vueltas debidas',
+        isExpense: false, userId: args.userId, createdAt: now,
+      })
+    }
+  }
   await audit({
     tenantId: args.tenantId, locationId: args.locationId, userId: args.userId, userName: args.userName,
     action: args.delta >= 0 ? 'dejó vueltas debiendo' : 'pagó vueltas',
@@ -1392,16 +1425,19 @@ export async function payCredit(customerId: string, amount: number): Promise<Cus
   const c = await db.customers.get(customerId)
   if (!c) return null
   const before = c.creditBalance
-  c.creditBalance = Math.max(0, c.creditBalance - amount)
-  if (c.creditBalance === 0) { c.creditSince = undefined; c.lastReminder = undefined } // saldó: reinicia antigüedad
-  await db.customers.put(c)
-  const delta = Number((c.creditBalance - before).toFixed(2)) // negativo (lo que se abonó)
-  if (delta !== 0) {
-    await db.creditMovements.put({
-      id: uid('cm'), tenantId: c.tenantId, customerId: c.id, delta,
-      type: 'abono', userId: '', createdAt: new Date().toISOString(),
-    })
-  }
+  // Saldo y libro de crédito en una sola transacción (no quedan descuadrados).
+  await db.transaction('rw', [db.customers, db.creditMovements], async () => {
+    c.creditBalance = Math.max(0, c.creditBalance - amount)
+    if (c.creditBalance === 0) { c.creditSince = undefined; c.lastReminder = undefined } // saldó: reinicia antigüedad
+    await db.customers.put(c)
+    const delta = Number((c.creditBalance - before).toFixed(2)) // negativo (lo que se abonó)
+    if (delta !== 0) {
+      await db.creditMovements.put({
+        id: uid('cm'), tenantId: c.tenantId, customerId: c.id, delta,
+        type: 'abono', userId: '', createdAt: new Date().toISOString(),
+      })
+    }
+  })
   return c
 }
 

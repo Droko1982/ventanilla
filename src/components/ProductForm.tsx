@@ -120,6 +120,24 @@ export function ProductForm({
       toast('error', 'Ponle un nombre al producto')
       return
     }
+    const priceNum = parseCop(price)
+    if (priceNum <= 0) {
+      toast('error', 'Ponle un precio mayor a $0')
+      return
+    }
+    // Código de barras único (si se repite, el escáner tomaría uno ambiguo).
+    const code = barcode.trim()
+    if (code) {
+      const dupe = await db.products.where('barcode').equals(code).and((pp) => pp.id !== (product?.id ?? '')).first()
+      if (dupe) {
+        toast('error', `El código ${code} ya lo usa "${dupe.name}"`)
+        return
+      }
+    }
+    const costNum = parseCop(cost)
+    if (costNum > 0 && priceNum < costNum && !confirm(`El precio ($${priceNum.toLocaleString('es-CO')}) es menor al costo ($${costNum.toLocaleString('es-CO')}). ¿Guardar de todas formas?`)) {
+      return
+    }
     setSaving(true)
     const p: Product = {
       id: product?.id ?? uid('p'),
