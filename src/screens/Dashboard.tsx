@@ -18,6 +18,7 @@ import { toast } from '@/components/Toast'
 import { StatCard, Segmented, Money } from '@/components/ui'
 import { Icon } from '@/components/icons'
 import { useSession } from '@/store/session'
+import { DaySalesSheet } from '@/components/DaySalesSheet'
 
 const methodColors: Record<string, string> = {
   efectivo: '#10b981', nequi: '#8b5cf6', tarjeta: '#3b82f6', transferencia: '#f59e0b', fiado: '#ef4444',
@@ -33,6 +34,7 @@ export default function Dashboard() {
   const locations = useLocations()
   const user = useCurrentUser()
   const tenant = useTenant()
+  const [daySalesOpen, setDaySalesOpen] = useState(false)
   const filter = useSession((s) => s.locationFilter)
   const navigate = useNavigate()
   const [gran, setGran] = useState<Granularity>('semana')
@@ -97,6 +99,16 @@ export default function Dashboard() {
           {filter === 'all' ? 'Resumen de todos tus locales' : 'Resumen del local'}
         </p>
       </div>
+
+      <button onClick={() => setDaySalesOpen(true)} className="card mb-4 flex w-full items-center gap-3 p-3 text-left active:scale-[0.99]">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-100 text-brand-700"><Icon name="doc" className="h-6 w-6" /></span>
+        <div className="flex-1">
+          <p className="font-semibold text-slate-700">📋 Ventas de hoy</p>
+          <p className="text-xs text-slate-400">Verifica el día, la sincronización y la caja; anula o devuelve</p>
+        </div>
+        <Icon name="arrow-left" className="h-5 w-5 rotate-180 text-slate-300" />
+      </button>
+      {daySalesOpen && <DaySalesSheet onClose={() => setDaySalesOpen(false)} />}
 
       {(locations?.length ?? 0) > 1 && (
         <button onClick={() => navigate('/ventanillas')} className="card mb-4 flex w-full items-center gap-3 p-3 text-left active:scale-[0.99]">
