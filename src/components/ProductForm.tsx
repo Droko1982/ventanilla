@@ -6,6 +6,7 @@ import { toast } from './Toast'
 import { db } from '@/data/db'
 import { uid, internalCode } from '@/lib/id'
 import { parseCop } from '@/lib/money'
+import { PriceMarginEditor } from './PriceMarginEditor'
 import { fileToCompressedDataUrl } from '@/lib/image'
 import { bankLookup, bankSearch, bankContribute, isCloudConfigured, type BankProduct } from '@/data/api'
 import type { Category, Location, Product, Supplier } from '@/types'
@@ -268,16 +269,7 @@ export function ProductForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label">{unit === 'peso' ? 'Precio por kg' : 'Precio venta'}</label>
-            <input className="input" inputMode="numeric" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="$" />
-          </div>
-          <div>
-            <label className="label">Costo de compra</label>
-            <input className="input" inputMode="numeric" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="$" />
-          </div>
-        </div>
+        <PriceMarginEditor cost={cost} price={price} setCost={setCost} setPrice={setPrice} priceLabel={unit === 'peso' ? 'Precio/kg' : 'Precio venta'} />
 
         <div className="grid grid-cols-2 gap-3">
           <div>

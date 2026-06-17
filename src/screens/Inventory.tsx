@@ -9,11 +9,12 @@ import { db } from '@/data/db'
 import { adjustStock, recalcThresholds, transferStock, convertStock } from '@/data/repo'
 import { printLabel } from '@/lib/label'
 import { ProductForm } from '@/components/ProductForm'
+import { PriceMarginEditor } from '@/components/PriceMarginEditor'
 import { Sheet } from '@/components/Sheet'
 import { Segmented, EmptyState, PageHeader, ProductThumb } from '@/components/ui'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
-import { cop, kg } from '@/lib/money'
+import { cop, kg, parseCop } from '@/lib/money'
 import { daysUntil, timeAgo } from '@/lib/format'
 import { uid } from '@/lib/id'
 import { useSession } from '@/store/session'
@@ -32,7 +33,7 @@ export default function Inventory() {
   const navigate = useNavigate()
 
   const [search, setSearch] = useState('')
-  const [view, setView] = useState<'todos' | 'bajo' | 'vencer'>('todos')
+  const [view, setView] = useState<'todos' | 'bajo' | 'vencer' | 'inactivos'>('todos')
   const [addOpen, setAddOpen] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
   const [detail, setDetail] = useState<{ product: Product; stock: Stock } | null>(null)
@@ -49,7 +50,10 @@ export default function Inventory() {
   const activeLoc = locations?.find((l) => l.id === locationId)
 
   const rows = useMemo(() => {
-    let list = (products ?? []).filter((p) => p.active)
+    // 'inactivos' muestra solo los inactivos; el resto, solo activos.
+    let list = view === 'inactivos'
+      ? (products ?? []).filter((p) => p.active === false)
+      : (products ?? []).filter((p) => p.active !== false)
     if (search.trim()) {
       const q = search.toLowerCase()
       list = list.filter(
@@ -98,6 +102,7 @@ export default function Inventory() {
               { value: 'todos', label: 'Todos' },
               { value: 'bajo', label: 'Stock bajo' },
               { value: 'vencer', label: 'Por vencer' },
+              { value: 'inactivos', label: 'Inactivos' },
             ]}
           />
         </div>
@@ -139,21 +144,25 @@ export default function Inventory() {
           const low = stock.quantity <= stock.reorderThreshold
           const dExp = stock.nearestExpiry ? daysUntil(stock.nearestExpiry) : null
           const cat = catMap.get(product.categoryId)
+          const inactive = product.active === false
           return (
             <button
               key={product.id}
               onClick={() => setDetail({ product, stock })}
-              className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3 text-left shadow-sm active:scale-[0.99]"
+              className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left shadow-sm active:scale-[0.99] ${
+                inactive ? 'border-dashed border-slate-300 bg-slate-50 opacity-60' : 'border-slate-100 bg-white'
+              }`}
             >
               <ProductThumb photo={product.photo} emoji={product.imageEmoji} size={44} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-slate-700">{product.name}</p>
+                <p className={`truncate text-sm font-semibold ${inactive ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{product.name}</p>
                 <p className="text-xs text-slate-400">
                   {cat?.emoji} {cat?.name} · {cop(product.price)}
                   {product.unit === 'peso' ? '/kg' : ''}
                 </p>
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {low && <span className="chip bg-amber-100 text-amber-700">Reordenar</span>}
+                  {inactive && <span className="chip bg-slate-200 text-slate-500">Inactivo</span>}
+                  {low && !inactive && <span className="chip bg-amber-100 text-amber-700">Reordenar</span>}
                   {dExp !== null && dExp <= 7 && <span className="chip bg-rose-100 text-rose-700">Vence en {dExp}d</span>}
                   {dExp !== null && dExp > 7 && dExp <= 30 && <span className="chip bg-orange-100 text-orange-600">Vence en {dExp}d</span>}
                 </div>
@@ -314,6 +323,13 @@ function ProductDetailSheet({
   const [transferTo, setTransferTo] = useState('')
   const [transferQty, setTransferQty] = useState('')
   const dExp = stock.nearestExpiry ? daysUntil(stock.nearestExpiry) : null
+  // Edición rápida de costo/precio/rentabilidad desde el detalle.
+  const [pCost, setPCost] = useState(String(product.cost))
+  const [pPrice, setPPrice] = useState(String(product.price))
+  async function savePricing() {
+    await db.products.update(product.id, { cost: parseCop(pCost), price: parseCop(pPrice) })
+    toast('success', 'Costo y precio actualizados')
+  }
 
   async function applyDiscount() {
     const newPrice = Math.round(product.price * 0.85)
@@ -346,6 +362,13 @@ function ProductDetailSheet({
           <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{product.description}</p>
         )}
 
+        {/* Editar costo, precio y rentabilidad sin abrir el formulario completo */}
+        <div className="rounded-xl border border-slate-200 p-3">
+          <p className="mb-2 text-sm font-semibold text-slate-600">Precio y rentabilidad</p>
+          <PriceMarginEditor cost={pCost} price={pPrice} setCost={setPCost} setPrice={setPPrice} priceLabel={product.unit === 'peso' ? 'Precio/kg' : 'Precio'} />
+          <button onClick={savePricing} className="btn btn-primary mt-2 w-full text-sm">Guardar precio</button>
+        </div>
+
         <button onClick={() => printLabel(product, tenant?.businessName ?? 'Ventanilla')} className="btn btn-secondary w-full text-sm">
           <Icon name="print" className="h-5 w-5" /> Imprimir etiqueta de precio
         </button>
@@ -358,12 +381,35 @@ function ProductDetailSheet({
           {supplierName && <div className="rounded-lg bg-slate-50 p-2"><span className="text-xs text-slate-400">Último proveedor</span><p className="truncate font-semibold text-slate-700">{supplierName}</p></div>}
         </div>
 
-        <button
-          onClick={async () => { await db.products.update(product.id, { active: false }); toast('success', 'Producto inactivado'); onClose() }}
-          className="btn btn-secondary w-full text-sm text-rose-600"
-        >
-          Inactivar producto
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          {product.active === false ? (
+            <button
+              onClick={async () => { await db.products.update(product.id, { active: true }); toast('success', 'Producto reactivado'); onClose() }}
+              className="btn btn-success text-sm"
+            >
+              ✓ Reactivar
+            </button>
+          ) : (
+            <button
+              onClick={async () => { await db.products.update(product.id, { active: false }); toast('success', 'Producto inactivado'); onClose() }}
+              className="btn btn-secondary text-sm text-rose-600"
+            >
+              Inactivar
+            </button>
+          )}
+          <button
+            onClick={async () => {
+              if (!confirm(`¿Eliminar "${product.name}" definitivamente? Se borra el producto y su stock. Esto no se puede deshacer.`)) return
+              await db.products.delete(product.id)
+              await db.stock.where('productId').equals(product.id).delete()
+              toast('success', 'Producto eliminado')
+              onClose()
+            }}
+            className="btn btn-danger text-sm"
+          >
+            🗑 Eliminar
+          </button>
+        </div>
 
         {dExp !== null && dExp <= 30 && (
           <div className="flex items-center justify-between rounded-xl bg-rose-50 p-3">
