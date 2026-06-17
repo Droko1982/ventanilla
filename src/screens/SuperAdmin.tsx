@@ -12,7 +12,7 @@ import { fmtDate, daysUntil } from '@/lib/format'
 import { monthlyTotal, billingBreakdown } from '@/lib/billing'
 import {
   getApiUrl, getRole, superAdminLogin, adminListTenants, adminSetStatus, adminPay, adminSetLicense,
-  adminListDevices, adminReleaseDevice, adminDeleteTenant, adminCreateTenant, clearCloud,
+  adminListDevices, adminReleaseDevice, adminDeleteTenant, adminCreateTenant, adminUpdateCredentials, clearCloud,
   type CloudTenant, type CloudDevice,
 } from '@/data/api'
 import type { Tenant, AccountStatus } from '@/types'
@@ -307,6 +307,7 @@ function TenantDetail({ tenant, cloud, onChanged, onClose }: {
   // En local la lista de dispositivos viene de Dexie; en la nube se trae del API.
   const localDevices = useLiveQuery(() => db.devices.where('tenantId').equals(tenant.id).toArray(), [tenant.id]) ?? []
   const [cloudDevices, setCloudDevices] = useState<CloudDevice[]>([])
+  const [editing, setEditing] = useState(false)
   useEffect(() => {
     if (cloud) adminListDevices(tenant.id).then(setCloudDevices).catch(() => {})
   }, [cloud, tenant.id])
@@ -448,6 +449,12 @@ function TenantDetail({ tenant, cloud, onChanged, onClose }: {
             <button onClick={() => setStatus('activo')} className="btn btn-primary">Activar</button>
           )}
         </div>
+        {cloud && (
+          <button onClick={() => setEditing(true)} className="btn btn-secondary w-full text-sm">
+            ✏️ Editar datos / acceso del cliente
+          </button>
+        )}
+
         <p className="text-center text-xs text-slate-400">
           {cloud ? 'Los cambios se aplican en la cuenta real del cliente.' : 'Estás en el demo local. Conéctate a la nube para gestionar clientes reales.'}
         </p>
@@ -455,6 +462,56 @@ function TenantDetail({ tenant, cloud, onChanged, onClose }: {
         <button onClick={removeTenant} className="w-full text-center text-xs text-rose-400 hover:text-rose-600">
           Eliminar cliente definitivamente
         </button>
+      </div>
+
+      {editing && (
+        <EditTenantSheet
+          tenant={tenant}
+          onSaved={onChanged}
+          onClose={() => setEditing(false)}
+        />
+      )}
+    </Sheet>
+  )
+}
+
+// Editar nombre, dueño, correo y clave de acceso de un cliente (solo nube).
+function EditTenantSheet({ tenant, onSaved, onClose }: { tenant: Row; onSaved: () => Promise<void>; onClose: () => void }) {
+  const [businessName, setBusinessName] = useState(tenant.businessName)
+  const [ownerName, setOwnerName] = useState(tenant.ownerName)
+  const [email, setEmail] = useState(tenant.email)
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function save() {
+    if (!businessName.trim() || !email.trim()) return toast('error', 'Negocio y correo son obligatorios')
+    if (password && password.length < 6) return toast('error', 'La clave debe tener mínimo 6 caracteres')
+    setBusy(true)
+    try {
+      await adminUpdateCredentials(tenant.id, {
+        businessName: businessName.trim(), ownerName: ownerName.trim(), email: email.trim(),
+        ...(password ? { password } : {}),
+      })
+      await onSaved()
+      toast('success', 'Datos del cliente actualizados')
+      onClose()
+    } catch (e) {
+      toast('error', (e as Error).message || 'No se pudo actualizar')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Sheet open onClose={onClose} title="Editar cliente"
+      footer={<button onClick={save} disabled={busy} className="btn btn-primary btn-lg w-full">{busy ? 'Guardando…' : 'Guardar'}</button>}
+    >
+      <div className="space-y-3">
+        <div><label className="label">Nombre del negocio</label><input className="input" value={businessName} onChange={(e) => setBusinessName(e.target.value)} /></div>
+        <div><label className="label">Nombre del dueño</label><input className="input" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} /></div>
+        <div><label className="label">Correo (acceso del cliente)</label><input className="input" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+        <div><label className="label">Nueva clave (déjala vacía para no cambiarla)</label><input className="input" type="text" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="mínimo 6 caracteres" /></div>
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">Con el correo y la clave nuevos, el cliente vuelve a entrar a su app. Anótalos antes de guardar.</p>
       </div>
     </Sheet>
   )

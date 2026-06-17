@@ -90,6 +90,36 @@ adminRouter.delete('/tenants/:id', async (req, res) => {
   }
 })
 
+// Editar los datos de acceso del cliente: nombre del negocio, dueño, correo y
+// clave (el dueño no tiene pantalla para cambiar su clave de nube; lo hace el
+// dueño de la plataforma desde la consola).
+adminRouter.post('/tenants/:id/credentials', async (req, res) => {
+  const { email, password, businessName, ownerName } = req.body ?? {}
+  const data: { email?: string; businessName?: string; ownerName?: string; passwordHash?: string } = {}
+  if (email) data.email = String(email).trim().toLowerCase()
+  if (businessName) data.businessName = String(businessName).trim()
+  if (ownerName) data.ownerName = String(ownerName).trim()
+  if (password) {
+    if (String(password).length < 6) return res.status(400).json({ error: 'La clave debe tener al menos 6 caracteres' })
+    data.passwordHash = hash(String(password))
+  }
+  if (!Object.keys(data).length) return res.status(400).json({ error: 'Nada que actualizar' })
+  if (data.email) {
+    const exists = await prisma.tenant.findFirst({ where: { email: data.email, NOT: { id: req.params.id } } })
+    if (exists) return res.status(409).json({ error: 'Ese correo ya está en uso por otro cliente' })
+  }
+  await prisma.tenant.update({ where: { id: req.params.id }, data })
+  // Mantener al usuario dueño en sincronía (mismo correo/clave/nombre).
+  if (data.email || data.passwordHash || data.ownerName) {
+    const owner = await prisma.user.findFirst({ where: { tenantId: req.params.id, role: 'admin' } })
+    if (owner) await prisma.user.update({
+      where: { id: owner.id },
+      data: { ...(data.email ? { email: data.email } : {}), ...(data.passwordHash ? { passwordHash: data.passwordHash } : {}), ...(data.ownerName ? { name: data.ownerName } : {}) },
+    })
+  }
+  res.json({ ok: true })
+})
+
 // Dispositivos conectados de un cliente (para gestionarlos desde la consola).
 adminRouter.get('/tenants/:id/devices', async (req, res) => {
   const rows = await prisma.syncRecord.findMany({
