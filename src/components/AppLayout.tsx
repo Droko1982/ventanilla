@@ -198,6 +198,8 @@ function ChangePinSheet({ user, onClose }: { user: { id: string; name: string };
           onClick={async () => {
             if (pin.length !== 4) return toast('error', 'El PIN debe tener 4 dígitos')
             if (pin !== confirm) return toast('error', 'Los PIN no coinciden')
+            const dupe = await db.users.where('pin').equals(pin).and((u) => u.id !== user.id && u.active).first()
+            if (dupe) return toast('error', `Ese PIN ya lo usa ${dupe.name}. Elige otro.`)
             await db.users.update(user.id, { pin })
             toast('success', 'PIN actualizado')
             onClose()

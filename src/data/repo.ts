@@ -10,6 +10,7 @@ import type {
   Payment,
   PaymentMethod,
   Product,
+  Tenant,
   Stock,
   AuditLog,
   AppNotification,
@@ -125,6 +126,12 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
   const redeemPoints = loyaltyOn && input.customerId ? Math.max(0, Math.floor(input.redeemPoints ?? 0)) : 0
   const redeemDiscount = Math.min(redeemPoints * redeemVal, baseAfterDiscount)
   const total = Math.max(0, Math.round(baseAfterDiscount - redeemDiscount))
+  // Red de seguridad: los pagos DEBEN sumar el total (tolerancia de $1 por redondeo).
+  // Evita registrar una venta descuadrada (recibo/Informe Z incoherentes).
+  const paySum = Math.round(input.payments.reduce((s, p) => s + p.amount, 0))
+  if (Math.abs(paySum - total) > 1) {
+    throw new Error(`Los pagos ($${paySum.toLocaleString('es-CO')}) no cuadran con el total ($${total.toLocaleString('es-CO')}).`)
+  }
   const now = new Date().toISOString()
   let crossedThreshold = false // ¿algún producto bajó del umbral en esta venta?
   const docType = input.docType ?? (input.customerDoc ? 'factura' : 'tiquete_pos')
@@ -291,11 +298,42 @@ async function detectAnomaly(sale: Sale): Promise<void> {
 }
 
 // ---- Anular / Devolver venta ----------------------------------------------
+// Revierte en el cliente la parte de fiado, total gastado y puntos de una venta
+// que se anula o se devuelve (parcial o total). `amount` = valor revertido;
+// `baseTotal` = total original de la venta (para prorratear el fiado/puntos).
+// Debe llamarse DENTRO de una transacción que incluya db.customers y db.creditMovements.
+async function revertCustomerAggregates(
+  sale: Sale, amount: number, baseTotal: number, tenant: Tenant | undefined, userId: string, now: string,
+): Promise<void> {
+  if (!sale.customerId || amount <= 0) return
+  const c = await db.customers.get(sale.customerId)
+  if (!c) return
+  const fiadoTotal = sale.payments.filter((p) => p.method === 'fiado').reduce((a, p) => a + p.amount, 0)
+  if (fiadoTotal > 0 && baseTotal > 0) {
+    const fiadoRevert = Math.min(c.creditBalance, Math.round((fiadoTotal * amount) / baseTotal))
+    if (fiadoRevert > 0) {
+      c.creditBalance = Number((c.creditBalance - fiadoRevert).toFixed(2))
+      if (c.creditBalance <= 0) { c.creditSince = undefined; c.lastReminder = undefined }
+      await db.creditMovements.put({
+        id: uid('cm'), tenantId: sale.tenantId, customerId: c.id, delta: -fiadoRevert,
+        type: 'abono', refId: sale.id, userId, createdAt: now,
+      })
+    }
+  }
+  c.totalSpent = Math.max(0, (c.totalSpent ?? 0) - amount)
+  if (tenant?.loyaltyEnabled) {
+    const earnedRevert = Math.floor(amount / 1000) * (tenant.loyaltyPointsPerThousand ?? 1)
+    c.points = Math.max(0, (c.points ?? 0) - earnedRevert)
+  }
+  await db.customers.put(c)
+}
+
 export async function voidSale(saleId: string, userId: string, userName: string): Promise<void> {
   const sale = await db.sales.get(saleId)
   if (!sale || sale.status !== 'completada') return
   const now = new Date().toISOString()
-  await db.transaction('rw', [db.sales, db.stock, db.stockMovements], async () => {
+  const tenant = await db.tenants.get(sale.tenantId) // fuera de la transacción (solo lectura)
+  await db.transaction('rw', [db.sales, db.stock, db.stockMovements, db.customers, db.creditMovements], async () => {
     sale.status = 'anulada'
     await db.sales.put(sale)
     // Devuelve el stock
@@ -318,6 +356,8 @@ export async function voidSale(saleId: string, userId: string, userName: string)
         createdAt: now,
       })
     }
+    // Revierte fiado, total gastado y puntos otorgados del cliente.
+    await revertCustomerAggregates(sale, sale.total, sale.total, tenant, userId, now)
   })
   await audit({
     tenantId: sale.tenantId,
@@ -343,18 +383,22 @@ export async function returnSaleItems(
   const filtered = returns.filter((r) => r.qty > 0)
   if (!filtered.length) return 0
   const now = new Date().toISOString()
+  // Totales ORIGINALES, para prorratear el reembolso (incluye descuento global y
+  // canje de puntos) y la reversión de fiado/puntos.
+  const origSubtotal = sale.subtotal || sale.items.reduce((s, it) => s + it.unitPrice * it.qty - it.lineDiscount, 0)
+  const origTotal = sale.total
+  const tenant = await db.tenants.get(sale.tenantId)
   let refund = 0
-  await db.transaction('rw', [db.sales, db.stock, db.stockMovements], async () => {
+  await db.transaction('rw', [db.sales, db.stock, db.stockMovements, db.customers, db.creditMovements], async () => {
+    let returnedGross = 0
     for (const r of filtered) {
       const item = sale.items[r.index]
       if (!item) continue
       const qty = Math.min(r.qty, item.qty)
       if (qty <= 0) continue
       const oldQty = item.qty
-      // Reembolsa lo realmente pagado por esas unidades (descuenta su parte del
-      // descuento de línea), para no devolver de más.
       const refundedDiscount = oldQty > 0 ? Math.round((item.lineDiscount * qty) / oldQty) : 0
-      refund += item.unitPrice * qty - refundedDiscount
+      returnedGross += item.unitPrice * qty - refundedDiscount
       const ratio = oldQty > 0 ? (oldQty - qty) / oldQty : 0
       item.lineDiscount = Math.round(item.lineDiscount * ratio)
       item.qty = Number((oldQty - qty).toFixed(3))
@@ -373,10 +417,15 @@ export async function returnSaleItems(
       }
       sale.returns = [...(sale.returns ?? []), { productId: item.productId, qty, at: now }]
     }
+    // Reembolso = lo realmente pagado por esas unidades (prorratea descuento global
+    // y canje de puntos, no solo el de línea), para no devolver de más.
+    refund = origSubtotal > 0 ? Math.round((origTotal * returnedGross) / origSubtotal) : Math.round(returnedGross)
+    // Revierte la parte de fiado y puntos correspondiente al reembolso.
+    await revertCustomerAggregates(sale, refund, origTotal, tenant, userId, now)
     sale.items = sale.items.filter((it) => it.qty > 0)
     const subtotal = sale.items.reduce((s, it) => s + it.unitPrice * it.qty - it.lineDiscount, 0)
     sale.subtotal = Math.round(subtotal)
-    sale.total = Math.max(0, Math.round(subtotal - sale.discount))
+    sale.total = Math.max(0, origTotal - refund)
     if (!sale.creditNoteNumber) sale.creditNoteNumber = nextCreditNoteNumber()
     if (sale.items.length === 0) sale.status = 'devuelta'
     await db.sales.put(sale)

@@ -8,6 +8,7 @@ import {
 import { db } from '@/data/db'
 import { adjustStock, recalcThresholds, transferStock, convertStock } from '@/data/repo'
 import { printLabel } from '@/lib/label'
+import { can } from '@/lib/permissions'
 import { ProductForm } from '@/components/ProductForm'
 import { PriceMarginEditor } from '@/components/PriceMarginEditor'
 import { Sheet } from '@/components/Sheet'
@@ -30,6 +31,7 @@ export default function Inventory() {
   const locations = useLocations()
   const stock = useStockForLocation(locationId)
   const user = useCurrentUser()
+  const canManage = can(user, 'canManageInventory')
   const navigate = useNavigate()
 
   const [search, setSearch] = useState('')
@@ -80,9 +82,11 @@ export default function Inventory() {
         title="Inventario"
         subtitle={`${activeLoc?.name ?? ''}`}
         right={
-          <button onClick={() => setAddOpen(true)} className="btn btn-primary px-3 py-2 text-sm">
-            <Icon name="plus" className="h-5 w-5" /> Producto
-          </button>
+          canManage ? (
+            <button onClick={() => setAddOpen(true)} className="btn btn-primary px-3 py-2 text-sm">
+              <Icon name="plus" className="h-5 w-5" /> Producto
+            </button>
+          ) : undefined
         }
       />
 
@@ -196,6 +200,7 @@ export default function Inventory() {
             setEditProduct(detail.product)
             setDetail(null)
           }}
+          canManage={canManage}
           userId={user!.id}
           userName={user!.name}
           tenantId={tenantId}
@@ -300,10 +305,10 @@ function CountSheet({
 
 // --- Detalle de producto: ajustar stock, ver otros locales, trasladar -------
 function ProductDetailSheet({
-  product, stock, onClose, onEdit, userId, userName, tenantId, locationId,
+  product, stock, onClose, onEdit, canManage, userId, userName, tenantId, locationId,
 }: {
   product: Product; stock: Stock; onClose: () => void; onEdit: () => void
-  userId: string; userName: string; tenantId: string; locationId: string
+  canManage: boolean; userId: string; userName: string; tenantId: string; locationId: string
 }) {
   const locations = useLocations()
   const tenant = useTenant()
@@ -353,9 +358,11 @@ function ProductDetailSheet({
               Costo {cop(product.cost)} · IVA {product.ivaRate}% · {product.barcode || product.internalCode}
             </p>
           </div>
-          <button onClick={onEdit} className="btn btn-secondary ml-auto px-3 py-2 text-sm">
-            <Icon name="edit" className="h-4 w-4" /> Editar
-          </button>
+          {canManage && (
+            <button onClick={onEdit} className="btn btn-secondary ml-auto px-3 py-2 text-sm">
+              <Icon name="edit" className="h-4 w-4" /> Editar
+            </button>
+          )}
         </div>
 
         {product.description && (
@@ -363,11 +370,13 @@ function ProductDetailSheet({
         )}
 
         {/* Editar costo, precio y rentabilidad sin abrir el formulario completo */}
-        <div className="rounded-xl border border-slate-200 p-3">
-          <p className="mb-2 text-sm font-semibold text-slate-600">Precio y rentabilidad</p>
-          <PriceMarginEditor cost={pCost} price={pPrice} setCost={setPCost} setPrice={setPPrice} priceLabel={product.unit === 'peso' ? 'Precio/kg' : 'Precio'} />
-          <button onClick={savePricing} className="btn btn-primary mt-2 w-full text-sm">Guardar precio</button>
-        </div>
+        {canManage && (
+          <div className="rounded-xl border border-slate-200 p-3">
+            <p className="mb-2 text-sm font-semibold text-slate-600">Precio y rentabilidad</p>
+            <PriceMarginEditor cost={pCost} price={pPrice} setCost={setPCost} setPrice={setPPrice} priceLabel={product.unit === 'peso' ? 'Precio/kg' : 'Precio'} />
+            <button onClick={savePricing} className="btn btn-primary mt-2 w-full text-sm">Guardar precio</button>
+          </div>
+        )}
 
         <button onClick={() => printLabel(product, tenant?.businessName ?? 'Ventanilla')} className="btn btn-secondary w-full text-sm">
           <Icon name="print" className="h-5 w-5" /> Imprimir etiqueta de precio
@@ -381,6 +390,7 @@ function ProductDetailSheet({
           {supplierName && <div className="rounded-lg bg-slate-50 p-2"><span className="text-xs text-slate-400">Último proveedor</span><p className="truncate font-semibold text-slate-700">{supplierName}</p></div>}
         </div>
 
+        {canManage && (
         <div className="grid grid-cols-2 gap-2">
           {product.active === false ? (
             <button
@@ -412,6 +422,7 @@ function ProductDetailSheet({
             🗑 Eliminar
           </button>
         </div>
+        )}
 
         {dExp !== null && dExp <= 30 && (
           <div className="flex items-center justify-between rounded-xl bg-rose-50 p-3">
@@ -423,6 +434,7 @@ function ProductDetailSheet({
         )}
 
         {/* Ajustar stock */}
+        {canManage && (
         <div>
           <label className="label">Stock en este local (entrada / conteo)</label>
           <div className="flex gap-2">
@@ -442,6 +454,7 @@ function ProductDetailSheet({
             </button>
           </div>
         </div>
+        )}
 
         {/* Consulta de stock cruzado */}
         <div>

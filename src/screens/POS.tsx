@@ -65,6 +65,10 @@ export default function POS() {
   const [displayOpen, setDisplayOpen] = useState(false)
   const [receipt, setReceipt] = useState<Sale | null>(null)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
+  // Candado anti-doble-venta: el ref bloquea sincrónicamente un segundo toque
+  // antes de que React re-renderice; el estado deshabilita el botón visualmente.
+  const processingRef = useRef(false)
+  const [processing, setProcessing] = useState(false)
 
   const canManage = can(user, 'canManageInventory')
   const canDiscount = can(user, 'canDiscount')
@@ -209,6 +213,22 @@ export default function POS() {
   // Cierra la venta (reutilizado por el cobro normal y el cobro rápido).
   // Según docMode (mostrador) genera: tiquete normal, factura electrónica o remisión.
   async function completeSale(payments: Payment[], opts: PayOpts, showReceipt = true) {
+    if (!locationId || !user) return
+    if (processingRef.current) return // ya hay una venta en curso (evita doble toque)
+    processingRef.current = true
+    setProcessing(true)
+    try {
+      await doCompleteSale(payments, opts, showReceipt)
+    } catch (e) {
+      console.error('completeSale falló', e)
+      toast('error', 'No se pudo registrar la venta. Revisa e intenta de nuevo.')
+    } finally {
+      processingRef.current = false
+      setProcessing(false)
+    }
+  }
+
+  async function doCompleteSale(payments: Payment[], opts: PayOpts, showReceipt = true) {
     if (!locationId || !user) return
     const items = cart.lines.map((l) => ({
       productId: l.productId, name: l.name, unit: l.unit, qty: l.qty,
@@ -448,10 +468,11 @@ export default function POS() {
           </button>
           <button
             onClick={() => completeSale([{ method: 'efectivo', amount: total, confirmed: true }], { transmitDian: tenant?.dian.enabled ?? true }, false)}
-            className="flex shrink-0 items-center gap-1 rounded-2xl bg-emerald-600 px-4 py-3.5 font-bold text-white shadow-lg active:scale-95"
+            disabled={processing}
+            className="flex shrink-0 items-center gap-1 rounded-2xl bg-emerald-600 px-4 py-3.5 font-bold text-white shadow-lg active:scale-95 disabled:opacity-60"
             title="Cobro rápido en efectivo (exacto) y cerrar"
           >
-            💵 Efectivo
+            {processing ? '…' : '💵 Efectivo'}
           </button>
         </div>
       )}
@@ -1236,7 +1257,9 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
   const redeemVal = tenant?.loyaltyRedeemValue ?? 20
   const selectedCustomer = (customers ?? []).find((c) => c.id === customerId)
   const availablePoints = selectedCustomer?.points ?? 0
-  const redeemPointsUsed = redeem && loyaltyOn ? Math.min(availablePoints, Math.floor(total / redeemVal)) : 0
+  // El canje exige cliente (los puntos se descuentan de su cuenta). Sin cliente
+  // no se canjea, así el cobro nunca queda por debajo del total.
+  const redeemPointsUsed = redeem && loyaltyOn && customerId ? Math.min(availablePoints, Math.floor(total / redeemVal)) : 0
   const redeemValue = redeemPointsUsed * redeemVal
   const chargeTotal = Math.max(0, total - redeemValue)
 
@@ -1258,6 +1281,10 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
     if (method === 'mixto') {
       if (splitRemaining !== 0) {
         toast('error', 'El pago mixto debe sumar el total exacto')
+        return null
+      }
+      if (split.some((p) => p.method === 'fiado') && !customerId) {
+        toast('error', 'Elige el cliente para la parte fiada')
         return null
       }
       return split.map((p) => ({ method: p.method, amount: p.amount, confirmed: p.method !== 'fiado', proofPhoto: undefined }))

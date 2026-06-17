@@ -6,6 +6,7 @@ import {
   useCustomers, useScopeSales, useScopeLocationIds,
 } from '@/hooks/data'
 import { createRemision, convertRemisionToFactura, voidRemision, voidSale, recordSale, transmitDian } from '@/data/repo'
+import { can } from '@/lib/permissions'
 import { ProductPicker, itemsTotal } from '@/components/ProductPicker'
 import { Sheet } from '@/components/Sheet'
 import { Segmented, EmptyState, PageHeader, DianChip } from '@/components/ui'
@@ -365,7 +366,7 @@ function FacturaDetail({ sale, onClose }: { sale: Sale; onClose: () => void }) {
           <a href={waLink('', text)} target="_blank" rel="noreferrer" className="btn btn-secondary flex-col py-3 text-xs"><Icon name="whatsapp" className="h-6 w-6" /> WhatsApp</a>
         </div>
 
-        {sale.status === 'completada' && (
+        {sale.status === 'completada' && can(user, 'canVoid') && (
           <button onClick={async () => { await voidSale(sale.id, user!.id, user!.name); toast('success', 'Factura anulada · nota crédito'); onClose() }} className="btn btn-secondary w-full text-rose-600">
             <Icon name="trash" className="h-5 w-5" /> Anular (nota crédito)
           </button>
@@ -443,9 +444,11 @@ function RemisionDetail({ rem, onClose }: { rem: Remision; onClose: () => void }
                 <Icon name="doc" className="h-5 w-5" /> Convertir en factura electrónica
               </button>
             )}
-            <button onClick={async () => { await voidRemision(rem.id, user!.id, user!.name); toast('success', 'Remisión anulada · stock devuelto'); onClose() }} className="btn btn-secondary w-full text-rose-600">
-              <Icon name="trash" className="h-5 w-5" /> Anular remisión
-            </button>
+            {can(user, 'canVoid') && (
+              <button onClick={async () => { await voidRemision(rem.id, user!.id, user!.name); toast('success', 'Remisión anulada · stock devuelto'); onClose() }} className="btn btn-secondary w-full text-rose-600">
+                <Icon name="trash" className="h-5 w-5" /> Anular remisión
+              </button>
+            )}
           </>
         )}
         {rem.status === 'facturada' && (

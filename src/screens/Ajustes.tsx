@@ -696,6 +696,11 @@ function EmployeeForm({ employee, tenantId, locations, onClose }: { employee?: U
         <button className="btn btn-primary btn-lg w-full" onClick={async () => {
           if (!name.trim()) return toast('error', 'Ponle nombre')
           if (pin.length !== 4) return toast('error', 'El PIN debe tener 4 dígitos')
+          // El PIN debe ser único por tienda: si se repite, dos personas entrarían
+          // como una sola y la auditoría quedaría mal atribuida.
+          const dupe = await db.users.where('pin').equals(pin)
+            .and((u) => u.tenantId === tenantId && u.active && u.id !== (employee?.id ?? '')).first()
+          if (dupe) return toast('error', `El PIN ${pin} ya lo usa ${dupe.name}. Elige otro.`)
           await db.users.put({
             id: employee?.id ?? uid('u'), tenantId, name: name.trim(), role: 'empleado',
             pin, locationId, active: employee?.active ?? true,

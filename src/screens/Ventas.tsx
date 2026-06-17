@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useScopeSales, useLocations, useCurrentUser, useTenant } from '@/hooks/data'
+import { can } from '@/lib/permissions'
 import { transmitDian, voidSale, returnSaleItems, generateDebitNote } from '@/data/repo'
 import { Sheet } from '@/components/Sheet'
 import { Segmented, EmptyState, PageHeader, DianChip, Money } from '@/components/ui'
@@ -181,18 +182,18 @@ function SaleDetail({
           </div>
         )}
 
-        {/* Devolución parcial / anular */}
-        {sale.status === 'completada' && sale.items.length > 0 && (
+        {/* Devolución parcial / anular / nota débito — solo con permiso (anti-fraude) */}
+        {sale.status === 'completada' && sale.items.length > 0 && can(user, 'canVoid') && (
           <button onClick={() => setReturnOpen(true)} className="btn btn-secondary w-full text-amber-600">
             <Icon name="arrow-left" className="h-5 w-5" /> Devolución parcial (algunos ítems)
           </button>
         )}
-        {sale.status === 'completada' && (
+        {sale.status === 'completada' && can(user, 'canVoid') && (
           <button onClick={onVoid} className="btn btn-secondary w-full text-rose-600">
             <Icon name="trash" className="h-5 w-5" /> Anular venta completa (nota crédito)
           </button>
         )}
-        {sale.status === 'completada' && (
+        {sale.status === 'completada' && can(user, 'canVoid') && (
           <button onClick={() => setNdOpen(true)} className="btn btn-secondary w-full text-blue-600">
             <Icon name="doc" className="h-5 w-5" /> Generar nota débito (cargo adicional)
           </button>

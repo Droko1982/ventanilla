@@ -49,6 +49,8 @@ function dailySummaryText(o: {
 
 export default function Caja() {
   const tenantId = useSession((s) => s.tenantId)!
+  const role = useSession((s) => s.role)
+  const isOwner = role === 'admin'
   const locationId = useActiveLocationId()
   const locations = useLocations()
   const user = useCurrentUser()
@@ -138,30 +140,34 @@ export default function Caja() {
     <div>
       <PageHeader title="Caja" subtitle={activeLoc?.name} />
 
-      {/* Resumen del día (conciliación) */}
-      <div className="mb-4 grid grid-cols-2 gap-2.5">
-        <StatCard label="Ventas de hoy" value={<Money value={summary.revenue} />} sub={`${summary.count} ventas`} accent="text-brand-700" />
-        <StatCard label="Efectivo de hoy" value={<Money value={summary.byMethod.efectivo} />} accent="text-emerald-600" />
-      </div>
-
-      <div className="card mb-4 p-4">
-        <p className="mb-3 text-sm font-semibold text-slate-600">Conciliación por método</p>
-        <div className="space-y-1.5">
-          {Object.entries(summary.byMethod).map(([m, v]) => (
-            <div key={m} className="flex items-center justify-between text-sm">
-              <span className="text-slate-500">{methodLabels[m]}</span>
-              <span className="font-semibold text-slate-700">{cop(v)}</span>
-            </div>
-          ))}
-          <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2 text-base font-bold">
-            <span>Total registrado</span>
-            <span className="text-brand-700">{cop(summary.revenue)}</span>
+      {/* Resumen del día (conciliación) — solo el dueño ve los totales del negocio */}
+      {isOwner && (
+        <>
+          <div className="mb-4 grid grid-cols-2 gap-2.5">
+            <StatCard label="Ventas de hoy" value={<Money value={summary.revenue} />} sub={`${summary.count} ventas`} accent="text-brand-700" />
+            <StatCard label="Efectivo de hoy" value={<Money value={summary.byMethod.efectivo} />} accent="text-emerald-600" />
           </div>
-        </div>
-        <button onClick={() => sendSummary()} className="btn btn-success mt-3 w-full text-sm">
-          <Icon name="whatsapp" className="h-4 w-4" /> Enviar resumen del día al dueño
-        </button>
-      </div>
+
+          <div className="card mb-4 p-4">
+            <p className="mb-3 text-sm font-semibold text-slate-600">Conciliación por método</p>
+            <div className="space-y-1.5">
+              {Object.entries(summary.byMethod).map(([m, v]) => (
+                <div key={m} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">{methodLabels[m]}</span>
+                  <span className="font-semibold text-slate-700">{cop(v)}</span>
+                </div>
+              ))}
+              <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2 text-base font-bold">
+                <span>Total registrado</span>
+                <span className="text-brand-700">{cop(summary.revenue)}</span>
+              </div>
+            </div>
+            <button onClick={() => sendSummary()} className="btn btn-success mt-3 w-full text-sm">
+              <Icon name="whatsapp" className="h-4 w-4" /> Enviar resumen del día al dueño
+            </button>
+          </div>
+        </>
+      )}
 
       {/* Estado de la caja */}
       {!session ? (
