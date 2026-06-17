@@ -15,6 +15,7 @@ import { fmtDateTime, fmtTime, fmtDate } from '@/lib/format'
 import { waLink } from '@/lib/whatsapp'
 import { useSession } from '@/store/session'
 import { can } from '@/lib/permissions'
+import { DaySalesSheet } from '@/components/DaySalesSheet'
 
 const methodLabels: Record<string, string> = {
   efectivo: 'Efectivo', nequi: 'Nequi', tarjeta: 'Tarjeta', transferencia: 'Transferencia', fiado: 'Fiado',
@@ -57,6 +58,7 @@ export default function Caja() {
   const tenant = useTenant()
   const [openSheet, setOpenSheet] = useState(false)
   const [closeSheet, setCloseSheet] = useState(false)
+  const [daySalesOpen, setDaySalesOpen] = useState(false)
   const [movSheet, setMovSheet] = useState<null | 'ingreso' | 'egreso'>(null)
   const [base, setBase] = useState('')
   const [counted, setCounted] = useState('')
@@ -144,7 +146,10 @@ export default function Caja() {
       {isOwner && (
         <>
           <div className="mb-4 grid grid-cols-2 gap-2.5">
-            <StatCard label="Ventas de hoy" value={<Money value={summary.revenue} />} sub={`${summary.count} ventas`} accent="text-brand-700" />
+            {/* Toca "Ventas de hoy" para ver el detalle, sincronización y devoluciones. */}
+            <button onClick={() => setDaySalesOpen(true)} className="w-full text-left active:scale-[0.98]" title="Ver detalle, sincronización y devoluciones">
+              <StatCard label="📋 Ventas de hoy" value={<Money value={summary.revenue} />} sub={`${summary.count} ventas · ver detalle`} accent="text-brand-700" />
+            </button>
             <StatCard label="Efectivo de hoy" value={<Money value={summary.byMethod.efectivo} />} accent="text-emerald-600" />
           </div>
 
@@ -359,6 +364,7 @@ export default function Caja() {
           }}
         />
       )}
+      {daySalesOpen && <DaySalesSheet onClose={() => setDaySalesOpen(false)} />}
     </div>
   )
 }
