@@ -167,9 +167,11 @@ function TopBar() {
               onClick={async () => {
                 setResetting(true)
                 await resetDemo()
-                toast('success', 'Demo reiniciado con datos nuevos')
-                setResetting(false)
-                setMenu(false)
+                // Vuelve a ser un demo "puro" y recarga para refrescar las vistas
+                // (sin recargar, las consultas en vivo quedan con datos viejos).
+                try { localStorage.removeItem('ventanilla-real-account') } catch { /* */ }
+                toast('success', 'Demo reiniciado')
+                setTimeout(() => location.reload(), 500)
               }}
             >
               {resetting ? 'Reiniciando…' : '↺ Reiniciar datos del demo'}

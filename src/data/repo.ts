@@ -436,8 +436,9 @@ export async function returnSaleItems(
       sale.returns = [...(sale.returns ?? []), { productId: item.productId, qty, at: now }]
     }
     // Reembolso = lo realmente pagado por esas unidades (prorratea descuento global
-    // y canje de puntos, no solo el de línea), para no devolver de más.
-    refund = origSubtotal > 0 ? Math.round((origTotal * returnedGross) / origSubtotal) : Math.round(returnedGross)
+    // y canje de puntos, no solo el de línea), para no devolver de más. Topado al
+    // total restante de la venta (nunca se reembolsa más de lo pagado).
+    refund = Math.min(origTotal, origSubtotal > 0 ? Math.round((origTotal * returnedGross) / origSubtotal) : Math.round(returnedGross))
     // Revierte la parte de fiado y puntos correspondiente al reembolso.
     await revertCustomerAggregates(sale, refund, origTotal, tenant, userId, now)
     sale.items = sale.items.filter((it) => it.qty > 0)
@@ -1305,10 +1306,14 @@ export async function generateZReport(
     }
   }
   const existing = await db.zReports.where('tenantId').equals(tenantId).count()
+  // Cuadre exacto del consolidado: base + IVA == total (revenue). El IVA absorbe
+  // el centavo del redondeo, igual que en cada documento.
+  const rRevenue = Math.round(revenue)
+  const rBase = Math.round(base)
   const z: ZReport = {
     id: uid('z'), tenantId, locationId, number: `Z-${String(existing + 1).padStart(4, '0')}`,
-    date: dateStr, cumulative, count, revenue: Math.round(revenue),
-    base: Math.round(base), iva: Math.round(iva),
+    date: dateStr, cumulative, count, revenue: rRevenue,
+    base: rBase, iva: rRevenue - rBase,
     ivaByRate: [...ivaAgg.entries()].map(([rate, v]) => ({ rate, base: Math.round(v.base), iva: Math.round(v.iva) })).sort((a, b) => a.rate - b.rate),
     byMethod, byDocType, discounts: Math.round(discounts), returnsCount,
     generatedAt: new Date().toISOString(),
