@@ -8,6 +8,7 @@ import { EmptyState, PageHeader } from '@/components/ui'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
 import { cop, parseCop } from '@/lib/money'
+import { uid } from '@/lib/id'
 import { fmtDateTime } from '@/lib/format'
 import { useSession } from '@/store/session'
 import type { Product, PurchaseItem, Supplier } from '@/types'
@@ -173,8 +174,11 @@ function NewPurchaseSheet({ products, suppliers, tenantId, locationId, onClose }
 }) {
   const user = useCurrentUser()
   const [supplierId, setSupplierId] = useState('')
+  const [addingSupplier, setAddingSupplier] = useState(false)
+  const [newSupplierName, setNewSupplierName] = useState('')
   const [supplierInvoice, setSupplierInvoice] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'contado' | 'credito'>('contado')
+  const [dueDate, setDueDate] = useState('') // fecha de pago (cuando es a crédito)
   const [commercialDiscount, setCommercialDiscount] = useState('')
   const [weightSign, setWeightSign] = useState<'sumar' | 'restar'>('sumar')
   const [weightAdjust, setWeightAdjust] = useState('')
@@ -227,7 +231,8 @@ function NewPurchaseSheet({ products, suppliers, tenantId, locationId, onClose }
               tenantId, locationId, supplierId, supplierName: supplier?.name ?? 'Proveedor',
               supplierInvoice: supplierInvoice.trim() || undefined,
               items, commercialDiscount: parseCop(commercialDiscount), weightAdjust: wAdj,
-              paymentMethod, userId: user!.id, userName: user!.name,
+              paymentMethod, dueDate: paymentMethod === 'credito' && dueDate ? dueDate : undefined,
+              userId: user!.id, userName: user!.name,
             })
             toast('success', 'Compra guardada · stock y costo promedio actualizados')
             onClose()
@@ -240,11 +245,35 @@ function NewPurchaseSheet({ products, suppliers, tenantId, locationId, onClose }
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="label">Proveedor</label>
-            <select className="input" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-              <option value="">Seleccione…</option>
-              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+            <div className="flex items-center justify-between">
+              <label className="label">Proveedor</label>
+              <button type="button" onClick={() => setAddingSupplier((v) => !v)} className="text-xs font-semibold text-brand-600">
+                {addingSupplier ? 'Cancelar' : '➕ Nuevo'}
+              </button>
+            </div>
+            {addingSupplier ? (
+              <div className="flex gap-1">
+                <input className="input flex-1" autoFocus value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} placeholder="Nombre del proveedor" />
+                <button
+                  className="btn btn-primary px-3"
+                  onClick={async () => {
+                    const nm = newSupplierName.trim()
+                    if (!nm) return toast('error', 'Ponle nombre al proveedor')
+                    const id = uid('s')
+                    await db.suppliers.put({ id, tenantId, name: nm, leadTimeDays: 3, debt: 0 })
+                    setSupplierId(id); setNewSupplierName(''); setAddingSupplier(false)
+                    toast('success', 'Proveedor creado')
+                  }}
+                >
+                  Crear
+                </button>
+              </div>
+            ) : (
+              <select className="input" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+                <option value="">Seleccione…</option>
+                {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            )}
           </div>
           <div>
             <label className="label">No. Factura proveedor</label>
@@ -275,6 +304,12 @@ function NewPurchaseSheet({ products, suppliers, tenantId, locationId, onClose }
               <input className="input" inputMode="numeric" value={weightAdjust} onChange={(e) => setWeightAdjust(e.target.value)} placeholder="$ 0" />
             </div>
           </div>
+          {paymentMethod === 'credito' && (
+            <div>
+              <label className="label">Fecha de pago</label>
+              <input className="input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </div>
+          )}
         </div>
 
         {/* Entrada de productos */}

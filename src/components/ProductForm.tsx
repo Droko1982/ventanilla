@@ -41,6 +41,8 @@ export function ProductForm({
   const [barcode, setBarcode] = useState(product?.barcode ?? initialBarcode ?? '')
   const [scanOpen, setScanOpen] = useState(false)
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? categories[0]?.id ?? '')
+  const [addingCat, setAddingCat] = useState(false)
+  const [newCatName, setNewCatName] = useState('')
   // Garantiza una categoría "Otro" para clasificar productos que no encajan en
   // ninguna (también en tiendas ya creadas, no solo en el demo nuevo).
   useEffect(() => {
@@ -300,14 +302,39 @@ export function ProductForm({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="label">Categoría</label>
-            <select className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.emoji} {c.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center justify-between">
+              <label className="label">Categoría</label>
+              <button type="button" onClick={() => setAddingCat((v) => !v)} className="text-xs font-semibold text-brand-600">
+                {addingCat ? 'Cancelar' : '➕ Nueva'}
+              </button>
+            </div>
+            {addingCat ? (
+              <div className="flex gap-1">
+                <input className="input flex-1" autoFocus value={newCatName} onChange={(e) => setNewCatName(e.target.value)} placeholder="Nombre de la categoría" />
+                <button
+                  type="button"
+                  className="btn btn-primary px-3"
+                  onClick={async () => {
+                    const nm = newCatName.trim()
+                    if (!nm) return toast('error', 'Ponle nombre a la categoría')
+                    const id = uid('cat')
+                    await db.categories.put({ id, tenantId, name: nm, color: '#94a3b8', emoji: '🏷️' })
+                    setCategoryId(id); setNewCatName(''); setAddingCat(false)
+                    toast('success', 'Categoría creada')
+                  }}
+                >
+                  Crear
+                </button>
+              </div>
+            ) : (
+              <select className="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.emoji} {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <div>
             <label className="label">Se vende por</label>
