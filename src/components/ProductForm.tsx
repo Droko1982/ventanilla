@@ -7,7 +7,6 @@ import { db } from '@/data/db'
 import { uid, internalCode } from '@/lib/id'
 import { parseCop } from '@/lib/money'
 import { PriceMarginEditor } from './PriceMarginEditor'
-import { useSession } from '@/store/session'
 import { fileToCompressedDataUrl } from '@/lib/image'
 import { bankLookup, bankSearch, bankContribute, externalBarcodeLookup, isCloudConfigured, type BankProduct } from '@/data/api'
 import type { Category, Location, Product, Supplier } from '@/types'
@@ -38,7 +37,6 @@ export function ProductForm({
   initialBarcode?: string
 }) {
   const editing = !!product
-  const isOwner = useSession((s) => s.role) === 'admin' // costo/rentabilidad solo el dueño
   const [name, setName] = useState(product?.name ?? '')
   const [barcode, setBarcode] = useState(product?.barcode ?? initialBarcode ?? '')
   const [scanOpen, setScanOpen] = useState(false)
@@ -311,15 +309,13 @@ export function ProductForm({
           </div>
         </div>
 
-        <PriceMarginEditor cost={cost} price={price} setCost={setCost} setPrice={setPrice} priceLabel={unit === 'peso' ? 'Precio/kg' : 'Precio venta'} showCost={isOwner} />
+        <PriceMarginEditor cost={cost} price={price} setCost={setCost} setPrice={setPrice} priceLabel={unit === 'peso' ? 'Precio/kg' : 'Precio venta'} showCost />
 
         <div className="grid grid-cols-2 gap-3">
-          {isOwner && (
-            <div>
-              <label className="label">Costo promedio</label>
-              <input className="input" inputMode="numeric" value={avgCost} onChange={(e) => setAvgCost(e.target.value)} placeholder="auto al comprar" />
-            </div>
-          )}
+          <div>
+            <label className="label">Costo promedio</label>
+            <input className="input" inputMode="numeric" value={avgCost} onChange={(e) => setAvgCost(e.target.value)} placeholder="auto al comprar" />
+          </div>
           <div>
             <label className="label">Sección / posición</label>
             <input className="input" value={section} onChange={(e) => setSection(e.target.value)} placeholder="Ej. Góndola 3" />
