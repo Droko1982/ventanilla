@@ -169,6 +169,7 @@ const categories: Category[] = [
   { id: 'c_lac', tenantId: TENANT_ID, name: 'Lácteos', color: '#ec4899', emoji: '🥛' },
   { id: 'c_gra', tenantId: TENANT_ID, name: 'Granel', color: '#10b981', emoji: '⚖️' },
   { id: 'c_lic', tenantId: TENANT_ID, name: 'Licores', color: '#ef4444', emoji: '🍺' },
+  { id: 'c_otro', tenantId: TENANT_ID, name: 'Otro', color: '#94a3b8', emoji: '📦' },
 ]
 
 // ---------------------------------------------------------------------------

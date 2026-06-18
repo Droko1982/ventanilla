@@ -50,18 +50,19 @@ export function PriceMarginEditor({
   }
   return (
     <div className="space-y-2">
+      {/* Orden secuencial: costo → rentabilidad que quiero → precio que resulta. */}
       <div className="grid grid-cols-3 gap-2">
         <div>
           <label className="label">Costo</label>
           <input className="input" inputMode="numeric" value={cost} onChange={(e) => onCost(e.target.value)} placeholder="$" />
         </div>
         <div>
-          <label className="label">{priceLabel}</label>
-          <input className="input" inputMode="numeric" value={price} onChange={(e) => onPrice(e.target.value)} placeholder="$" />
-        </div>
-        <div>
           <label className="label">Rentab. %</label>
           <input className="input" inputMode="numeric" value={margin} onChange={(e) => onMargin(e.target.value)} placeholder="%" />
+        </div>
+        <div>
+          <label className="label">{priceLabel}</label>
+          <input className="input" inputMode="numeric" value={price} onChange={(e) => onPrice(e.target.value)} placeholder="$" />
         </div>
       </div>
       <p className="text-xs text-slate-500">

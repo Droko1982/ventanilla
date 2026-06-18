@@ -41,6 +41,15 @@ export function ProductForm({
   const [barcode, setBarcode] = useState(product?.barcode ?? initialBarcode ?? '')
   const [scanOpen, setScanOpen] = useState(false)
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? categories[0]?.id ?? '')
+  // Garantiza una categoría "Otro" para clasificar productos que no encajan en
+  // ninguna (también en tiendas ya creadas, no solo en el demo nuevo).
+  useEffect(() => {
+    if (!tenantId) return
+    void (async () => {
+      const has = await db.categories.where('tenantId').equals(tenantId).filter((c) => c.name.trim().toLowerCase() === 'otro').count()
+      if (has === 0) await db.categories.put({ id: uid('cat'), tenantId, name: 'Otro', color: '#94a3b8', emoji: '📦' })
+    })()
+  }, [tenantId])
   const [unit, setUnit] = useState<'unidad' | 'peso'>(product?.unit ?? 'unidad')
   const [price, setPrice] = useState(product ? String(product.price) : '')
   const [cost, setCost] = useState(product ? String(product.cost) : '')
