@@ -8,6 +8,7 @@ import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
 import { cop, kg, parseCop } from '@/lib/money'
 import { fmtDateTime, fmtTime, timeAgo } from '@/lib/format'
+import { saleDay } from '@/lib/businessDay'
 import type { Sale } from '@/types'
 
 const methodEmoji: Record<string, string> = {
@@ -20,20 +21,31 @@ export default function Ventas() {
   const user = useCurrentUser()
   const tenant = useTenant()
   const [filter, setFilter] = useState<'todas' | 'pendiente'>('todas')
+  const [day, setDay] = useState('') // YYYY-MM-DD: ver las ventas de un día concreto
+  const [q, setQ] = useState('') // buscar por monto, documento o producto
   const [detail, setDetail] = useState<Sale | null>(null)
   const [busyDian, setBusyDian] = useState(false)
 
   const locName = useMemo(() => new Map((locations ?? []).map((l) => [l.id, l.name])), [locations])
 
   const pending = (sales ?? []).filter((s) => s.dianStatus === 'pendiente' && s.status === 'completada')
-  const list = filter === 'pendiente' ? pending : (sales ?? [])
+  // Filtro por día contable (para hallar la factura de un día previo) y por texto.
+  const ql = q.trim().toLowerCase()
+  const list = (filter === 'pendiente' ? pending : (sales ?? [])).filter((s) => {
+    if (day && saleDay(s) !== day) return false
+    if (ql) {
+      const hay = `${s.total} ${s.dianDocNumber ?? ''} ${s.items.map((i) => i.name).join(' ')}`.toLowerCase()
+      if (!hay.includes(ql)) return false
+    }
+    return true
+  })
 
   // Alerta de pendientes "viejos" (más de 24h sin transmitir → riesgo de sanción)
   const oldPending = pending.filter((s) => Date.now() - new Date(s.createdAt).getTime() > 24 * 3600000)
 
   return (
     <div>
-      <PageHeader help="ventas" title="Ventas y DIAN" subtitle="Historial y documentos electrónicos" />
+      <PageHeader help="ventas" title="Ventas y facturas" subtitle="Historial · busca por día y reimprime/emite facturas" />
 
       {oldPending.length > 0 && (
         <div className="mb-3 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3">
@@ -44,7 +56,7 @@ export default function Ventas() {
         </div>
       )}
 
-      <div className="mb-4">
+      <div className="mb-3">
         <Segmented
           value={filter}
           onChange={setFilter}
@@ -54,6 +66,27 @@ export default function Ventas() {
           ]}
         />
       </div>
+
+      {/* Buscar la venta de un día anterior para reimprimir/emitir su factura */}
+      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+          <span className="text-base">📅</span>
+          <span className="shrink-0 text-slate-500">Ver un día:</span>
+          <input type="date" value={day} onChange={(e) => setDay(e.target.value)} className="min-w-0 flex-1 bg-transparent text-slate-700 outline-none" />
+          {day && <button onClick={() => setDay('')} className="shrink-0 text-xs font-semibold text-brand-600">limpiar</button>}
+        </label>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por monto, documento o producto…"
+          className="input"
+        />
+      </div>
+      {(day || ql) && (
+        <p className="mb-3 text-xs text-slate-400">
+          {list.length} venta(s){day ? ` del ${day}` : ''}{ql ? ` que coinciden con "${q.trim()}"` : ''}
+        </p>
+      )}
 
       {pending.length > 0 && (
         <button
