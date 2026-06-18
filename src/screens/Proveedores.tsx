@@ -276,6 +276,10 @@ function PurchaseOrderCard({ po, supplierName, userId, userName }: { po: any; su
   const [received, setReceived] = useState<Record<string, string>>(
     Object.fromEntries(po.items.map((it: any) => [it.productId, String(it.suggestedQty)])),
   )
+  // Costo real recibido (arranca con el estimado del pedido; el dueño lo ajusta).
+  const [costInput, setCostInput] = useState<Record<string, string>>(
+    Object.fromEntries(po.items.map((it: any) => [it.productId, it.cost ? String(it.cost) : ''])),
+  )
   return (
     <div className="card p-4">
       <div className="flex items-center justify-between">
@@ -316,7 +320,9 @@ function PurchaseOrderCard({ po, supplierName, userId, userName }: { po: any; su
             onClick={async () => {
               const map: Record<string, number> = {}
               for (const [k, v] of Object.entries(received)) map[k] = parseInt(v || '0', 10) || 0
-              await receivePurchase(po.id, map, userId, userName)
+              const costs: Record<string, number> = {}
+              for (const [k, v] of Object.entries(costInput)) { const n = parseCop(v); if (n > 0) costs[k] = n }
+              await receivePurchase(po.id, map, userId, userName, costs)
               toast('success', 'Mercancía recibida y stock actualizado')
               setOpen(false)
             }}
@@ -325,18 +331,33 @@ function PurchaseOrderCard({ po, supplierName, userId, userName }: { po: any; su
           </button>
         }
       >
-        <p className="mb-3 text-sm text-slate-500">Confirma lo que llegó de verdad (puede diferir de lo pedido):</p>
+        <p className="mb-3 text-sm text-slate-500">Confirma lo que llegó de verdad y a qué costo (puede diferir de lo pedido). El costo ajusta lo que le debes al proveedor.</p>
         <div className="space-y-2">
           {po.items.map((it: any) => (
-            <div key={it.productId} className="flex items-center justify-between gap-2">
-              <span className="flex-1 truncate text-sm text-slate-600">{it.name}</span>
-              <span className="text-xs text-slate-400">pedido {it.suggestedQty}</span>
-              <input
-                className="w-20 rounded-lg border border-slate-200 px-2 py-1.5 text-right"
-                inputMode="numeric"
-                value={received[it.productId]}
-                onChange={(e) => setReceived({ ...received, [it.productId]: e.target.value })}
-              />
+            <div key={it.productId} className="rounded-lg border border-slate-100 p-2">
+              <p className="truncate text-sm text-slate-600">{it.name}</p>
+              <div className="mt-1 flex items-center gap-2">
+                <label className="flex items-center gap-1 text-xs text-slate-400">
+                  Cant.
+                  <input
+                    className="w-16 rounded-lg border border-slate-200 px-2 py-1.5 text-right"
+                    inputMode="numeric"
+                    value={received[it.productId]}
+                    onChange={(e) => setReceived({ ...received, [it.productId]: e.target.value })}
+                  />
+                </label>
+                <label className="flex flex-1 items-center gap-1 text-xs text-slate-400">
+                  Costo
+                  <input
+                    className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-right"
+                    inputMode="numeric"
+                    value={costInput[it.productId]}
+                    onChange={(e) => setCostInput({ ...costInput, [it.productId]: e.target.value })}
+                    placeholder="$"
+                  />
+                </label>
+                <span className="text-[11px] text-slate-300">ped. {it.suggestedQty}</span>
+              </div>
             </div>
           ))}
         </div>

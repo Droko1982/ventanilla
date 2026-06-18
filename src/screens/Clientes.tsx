@@ -220,7 +220,7 @@ function CustomerDetail({ customer, onClose }: { customer: Customer; onClose: ()
                     const amt = parseCop(abono)
                     if (amt <= 0) return toast('error', 'Escribe un monto válido')
                     if (amt > customer.creditBalance) return toast('error', `El abono supera el saldo (${cop(customer.creditBalance)})`)
-                    await payCredit(customer.id, amt)
+                    await payCredit(customer.id, amt, { userId: useSession.getState().userId ?? '' })
                     toast('success', 'Abono registrado')
                     onClose()
                   }}

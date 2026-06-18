@@ -62,8 +62,11 @@ export default function Ajustes() {
   }
 
   if (!tenant) return null
-  const billing = billingBreakdown(locations?.length ?? 0, tenant.monthlyFeePerLocation)
-  const usedSeats = locations?.length ?? 0
+  // Solo los locales ACTIVOS ocupan un punto de la licencia y se muestran arriba.
+  const activeLocs = (locations ?? []).filter((l) => l.active !== false)
+  const inactiveLocs = (locations ?? []).filter((l) => l.active === false)
+  const billing = billingBreakdown(activeLocs.length, tenant.monthlyFeePerLocation)
+  const usedSeats = activeLocs.length
   const maxSeats = tenant.maxSeats ?? usedSeats
   function addLocation() {
     if (usedSeats >= maxSeats) {
@@ -72,6 +75,14 @@ export default function Ajustes() {
     }
     setLocAdd(true)
   }
+  async function reactivateLocation(l: Location) {
+    if (usedSeats >= maxSeats) {
+      toast('info', `Tu licencia permite ${maxSeats} punto(s). Pide a la plataforma ampliarla.`)
+      return
+    }
+    await db.locations.update(l.id, { active: true })
+    toast('success', 'Local reactivado')
+  }
 
   return (
     <div className="space-y-6">
@@ -79,7 +90,7 @@ export default function Ajustes() {
 
       {/* Locales */}
       <Section title={`Locales / Ventanillas (${usedSeats}/${maxSeats})`} action={<AddBtn onClick={addLocation} />}>
-        {locations?.map((l) => (
+        {activeLocs.map((l) => (
           <button key={l.id} onClick={() => setLocEdit(l)} className="flex w-full items-center gap-3 rounded-xl bg-slate-50 p-3 text-left">
             <Icon name="building" className="h-5 w-5 text-brand-600" />
             <div className="flex-1">
@@ -89,6 +100,21 @@ export default function Ajustes() {
             <Icon name="edit" className="h-4 w-4 text-slate-300" />
           </button>
         ))}
+        {inactiveLocs.length > 0 && (
+          <div className="mt-2 space-y-2">
+            <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Inactivos</p>
+            {inactiveLocs.map((l) => (
+              <div key={l.id} className="flex items-center gap-3 rounded-xl bg-slate-50 p-3 opacity-70">
+                <Icon name="building" className="h-5 w-5 text-slate-400" />
+                <div className="flex-1">
+                  <p className="font-semibold text-slate-500">{l.name}</p>
+                  <p className="text-xs text-slate-400">{l.address}, {l.city} · inactivo</p>
+                </div>
+                <button onClick={() => reactivateLocation(l)} className="btn btn-secondary px-3 py-1.5 text-xs">Reactivar</button>
+              </div>
+            ))}
+          </div>
+        )}
       </Section>
 
       {/* Empleados */}
@@ -252,7 +278,7 @@ export default function Ajustes() {
 
       {/* Sheets */}
       {(locEdit || locAdd) && (
-        <LocationForm location={locEdit ?? undefined} tenantId={tenantId} city={tenant.city} onClose={() => { setLocEdit(null); setLocAdd(false) }} />
+        <LocationForm location={locEdit ?? undefined} tenantId={tenantId} city={tenant.city} activeCount={activeLocs.length} onClose={() => { setLocEdit(null); setLocAdd(false) }} />
       )}
       {(empEdit || empAdd) && (
         <EmployeeForm employee={empEdit ?? undefined} tenantId={tenantId} locations={locations ?? []} onClose={() => { setEmpEdit(null); setEmpAdd(false) }} />
@@ -641,7 +667,7 @@ function AddBtn({ onClick }: { onClick: () => void }) {
   )
 }
 
-function LocationForm({ location, tenantId, city, onClose }: { location?: Location; tenantId: string; city: string; onClose: () => void }) {
+function LocationForm({ location, tenantId, city, activeCount, onClose }: { location?: Location; tenantId: string; city: string; activeCount: number; onClose: () => void }) {
   const [name, setName] = useState(location?.name ?? '')
   const [address, setAddress] = useState(location?.address ?? '')
   const [locCity, setCity] = useState(location?.city ?? city)
@@ -669,6 +695,21 @@ function LocationForm({ location, tenantId, city, onClose }: { location?: Locati
           <input type="checkbox" checked={allowBulk} onChange={(e) => setAllowBulk(e.target.checked)} className="h-5 w-5" />
           <span className="text-sm text-slate-600">Vende a granel / por peso</span>
         </label>
+        {/* Desactivar libera el punto de la licencia; el histórico de ventas se
+            conserva. No se puede desactivar el único local activo. */}
+        {location && location.active !== false && activeCount > 1 && (
+          <button
+            className="btn btn-secondary w-full text-rose-600"
+            onClick={async () => {
+              await db.locations.update(location.id, { active: false })
+              if (useSession.getState().locationFilter === location.id) useSession.getState().setLocationFilter('all')
+              toast('success', 'Local desactivado · liberaste un punto')
+              onClose()
+            }}
+          >
+            Desactivar este local
+          </button>
+        )}
       </div>
     </Sheet>
   )

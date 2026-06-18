@@ -66,7 +66,7 @@ function TopBar() {
               className="-ml-1 max-w-[12rem] truncate bg-transparent text-xs text-slate-500 outline-none"
             >
               <option value="all">Todos los locales</option>
-              {locations?.map((l) => (
+              {locations?.filter((l) => l.active !== false).map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.name}
                 </option>

@@ -131,7 +131,7 @@ export default function Cartera() {
                 const amt = parseCop(a)
                 if (amt <= 0) return toast('error', 'Monto inválido')
                 if (amt > c.creditBalance) return toast('error', 'El abono supera el saldo')
-                await payCredit(c.id, amt); toast('success', 'Abono registrado')
+                await payCredit(c.id, amt, { userId: useSession.getState().userId ?? '' }); toast('success', 'Abono registrado')
               }}
               className="btn btn-success px-3 py-2 text-xs"
             >

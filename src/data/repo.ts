@@ -774,6 +774,7 @@ export async function receivePurchase(
   received: Record<string, number>,
   userId: string,
   userName: string,
+  costs?: Record<string, number>, // costo unitario REAL recibido (si se capturó); ajusta "por pagar"
 ): Promise<void> {
   const po = await db.purchaseOrders.get(poId)
   if (!po) return
@@ -782,6 +783,10 @@ export async function receivePurchase(
     for (const it of po.items) {
       const qty = received[it.productId] ?? 0
       it.receivedQty = qty
+      // Si llega el costo real recibido, reemplaza el estimado del pedido (para que
+      // "Por pagar" refleje lo que de verdad se debe al proveedor).
+      const realCost = costs?.[it.productId]
+      if (realCost != null && realCost > 0) it.cost = realCost
       if (qty > 0) {
         const st = await db.stock.get(`${po.locationId}:${it.productId}`)
         if (st) {
@@ -1432,7 +1437,7 @@ export async function maybeFiadoReminders(tenantId: string): Promise<void> {
   try { await runFiadoReminders(tenantId) } catch { /* nunca rompe */ }
 }
 
-export async function payCredit(customerId: string, amount: number): Promise<Customer | null> {
+export async function payCredit(customerId: string, amount: number, by?: { userId: string }): Promise<Customer | null> {
   const c = await db.customers.get(customerId)
   if (!c) return null
   const before = c.creditBalance
@@ -1444,8 +1449,9 @@ export async function payCredit(customerId: string, amount: number): Promise<Cus
     const delta = Number((c.creditBalance - before).toFixed(2)) // negativo (lo que se abonó)
     if (delta !== 0) {
       await db.creditMovements.put({
+        // Queda firmado con quien registró el abono (trazabilidad anti-fraude).
         id: uid('cm'), tenantId: c.tenantId, customerId: c.id, delta,
-        type: 'abono', userId: '', createdAt: new Date().toISOString(),
+        type: 'abono', userId: by?.userId ?? '', createdAt: new Date().toISOString(),
       })
     }
   })
