@@ -16,6 +16,9 @@ export default function Login() {
   const loginByPin = useSession((s) => s.loginEmployeeByPin)
   const loginAdminByPin = useSession((s) => s.loginAdminByPin)
   const loginSuperAdmin = useSession((s) => s.loginSuperAdmin)
+  // Si el equipo ya tuvo una cuenta real, NO mostrar pistas de PIN del demo.
+  let realAccount = false
+  try { realAccount = localStorage.getItem('ventanilla-real-account') === '1' } catch { /* */ }
   const [mode, setMode] = useState<'menu' | 'pin' | 'super' | 'owner-cloud'>('menu')
   const [pinRole, setPinRole] = useState<'admin' | 'empleado'>('empleado')
   const [pin, setPin] = useState('')
@@ -132,9 +135,11 @@ export default function Login() {
             <Icon name="arrow-left" className="h-5 w-5 rotate-180 text-brand-200" />
           </button>
 
-          <p className="pt-4 text-center text-xs text-brand-200">
-            Es un demo: los datos son de ejemplo y viven en tu dispositivo.
-          </p>
+          {!realAccount && (
+            <p className="pt-4 text-center text-xs text-brand-200">
+              Es un demo: los datos son de ejemplo y viven en tu dispositivo.
+            </p>
+          )}
         </div>
       ) : mode === 'super' ? (
         <div className="w-full max-w-sm space-y-3">
@@ -202,7 +207,7 @@ export default function Login() {
             pin={pin}
             tone="brand"
             label={pinRole === 'admin' ? 'PIN del dueño' : 'Ingresa tu PIN de 4 dígitos'}
-            hint={pinRole === 'admin' ? 'Demo: 1111' : 'Demo: Centro 1234 · Norte 2345 · Pereira 3456'}
+            hint={realAccount ? undefined : pinRole === 'admin' ? 'Demo: 1111' : 'Demo: Centro 1234 · Norte 2345 · Pereira 3456'}
             onDigit={(d) => submitPin(pin + d)}
             onBack={() => setPin(pin.slice(0, -1))}
             onCancel={() => {

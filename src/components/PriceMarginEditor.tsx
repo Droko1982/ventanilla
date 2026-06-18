@@ -4,13 +4,15 @@ import { cop, parseCop } from '@/lib/money'
 // Editor enlazado: costo ↔ precio ↔ rentabilidad %. Editar cualquiera ajusta los
 // otros. La rentabilidad es la utilidad sobre el precio: precio = costo / (1 − %).
 export function PriceMarginEditor({
-  cost, price, setCost, setPrice, priceLabel = 'Precio venta',
+  cost, price, setCost, setPrice, priceLabel = 'Precio venta', showCost = true,
 }: {
   cost: string
   price: string
   setCost: (v: string) => void
   setPrice: (v: string) => void
   priceLabel?: string
+  /** Si es false, oculta costo, rentabilidad y utilidad (privacidad del margen para el cajero). */
+  showCost?: boolean
 }) {
   const c0 = parseCop(cost), p0 = parseCop(price)
   const [margin, setMargin] = useState<string>(p0 > 0 && c0 >= 0 ? String(Math.round((1 - c0 / p0) * 100)) : '')
@@ -37,6 +39,15 @@ export function PriceMarginEditor({
   }
 
   const c = parseCop(cost), p = parseCop(price)
+  // Sin acceso al costo (cajero): solo el precio, sin costo ni rentabilidad/utilidad.
+  if (!showCost) {
+    return (
+      <div>
+        <label className="label">{priceLabel}</label>
+        <input className="input" inputMode="numeric" value={price} onChange={(e) => onPrice(e.target.value)} placeholder="$" />
+      </div>
+    )
+  }
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-3 gap-2">

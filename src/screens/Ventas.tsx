@@ -62,7 +62,7 @@ export default function Ventas() {
             let n = 0
             for (const s of pending) { try { await transmitDian(s.id); n++ } catch { /* sigue con las demás */ } }
             setBusyDian(false)
-            toast('success', `${n} documento(s) transmitidos a la DIAN`)
+            toast('success', `${n} documento(s) procesados (consecutivo asignado)`)
           }}
           disabled={busyDian}
           className="btn btn-primary mb-4 w-full text-sm disabled:opacity-60"
@@ -97,7 +97,7 @@ export default function Ventas() {
           onClose={() => setDetail(null)}
           onTransmit={async () => {
             await transmitDian(detail.id)
-            toast('success', 'Documento DIAN generado y transmitido')
+            toast('success', 'Documento DIAN generado (consecutivo asignado)')
             setDetail(null)
           }}
           onVoid={async () => {
@@ -166,7 +166,7 @@ export function SaleDetail({
           <div className="rounded-xl border border-brand-100 bg-brand-50/50 p-3">
             {sale.dianStatus === 'enviado' ? (
               <p className="text-sm text-emerald-700">
-                ✓ Documento {sale.dianDocType.replace('_', ' ')} {sale.dianDocNumber} transmitido a la DIAN.
+                ✓ Documento {sale.dianDocType.replace('_', ' ')} {sale.dianDocNumber} generado (consecutivo local).
               </p>
             ) : (
               <>

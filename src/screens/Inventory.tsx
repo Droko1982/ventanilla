@@ -314,6 +314,7 @@ function ProductDetailSheet({
   const tenant = useTenant()
   const suppliers = useSuppliers()
   const allProducts = useProducts()
+  const isOwner = useSession((s) => s.role) === 'admin' // costo/utilidad solo el dueño
   const supplierName = suppliers?.find((s) => s.id === product.supplierId)?.name
   const [convertOpen, setConvertOpen] = useState(false)
   const [newQty, setNewQty] = useState(String(stock.quantity))
@@ -355,7 +356,7 @@ function ProductDetailSheet({
               {product.unit === 'peso' && <span className="text-sm text-slate-400">/kg</span>}
             </p>
             <p className="truncate text-xs text-slate-400">
-              Costo {cop(product.cost)} · IVA {product.ivaRate}% · {product.barcode || product.internalCode}
+              {isOwner && `Costo ${cop(product.cost)} · `}IVA {product.ivaRate}% · {product.barcode || product.internalCode}
             </p>
           </div>
           {canManage && (
@@ -373,7 +374,7 @@ function ProductDetailSheet({
         {canManage && (
           <div className="rounded-xl border border-slate-200 p-3">
             <p className="mb-2 text-sm font-semibold text-slate-600">Precio y rentabilidad</p>
-            <PriceMarginEditor cost={pCost} price={pPrice} setCost={setPCost} setPrice={setPPrice} priceLabel={product.unit === 'peso' ? 'Precio/kg' : 'Precio'} />
+            <PriceMarginEditor cost={pCost} price={pPrice} setCost={setPCost} setPrice={setPPrice} priceLabel={product.unit === 'peso' ? 'Precio/kg' : 'Precio'} showCost={isOwner} />
             <button onClick={savePricing} className="btn btn-primary mt-2 w-full text-sm">Guardar precio</button>
           </div>
         )}
@@ -382,10 +383,10 @@ function ProductDetailSheet({
           <Icon name="print" className="h-5 w-5" /> Imprimir etiqueta de precio
         </button>
 
-        {/* Costo promedio, utilidad, sección, último proveedor */}
+        {/* Costo promedio, utilidad, sección, último proveedor (costo/utilidad solo el dueño) */}
         <div className="grid grid-cols-2 gap-2 text-sm">
-          <div className="rounded-lg bg-slate-50 p-2"><span className="text-xs text-slate-400">Costo promedio</span><p className="font-semibold text-slate-700">{cop(product.avgCost ?? product.cost)}</p></div>
-          <div className="rounded-lg bg-slate-50 p-2"><span className="text-xs text-slate-400">Utilidad</span><p className="font-semibold text-emerald-600">{product.price > 0 ? Math.round((1 - (product.avgCost ?? product.cost) / product.price) * 100) : 0}%</p></div>
+          {isOwner && <div className="rounded-lg bg-slate-50 p-2"><span className="text-xs text-slate-400">Costo promedio</span><p className="font-semibold text-slate-700">{cop(product.avgCost ?? product.cost)}</p></div>}
+          {isOwner && <div className="rounded-lg bg-slate-50 p-2"><span className="text-xs text-slate-400">Utilidad</span><p className="font-semibold text-emerald-600">{product.price > 0 ? Math.round((1 - (product.avgCost ?? product.cost) / product.price) * 100) : 0}%</p></div>}
           {product.section && <div className="rounded-lg bg-slate-50 p-2"><span className="text-xs text-slate-400">Sección</span><p className="font-semibold text-slate-700">{product.section}</p></div>}
           {supplierName && <div className="rounded-lg bg-slate-50 p-2"><span className="text-xs text-slate-400">Último proveedor</span><p className="truncate font-semibold text-slate-700">{supplierName}</p></div>}
         </div>

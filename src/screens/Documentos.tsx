@@ -355,7 +355,7 @@ function FacturaDetail({ sale, onClose }: { sale: Sale; onClose: () => void }) {
         </div>
 
         {sale.dianStatus === 'pendiente' && (
-          <button onClick={async () => { await transmitDian(sale.id); toast('success', 'Factura transmitida a la DIAN'); onClose() }} className="btn btn-primary w-full">
+          <button onClick={async () => { await transmitDian(sale.id); toast('success', 'Documento generado (consecutivo asignado)'); onClose() }} className="btn btn-primary w-full">
             <Icon name="doc" className="h-5 w-5" /> Transmitir a la DIAN
           </button>
         )}

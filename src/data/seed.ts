@@ -642,24 +642,36 @@ function mkTenant(
 const SEED_VERSION = '17-dueno-1111'
 const SEED_KEY = 'ventanilla-seed-version'
 
+// Bandera: este equipo ya tuvo una cuenta real (se conectó a la nube). Si está,
+// NUNCA se siembra/borra el demo, ni aunque la sesión de nube se haya perdido.
+const REAL_ACCOUNT_KEY = 'ventanilla-real-account'
+
 export async function seedIfEmpty(): Promise<void> {
   let stored: string | null = null
+  let realAccount = false
   try {
     stored = localStorage.getItem(SEED_KEY)
+    realAccount = localStorage.getItem(REAL_ACCOUNT_KEY) === '1'
   } catch {
     /* localStorage no disponible */
   }
-  if (stored !== SEED_VERSION) {
-    await resetDemo()
-    try {
-      localStorage.setItem(SEED_KEY, SEED_VERSION)
-    } catch {
-      /* ignore */
-    }
+  // Cuenta real (alguna vez conectada a la nube): jamás tocar sus datos locales,
+  // aunque el token haya vencido. Protege ventas/inventario reales y offline.
+  if (realAccount) return
+
+  const count = await db.tenants.count()
+  if (count === 0) {
+    // Base vacía → sembrar el demo por primera vez.
+    await seedNow()
+    try { localStorage.setItem(SEED_KEY, SEED_VERSION) } catch { /* */ }
     return
   }
-  const count = await db.tenants.count()
-  if (count === 0) await seedNow()
+  // Ya hay datos. Si cambió la versión del demo NO borramos (podrían ser datos
+  // del usuario): solo actualizamos el marcador. El demo se refresca a mano con
+  // el botón "Reiniciar datos del demo".
+  if (stored !== SEED_VERSION) {
+    try { localStorage.setItem(SEED_KEY, SEED_VERSION) } catch { /* */ }
+  }
 }
 
 export async function seedNow(): Promise<void> {

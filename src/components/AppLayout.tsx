@@ -197,6 +197,7 @@ function TopBar() {
 function ChangePinSheet({ user, onClose }: { user: { id: string; name: string }; onClose: () => void }) {
   const [pin, setPin] = useState('')
   const [confirm, setConfirm] = useState('')
+  const tenantId = useSession((s) => s.tenantId)
   return (
     <Sheet
       open onClose={onClose} title="Cambiar mi PIN"
@@ -206,7 +207,8 @@ function ChangePinSheet({ user, onClose }: { user: { id: string; name: string };
           onClick={async () => {
             if (pin.length !== 4) return toast('error', 'El PIN debe tener 4 dígitos')
             if (pin !== confirm) return toast('error', 'Los PIN no coinciden')
-            const dupe = await db.users.where('pin').equals(pin).and((u) => u.id !== user.id && u.active).first()
+            // Unicidad de PIN dentro de la misma tienda (no entre tenants).
+            const dupe = await db.users.where('pin').equals(pin).and((u) => u.id !== user.id && u.active && u.tenantId === tenantId).first()
             if (dupe) return toast('error', `Ese PIN ya lo usa ${dupe.name}. Elige otro.`)
             await db.users.update(user.id, { pin })
             toast('success', 'PIN actualizado')

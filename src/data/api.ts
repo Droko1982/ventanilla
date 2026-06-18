@@ -74,6 +74,7 @@ export async function cloudLogin(url: string, email: string, password: string) {
   })
   setToken(d.token)
   setRole(d.user?.role ?? 'admin')
+  try { localStorage.setItem('ventanilla-real-account', '1') } catch { /* */ }
   return d
 }
 
@@ -185,5 +186,6 @@ export async function cloudRegister(
   const d = await api<{ token: string; user?: { id: string; name: string; role: string } }>('/auth/register', { method: 'POST', body: data, auth: false })
   setToken(d.token)
   setRole('admin')
+  try { localStorage.setItem('ventanilla-real-account', '1') } catch { /* */ }
   return d
 }

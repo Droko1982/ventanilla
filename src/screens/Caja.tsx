@@ -100,9 +100,9 @@ export default function Caja() {
   const sessionSales = useLiveQuery(
     async () => {
       if (!session || !locationId) return []
-      const since = new Date(session.openedAt).getTime()
       const all = await db.sales.where('locationId').equals(locationId).toArray()
-      return all.filter((s) => s.status === 'completada' && new Date(s.createdAt).getTime() >= since)
+      // Por cashSessionId (no por reloj): exacto y coherente con el cierre.
+      return all.filter((s) => s.status === 'completada' && s.cashSessionId === session.id)
     },
     [session?.id, locationId],
   )
@@ -180,13 +180,10 @@ export default function Caja() {
           <div className="mb-2 text-4xl">🔒</div>
           <p className="font-semibold text-slate-700">La caja está cerrada</p>
           <p className="mb-4 text-sm text-slate-500">Ábrela con la base inicial para empezar a vender.</p>
-          {isOwner ? (
-            <button onClick={() => setOpenSheet(true)} className="btn btn-primary btn-lg w-full">
-              Abrir caja
-            </button>
-          ) : (
-            <p className="text-xs text-slate-400">El dueño abre y cierra la caja.</p>
-          )}
+          {/* El cajero puede ABRIR su turno (declara la base). El CIERRE (arqueo) lo hace el dueño. */}
+          <button onClick={() => setOpenSheet(true)} className="btn btn-primary btn-lg w-full">
+            Abrir caja
+          </button>
         </div>
       ) : (
         <div className="card mb-4 p-5">

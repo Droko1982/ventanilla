@@ -57,12 +57,13 @@ export function DaySalesSheet({ onClose }: { onClose: () => void }) {
     [locationId],
   )
   const movements = useLiveQuery(() => (session ? db.cashMovements.where('sessionId').equals(session.id).toArray() : []), [session?.id])
+  // Efectivo esperado = base + efectivo de las ventas de ESTA sesión (por
+  // cashSessionId, igual que el cierre), no del subconjunto del día. Solo dueño.
   let expectedCash: number | null = null
-  if (session) {
-    const since = new Date(session.openedAt).getTime()
+  if (session && isOwner) {
     let cashSales = 0
-    for (const s of valid) {
-      if (new Date(s.createdAt).getTime() < since || s.status !== 'completada') continue
+    for (const s of (sales ?? [])) {
+      if (s.cashSessionId !== session.id || s.status !== 'completada') continue
       for (const p of s.payments) if (p.method === 'efectivo') cashSales += p.amount
     }
     let movNet = 0
@@ -180,7 +181,7 @@ export function DaySalesSheet({ onClose }: { onClose: () => void }) {
           locName={locName}
           tenantName={tenant?.businessName ?? ''}
           onClose={() => setDetail(null)}
-          onTransmit={async () => { await transmitDian(detail.id); toast('success', 'Documento DIAN generado y transmitido'); setDetail(null) }}
+          onTransmit={async () => { await transmitDian(detail.id); toast('success', 'Documento DIAN generado (consecutivo asignado)'); setDetail(null) }}
           onVoid={async () => { await voidSale(detail.id, user!.id, user!.name); toast('success', 'Venta anulada · nota crédito'); setDetail(null) }}
         />
       )}

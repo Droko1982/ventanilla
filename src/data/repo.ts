@@ -135,7 +135,9 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
   const now = new Date().toISOString()
   let crossedThreshold = false // ¿algún producto bajó del umbral en esta venta?
   const docType = input.docType ?? (input.customerDoc ? 'factura' : 'tiquete_pos')
-  const docNumber = docType === 'factura' ? nextFacturaNumber() : nextDianNumber()
+  // Solo se consume el consecutivo si REALMENTE se transmite (evita saltos de
+  // numeración fiscal en ventas que no generan documento).
+  const docNumber = input.transmitDian ? (docType === 'factura' ? nextFacturaNumber() : nextDianNumber()) : undefined
   // Caja abierta del local → día contable (día de apertura). Si no hay caja
   // abierta, el día contable es el de hoy (calendario).
   const openSession = await db.cashSessions
@@ -997,18 +999,21 @@ export async function generateDebitNote(saleId: string, amount: number, reason: 
   sale.debitNoteNumber = number
   sale.debitNoteAmount = amount
   sale.note = sale.note ? `${sale.note} · ND: ${reason}` : `ND: ${reason}`
-  await db.sales.put(sale)
-  if (sale.customerId) {
-    const c = await db.customers.get(sale.customerId)
-    if (c) {
-      c.creditBalance += amount
-      await db.customers.put(c)
-      await db.creditMovements.put({
-        id: uid('cm'), tenantId: sale.tenantId, customerId: c.id, delta: amount,
-        type: 'nota', refId: sale.id, userId, createdAt: new Date().toISOString(),
-      })
+  // Venta + saldo + libro de crédito en una sola transacción (no quedan a medias).
+  await db.transaction('rw', [db.sales, db.customers, db.creditMovements], async () => {
+    await db.sales.put(sale)
+    if (sale.customerId) {
+      const c = await db.customers.get(sale.customerId)
+      if (c) {
+        c.creditBalance += amount
+        await db.customers.put(c)
+        await db.creditMovements.put({
+          id: uid('cm'), tenantId: sale.tenantId, customerId: c.id, delta: amount,
+          type: 'nota', refId: sale.id, userId, createdAt: new Date().toISOString(),
+        })
+      }
     }
-  }
+  })
   await audit({
     tenantId: sale.tenantId, locationId: sale.locationId, userId, userName,
     action: 'generó nota débito', entity: 'venta', entityId: sale.id, detail: `${number} · ${amount} · ${reason}`,
@@ -1131,12 +1136,13 @@ export async function closeCashSession(args: {
 }): Promise<CashSession | null> {
   const cs = await db.cashSessions.get(args.sessionId)
   if (!cs) return null
-  // Efectivo esperado = base + ventas en efectivo desde que abrió
+  // Efectivo esperado = base + ventas en efectivo de ESTA sesión de caja.
+  // Por cashSessionId (no por reloj): exacto y coherente con el Informe Z aunque
+  // el turno cruce la medianoche.
   const sales = await db.sales.where('locationId').equals(cs.locationId).toArray()
-  const since = new Date(cs.openedAt).getTime()
   let cashSales = 0
   for (const s of sales) {
-    if (new Date(s.createdAt).getTime() < since || s.status !== 'completada') continue
+    if (s.cashSessionId !== cs.id || s.status !== 'completada') continue
     for (const p of s.payments) if (p.method === 'efectivo') cashSales += p.amount
   }
   // Ingresos/egresos de efectivo registrados durante la sesión

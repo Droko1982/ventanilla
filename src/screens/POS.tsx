@@ -1260,7 +1260,7 @@ interface PayOpts {
   redeemPoints?: number
 }
 
-function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total: number; defaultCustomerId?: string; onClose: () => void; onConfirm: (p: Payment[], o: PayOpts) => void }) {
+function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total: number; defaultCustomerId?: string; onClose: () => void; onConfirm: (p: Payment[], o: PayOpts) => void | Promise<void> }) {
   const tenant = useTenant()
   const customers = useCustomers()
   const [method, setMethod] = useState<PaymentMethod | 'mixto'>('efectivo')
@@ -1334,18 +1334,24 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
 
   // Confirmar la venta (guarda anti-doble, para que Enter o el botón no la repitan).
   const submitting = useRef(false)
-  function confirmSale() {
+  async function confirmSale() {
     if (submitting.current) return
     const payments = buildPayments()
     if (!payments) return
     submitting.current = true
-    onConfirm(payments, {
-      customerId: customerId || undefined,
-      customerDoc: wantInvoice ? customerDoc : undefined,
-      transmitDian,
-      note: note.trim() || undefined,
-      redeemPoints: redeemPointsUsed || undefined,
-    })
+    try {
+      await onConfirm(payments, {
+        customerId: customerId || undefined,
+        customerDoc: wantInvoice ? customerDoc : undefined,
+        transmitDian,
+        note: note.trim() || undefined,
+        redeemPoints: redeemPointsUsed || undefined,
+      })
+    } finally {
+      // Si la venta falló (p. ej. validación), libera el candado para reintentar;
+      // si fue bien, la hoja ya se cerró y este reset es inofensivo.
+      submitting.current = false
+    }
   }
 
   // Cobrar con la tecla Enter (en vez de tener que tocar el botón). No dispara
