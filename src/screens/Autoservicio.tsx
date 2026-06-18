@@ -34,6 +34,7 @@ export default function Autoservicio() {
   const byCode = useMemo(() => {
     const m = new Map<string, Product>()
     for (const p of products ?? []) {
+      if (p.unit === 'peso') continue // los productos a granel requieren pesaje: no en autoservicio
       if (p.barcode) m.set(p.barcode, p)
       if (p.internalCode) m.set(p.internalCode, p)
     }
@@ -62,7 +63,7 @@ export default function Autoservicio() {
   const results = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return []
-    return (products ?? []).filter((p) => p.name.toLowerCase().includes(q) || p.barcode?.includes(search)).slice(0, 8)
+    return (products ?? []).filter((p) => p.unit !== 'peso' && (p.name.toLowerCase().includes(q) || p.barcode?.includes(search))).slice(0, 8)
   }, [products, search])
 
   async function finalize(method: PaymentMethod) {

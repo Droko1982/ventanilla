@@ -5,7 +5,7 @@ import { useScopeSales, useScopeStock, useProducts, useLocations, useTenant } fr
 import { useScopeLocationIds } from '@/hooks/data'
 import { summarize, topProducts, bottomProducts, productStats, filterByRange } from '@/lib/analytics'
 import { ivaBreakdown } from '@/lib/documents'
-import { saleDay } from '@/lib/businessDay'
+import { saleDay, localYMD } from '@/lib/businessDay'
 import { StatCard, Money, Segmented, PageHeader, EmptyState } from '@/components/ui'
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
@@ -70,8 +70,10 @@ export default function Reportes() {
   const expenses = useLiveQuery(async () => {
     if (!scopeIds.length) return 0
     const all = await db.expenses.where('locationId').anyOf(scopeIds).toArray()
-    const since = Date.now() - days * 86400000
-    return all.filter((e) => new Date(e.date).getTime() >= since).reduce((s, e) => s + e.amount, 0)
+    // Mismo criterio de día contable que las ventas (filterByRange), para que la
+    // utilidad neta no mezcle dos definiciones de período.
+    const sinceDay = localYMD(Date.now() - Math.max(0, days - 1) * 86400000)
+    return all.filter((e) => localYMD(e.date) >= sinceDay).reduce((s, e) => s + e.amount, 0)
   }, [scopeIds.join(','), days])
 
   const netProfit = summary.profit - (expenses ?? 0)

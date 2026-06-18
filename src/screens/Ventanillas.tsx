@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { useLocations } from '@/hooks/data'
-import { summarize, todayRange } from '@/lib/analytics'
+import { summarize } from '@/lib/analytics'
+import { saleDay, todayYMD } from '@/lib/businessDay'
 import { StatCard, Money, PageHeader, EmptyState } from '@/components/ui'
 import { cop } from '@/lib/money'
 import { useSession } from '@/store/session'
@@ -22,7 +23,8 @@ export default function Ventanillas() {
 
   const rows = useMemo(() => {
     return (locations ?? []).map((loc) => {
-      const locSales = todayRange((sales ?? []).filter((s) => s.locationId === loc.id))
+      const today = todayYMD()
+      const locSales = (sales ?? []).filter((s) => s.locationId === loc.id && saleDay(s) === today)
       const sum = summarize(locSales)
       const session = (openSessions ?? []).find((c) => c.locationId === loc.id)
       const lowStock = (stock ?? []).filter((s) => s.locationId === loc.id && s.quantity <= s.reorderThreshold).length

@@ -40,7 +40,7 @@ export default function Tienda() {
   const total = lines.reduce((s, p) => s + p.price * (qty[p.id] ?? 0), 0)
   const count = lines.reduce((s, p) => s + (qty[p.id] ?? 0), 0)
 
-  const phone = tenant?.phone || '573147555896'
+  const phone = tenant?.phone || ''
   const storeName = tenant?.businessName || 'la tienda'
 
   function setQ(id: string, v: number) {
@@ -49,6 +49,7 @@ export default function Tienda() {
 
   function sendOrder() {
     if (!lines.length) return toast('error', 'Agrega productos a tu pedido')
+    if (!phone) return toast('error', 'Esta tienda aún no tiene WhatsApp configurado')
     const L: string[] = []
     L.push(`*Pedido a ${storeName}* 🛒`)
     L.push('')

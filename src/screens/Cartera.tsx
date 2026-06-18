@@ -164,7 +164,17 @@ function AbonoForm({ resta, onApply }: { resta: number; onApply: (amount: number
         <p className="text-2xl font-extrabold text-rose-700">{cop(resta)}</p>
       </div>
       <input autoFocus className="input text-center text-xl font-bold" inputMode="numeric" value={v} onChange={(e) => setV(e.target.value)} placeholder="$ 0" />
-      <button className="btn btn-success w-full" onClick={() => onApply(parseCop(v))}>Registrar abono</button>
+      <button
+        className="btn btn-success w-full"
+        onClick={() => {
+          const amt = parseCop(v)
+          if (amt <= 0) return toast('error', 'Monto inválido')
+          if (amt > resta) return toast('error', 'El abono supera el saldo')
+          onApply(amt)
+        }}
+      >
+        Registrar abono
+      </button>
     </div>
   )
 }
