@@ -18,7 +18,7 @@ import { can } from '@/lib/permissions'
 import { DaySalesSheet } from '@/components/DaySalesSheet'
 
 const methodLabels: Record<string, string> = {
-  efectivo: 'Efectivo', nequi: 'Nequi', tarjeta: 'Tarjeta', transferencia: 'Transferencia', fiado: 'Fiado',
+  efectivo: 'Efectivo', nequi: 'Nequi', daviplata: 'Daviplata', tarjeta: 'Tarjeta', transferencia: 'Transferencia', otro: 'Otro', fiado: 'Fiado',
 }
 
 // Arma el resumen del día para enviar al dueño por WhatsApp.
@@ -139,7 +139,7 @@ export default function Caja() {
   if (!locationId) return <EmptyState emoji="🏪" title="Sin local" hint="Selecciona un local arriba." />
 
   return (
-    <div>
+    <div className="pb-24">
       <PageHeader help="caja" title="Caja" subtitle={activeLoc?.name} />
 
       {/* Resumen del día (conciliación) — solo el dueño ve los totales del negocio */}
@@ -156,9 +156,10 @@ export default function Caja() {
           <div className="card mb-4 p-4">
             <p className="mb-3 text-sm font-semibold text-slate-600">Conciliación por método</p>
             <div className="space-y-1.5">
-              {Object.entries(summary.byMethod).map(([m, v]) => (
+              {/* Solo los métodos con movimiento (no llenar de filas en $0). */}
+              {Object.entries(summary.byMethod).filter(([, v]) => v > 0).map(([m, v]) => (
                 <div key={m} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500">{methodLabels[m]}</span>
+                  <span className="text-slate-500">{methodLabels[m] ?? m}</span>
                   <span className="font-semibold text-slate-700">{cop(v)}</span>
                 </div>
               ))}

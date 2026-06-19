@@ -25,7 +25,10 @@ async function clickText(page, text) {
     return els.find((e) => e.textContent && e.textContent.trim().includes(t)) || null
   }, text)
   const el = handle.asElement()
-  if (!el) throw new Error(`No encontré el botón con texto: "${text}"`)
+  if (!el) {
+    try { await page.screenshot({ path: 'C:/Users/asus/ventanilla/smoke-fail.png' }) } catch { /* */ }
+    throw new Error(`No encontré el botón con texto: "${text}"`)
+  }
   try {
     await el.click()
   } catch {
@@ -152,7 +155,7 @@ async function main() {
   })
   await sleep(600)
   txt = await bodyText(page)
-  if (!/Ver carrito/.test(txt)) console.log('· (aviso) no apareció la barra de carrito tras tocar producto')
+  if (!/Cobrar/.test(txt)) console.log('· (aviso) no apareció la barra de carrito tras tocar producto')
   else console.log('✓ Agregar al carrito funciona')
 
   // Recarga / servicio (no afecta inventario)
@@ -180,7 +183,7 @@ async function main() {
 
   // 4b) Venta completa de extremo a extremo: carrito → cobrar → recibo
   ctx = 'checkout'
-  await clickText(page, 'Ver carrito')
+  await clickText(page, '🛒') // botón de revisar carrito (icono)
   await sleep(700)
   txt = await bodyText(page)
   if (!/Producto en papel/.test(txt)) throw new Error('El producto manual no llegó al carrito')
@@ -448,10 +451,10 @@ async function main() {
     const tiles = [...document.querySelectorAll('button')].filter((b) => /en stock|Agotado/.test(b.textContent || ''))
     if (tiles[0]) tiles[0].click()
   })
-  txt = await waitForText(page, '💵 Efectivo', 4000)
-  if (!/💵 Efectivo/.test(txt)) throw new Error('Botón de cobro rápido no apareció')
-  await clickText(page, '💵 Efectivo')
-  if (!(await waitForGone(page, 'Ver carrito', 4000))) throw new Error('El cobro rápido no cerró la venta')
+  txt = await waitForText(page, '💵', 4000)
+  if (!/💵/.test(txt)) throw new Error('Botón de cobro rápido no apareció')
+  await clickText(page, '💵')
+  if (!(await waitForGone(page, 'Cobrar', 4000))) throw new Error('El cobro rápido no cerró la venta')
   console.log('✓ POS: cobro rápido en efectivo (1 toque)')
 
   // 4h) Proveedores: reabastecimiento automático + cuentas por pagar

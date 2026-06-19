@@ -8,8 +8,10 @@ import { fmtDateTime } from './format'
 const methodLabel: Record<string, string> = {
   efectivo: 'Efectivo',
   nequi: 'Nequi',
+  daviplata: 'Daviplata',
   tarjeta: 'Tarjeta',
   transferencia: 'Transferencia',
+  otro: 'Otro',
   fiado: 'Fiado (crédito)',
 }
 

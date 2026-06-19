@@ -475,26 +475,32 @@ export default function POS() {
         <EmptyState emoji="🔍" title="Sin resultados" hint="Prueba otra búsqueda o agrega el producto." />
       )}
 
-      {/* Barra fija del carrito: ver carrito + cobro rápido en efectivo */}
+      {/* Barra fija del carrito: revisar 🛒 · efectivo rápido 💵 · Cobrar (elige método) */}
       {count > 0 && (
         <div className="fixed inset-x-0 bottom-[60px] z-30 mx-auto flex max-w-3xl items-center gap-2 px-3">
           <button
             onClick={() => setCartOpen(true)}
-            className="flex flex-1 items-center justify-between rounded-2xl bg-brand-600 px-5 py-3.5 text-white shadow-lg active:scale-[0.99]"
+            title="Ver / editar el carrito"
+            className="relative flex shrink-0 items-center justify-center rounded-2xl bg-slate-700 px-4 py-3.5 text-white shadow-lg active:scale-95"
           >
-            <span className="flex items-center gap-2 font-semibold">
-              <span className="flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-white/25 px-1 text-sm">{count}</span>
-              Ver carrito
-            </span>
-            <span className="text-lg font-bold">{cop(total)}</span>
+            <span className="text-xl">🛒</span>
+            <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-white px-1 text-xs font-bold text-slate-700 shadow">{count}</span>
           </button>
           <button
             onClick={() => completeSale([{ method: 'efectivo', amount: total, confirmed: true }], { transmitDian: tenant?.dian.enabled ?? true }, false)}
             disabled={processing}
-            className="flex shrink-0 items-center gap-1 rounded-2xl bg-emerald-600 px-4 py-3.5 font-bold text-white shadow-lg active:scale-95 disabled:opacity-60"
-            title="Cobro rápido en efectivo (exacto) y cerrar"
+            title="Cobro rápido en efectivo (exacto)"
+            className="flex shrink-0 items-center justify-center rounded-2xl bg-emerald-600 px-4 py-3.5 text-xl font-bold text-white shadow-lg active:scale-95 disabled:opacity-60"
           >
-            {processing ? '…' : '💵 Efectivo'}
+            {processing ? '…' : '💵'}
+          </button>
+          <button
+            onClick={() => { setCartOpen(false); setPayOpen(true) }}
+            className="flex flex-1 items-center justify-between rounded-2xl bg-brand-600 px-5 py-3.5 text-white shadow-lg active:scale-[0.99]"
+            title="Cobrar eligiendo el método de pago"
+          >
+            <span className="font-semibold">Cobrar</span>
+            <span className="text-lg font-bold">{cop(total)}</span>
           </button>
         </div>
       )}
@@ -1294,8 +1300,10 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
   const methods: { id: PaymentMethod; label: string; emoji: string }[] = [
     { id: 'efectivo', label: 'Efectivo', emoji: '💵' },
     { id: 'nequi', label: 'Nequi', emoji: '📲' },
+    { id: 'daviplata', label: 'Daviplata', emoji: '📱' },
     { id: 'tarjeta', label: 'Tarjeta', emoji: '💳' },
     { id: 'transferencia', label: 'Transferencia', emoji: '🏦' },
+    { id: 'otro', label: 'Otro', emoji: '🧾' },
     { id: 'fiado', label: 'Fiado', emoji: '📒' },
   ]
 
@@ -1330,7 +1338,7 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
     reader.readAsDataURL(file)
   }
 
-  const needsProof = ['nequi', 'tarjeta', 'transferencia'].includes(method)
+  const needsProof = ['nequi', 'daviplata', 'tarjeta', 'transferencia'].includes(method)
 
   // Confirmar la venta (guarda anti-doble, para que Enter o el botón no la repitan).
   const submitting = useRef(false)
@@ -1439,7 +1447,7 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
         )}
 
         {/* Bre-B: QR/llave de cobro para pagos digitales */}
-        {(method === 'nequi' || method === 'transferencia') && tenant && hasBreB(tenant) && (
+        {(method === 'nequi' || method === 'daviplata' || method === 'transferencia') && tenant && hasBreB(tenant) && (
           <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-center">
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-cyan-700">Cobra con Bre-B</p>
             <QRCode value={breBPayload(tenant)} size={150} />
@@ -1500,7 +1508,7 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
             ))}
             {splitRemaining > 0 && (
               <div className="grid grid-cols-3 gap-1.5">
-                {(['efectivo', 'nequi', 'tarjeta', 'transferencia', 'fiado'] as PaymentMethod[]).map((m) => (
+                {(['efectivo', 'nequi', 'daviplata', 'tarjeta', 'transferencia', 'otro', 'fiado'] as PaymentMethod[]).map((m) => (
                   <button key={m} onClick={() => setSplit([...split, { method: m, amount: splitRemaining }])} className="rounded-lg border border-slate-200 bg-white py-1.5 text-xs font-medium capitalize">
                     + {m}
                   </button>

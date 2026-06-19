@@ -14,7 +14,7 @@ export interface SalesSummary {
 }
 
 const emptyMethods = (): Record<PaymentMethod, number> => ({
-  efectivo: 0, nequi: 0, tarjeta: 0, transferencia: 0, fiado: 0,
+  efectivo: 0, nequi: 0, daviplata: 0, tarjeta: 0, transferencia: 0, otro: 0, fiado: 0,
 })
 
 export function summarize(sales: Sale[]): SalesSummary {

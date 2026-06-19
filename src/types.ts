@@ -11,8 +11,10 @@ export type Unit = 'unidad' | 'peso'
 export type PaymentMethod =
   | 'efectivo'
   | 'nequi'
+  | 'daviplata'
   | 'tarjeta'
   | 'transferencia'
+  | 'otro' // cualquier otro medio (Bancolombia, PSE, bono, etc.)
   | 'fiado' // crédito al cliente (muy usado en tiendas de barrio en Colombia)
 
 export type SaleStatus = 'completada' | 'anulada' | 'devuelta'

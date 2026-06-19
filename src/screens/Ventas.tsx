@@ -12,7 +12,7 @@ import { saleDay } from '@/lib/businessDay'
 import type { Sale } from '@/types'
 
 const methodEmoji: Record<string, string> = {
-  efectivo: '💵', nequi: '📲', tarjeta: '💳', transferencia: '🏦', fiado: '📒',
+  efectivo: '💵', nequi: '📲', daviplata: '📱', tarjeta: '💳', transferencia: '🏦', otro: '🧾', fiado: '📒',
 }
 
 export default function Ventas() {

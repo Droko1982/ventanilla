@@ -12,7 +12,7 @@ import { fmtDate, fmtDateTime } from '@/lib/format'
 import { useSession } from '@/store/session'
 import type { ZReport } from '@/types'
 
-const methodLabels: Record<string, string> = { efectivo: 'Efectivo', nequi: 'Nequi', tarjeta: 'Tarjeta', transferencia: 'Transferencia', fiado: 'Fiado' }
+const methodLabels: Record<string, string> = { efectivo: 'Efectivo', nequi: 'Nequi', daviplata: 'Daviplata', tarjeta: 'Tarjeta', transferencia: 'Transferencia', otro: 'Otro', fiado: 'Fiado' }
 const docLabels: Record<string, string> = { tiquete_pos: 'Tiquete POS', factura: 'Factura', nota_credito: 'Nota crédito' }
 
 function today(): string {

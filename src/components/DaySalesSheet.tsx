@@ -16,7 +16,7 @@ import { SaleDetail } from '@/screens/Ventas'
 import type { Sale } from '@/types'
 
 const methodLabel: Record<string, string> = {
-  efectivo: 'Efectivo', nequi: 'Nequi', tarjeta: 'Tarjeta', transferencia: 'Transferencia', fiado: 'Fiado',
+  efectivo: 'Efectivo', nequi: 'Nequi', daviplata: 'Daviplata', tarjeta: 'Tarjeta', transferencia: 'Transferencia', otro: 'Otro', fiado: 'Fiado',
 }
 
 // Panel "Ventas de hoy": el dueño verifica de un vistazo cuánto se vendió, que las
