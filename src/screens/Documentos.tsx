@@ -14,6 +14,7 @@ import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
 import { cop, kg, parseCop } from '@/lib/money'
 import { fmtDateTime, timeAgo } from '@/lib/format'
+import { saleDay, localYMD, todayYMD } from '@/lib/businessDay'
 import { ivaBreakdown } from '@/lib/documents'
 import { facturaText, remisionText, printFactura, printRemision } from '@/lib/docprint'
 import { waLink, mailtoLink } from '@/lib/whatsapp'
@@ -32,6 +33,9 @@ export default function Documentos() {
   const [detailSale, setDetailSale] = useState<Sale | null>(null)
   const [detailRem, setDetailRem] = useState<Remision | null>(null)
 
+  const [q, setQ] = useState('') // buscar por número, cliente o monto
+  const [day, setDay] = useState('') // ver documentos de un día concreto
+
   const facturas = useMemo(
     () => (sales ?? []).filter((s) => s.dianDocType === 'factura'),
     [sales],
@@ -41,13 +45,41 @@ export default function Documentos() {
     [scopeIds.join(',')],
   )
 
+  // Búsqueda + filtro por día, para encontrar un documento de cualquier fecha.
+  const ql = q.trim().toLowerCase()
+  const facturasShown = facturas.filter((f) => {
+    if (day && saleDay(f) !== day) return false
+    if (ql && !`${f.dianDocNumber ?? ''} ${f.customerName ?? ''} ${f.total}`.toLowerCase().includes(ql)) return false
+    return true
+  })
+  const remisionesShown = (remisiones ?? []).filter((r) => {
+    if (day && localYMD(r.createdAt) !== day) return false
+    if (ql && !`${r.number} ${r.customerName ?? ''} ${r.total}`.toLowerCase().includes(ql)) return false
+    return true
+  })
+
+  // Exporta el registro de facturas a CSV (para contabilidad / respaldo).
+  function exportFacturas() {
+    if (facturasShown.length === 0) return toast('info', 'No hay facturas para exportar')
+    const rows: string[][] = [['Numero', 'Fecha', 'Cliente', 'Base', 'IVA', 'Total', 'Estado DIAN']]
+    for (const f of facturasShown) {
+      const br = ivaBreakdown(f.items, f.discount)
+      rows.push([f.dianDocNumber ?? '', saleDay(f), f.customerName ?? 'Consumidor final', String(br.base), String(br.iva), String(f.total), f.dianStatus ?? ''])
+    }
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const a = document.createElement('a')
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv)
+    a.download = `facturas-${todayYMD()}.csv`
+    a.click()
+  }
+
   if (!locationId) return <EmptyState emoji="🏪" title="Sin local" hint="Selecciona un local arriba." />
 
   return (
     <div>
       <PageHeader help="ventas" title="Facturas y remisiones" subtitle="Documentos electrónicos y notas de entrega" />
 
-      <div className="mb-4">
+      <div className="mb-3">
         <Segmented
           value={tab}
           onChange={setTab}
@@ -58,13 +90,30 @@ export default function Documentos() {
         />
       </div>
 
+      {/* Buscar / filtrar por día — para encontrar un documento de cualquier fecha */}
+      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por número, cliente o monto…" className="input" />
+        <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+          <span className="text-base">📅</span>
+          <span className="shrink-0 text-slate-500">Día:</span>
+          <input type="date" value={day} onChange={(e) => setDay(e.target.value)} className="min-w-0 flex-1 bg-transparent text-slate-700 outline-none" />
+          {day && <button onClick={() => setDay('')} className="shrink-0 text-xs font-semibold text-brand-600">limpiar</button>}
+        </label>
+      </div>
+
       {tab === 'facturas' ? (
         <>
-          <button onClick={() => setNewFactura(true)} className="btn btn-primary mb-3 w-full">
-            <Icon name="plus" className="h-5 w-5" /> Nueva factura electrónica
-          </button>
+          <div className="mb-3 flex gap-2">
+            <button onClick={() => setNewFactura(true)} className="btn btn-primary flex-1">
+              <Icon name="plus" className="h-5 w-5" /> Nueva factura electrónica
+            </button>
+            <button onClick={exportFacturas} className="btn btn-secondary px-3" title="Exportar el registro de facturas a CSV (contabilidad / respaldo)">
+              ⬇️ Exportar
+            </button>
+          </div>
+          {(q || day) && <p className="mb-2 text-xs text-slate-400">{facturasShown.length} factura(s){day ? ` del ${day}` : ''}</p>}
           <div className="space-y-2">
-            {facturas.map((f) => (
+            {facturasShown.map((f) => (
               <button key={f.id} onClick={() => setDetailSale(f)} className="card flex w-full items-center gap-3 p-3 text-left">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
                   <Icon name="doc" className="h-5 w-5" />
@@ -76,7 +125,7 @@ export default function Documentos() {
                 <DianChip status={f.dianStatus} />
               </button>
             ))}
-            {facturas.length === 0 && <EmptyState emoji="🧾" title="Sin facturas" hint="Crea una factura electrónica con datos del cliente." />}
+            {facturasShown.length === 0 && <EmptyState emoji="🧾" title={q || day ? 'Sin resultados' : 'Sin facturas'} hint={q || day ? 'Cambia la búsqueda o el día.' : 'Crea una factura electrónica con datos del cliente.'} />}
           </div>
         </>
       ) : (
@@ -84,8 +133,9 @@ export default function Documentos() {
           <button onClick={() => setNewRemision(true)} className="btn btn-primary mb-3 w-full">
             <Icon name="plus" className="h-5 w-5" /> Nueva remisión
           </button>
+          {(q || day) && <p className="mb-2 text-xs text-slate-400">{remisionesShown.length} remisión(es){day ? ` del ${day}` : ''}</p>}
           <div className="space-y-2">
-            {remisiones?.map((r) => (
+            {remisionesShown.map((r) => (
               <button key={r.id} onClick={() => setDetailRem(r)} className="card flex w-full items-center gap-3 p-3 text-left">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
                   <Icon name="truck" className="h-5 w-5" />
@@ -97,7 +147,7 @@ export default function Documentos() {
                 <RemStatusChip status={r.status} />
               </button>
             ))}
-            {(remisiones?.length ?? 0) === 0 && <EmptyState emoji="📦" title="Sin remisiones" hint="Crea notas de entrega/despacho." />}
+            {remisionesShown.length === 0 && <EmptyState emoji="📦" title={q || day ? 'Sin resultados' : 'Sin remisiones'} hint={q || day ? 'Cambia la búsqueda o el día.' : 'Crea notas de entrega/despacho.'} />}
           </div>
         </>
       )}
