@@ -892,11 +892,12 @@ export async function recordPurchase(input: RecordPurchaseInput): Promise<Purcha
         const denom = prevQty + it.qty
         p.cost = it.unitCost
         p.avgCost = denom > 0 ? Math.round((oldAvg * prevQty + it.unitCost * it.qty) / denom) : it.unitCost
-        p.supplierId = input.supplierId
+        // Entrada "Inventario" (sin proveedor): no pisar el último proveedor real.
+        if (input.supplierId) p.supplierId = input.supplierId
         await db.products.put(p)
       }
     }
-    if (input.paymentMethod === 'credito') {
+    if (input.paymentMethod === 'credito' && input.supplierId) {
       const sup = await db.suppliers.get(input.supplierId)
       if (sup) { sup.debt = (sup.debt ?? 0) + total; await db.suppliers.put(sup) }
     }
@@ -907,6 +908,20 @@ export async function recordPurchase(input: RecordPurchaseInput): Promise<Purcha
     detail: `${purchase.number} · ${input.supplierName} · total ${total} · ${input.paymentMethod}`,
   })
   return purchase
+}
+
+/** Marca una factura de compra como pagada (y baja la deuda si era a crédito). */
+export async function markPurchasePaid(purchaseId: string): Promise<void> {
+  await db.transaction('rw', [db.purchases, db.suppliers], async () => {
+    const pur = await db.purchases.get(purchaseId)
+    if (!pur || pur.paid) return
+    pur.paid = true
+    await db.purchases.put(pur)
+    if (pur.paymentMethod === 'credito' && pur.supplierId) {
+      const sup = await db.suppliers.get(pur.supplierId)
+      if (sup) { sup.debt = Math.max(0, (sup.debt ?? 0) - pur.total); await db.suppliers.put(sup) }
+    }
+  })
 }
 
 export async function paySupplierDebt(supplierId: string, amount: number): Promise<number> {

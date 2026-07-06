@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { useActiveLocationId, useProducts, useSuppliers, useCurrentUser, useScopeLocationIds } from '@/hooks/data'
-import { recordPurchase, recordSupplierReturn } from '@/data/repo'
+import { recordPurchase, recordSupplierReturn, markPurchasePaid } from '@/data/repo'
 import { Sheet } from '@/components/Sheet'
 import { EmptyState, PageHeader } from '@/components/ui'
 import { Icon } from '@/components/icons'
@@ -11,7 +11,7 @@ import { cop, parseCop } from '@/lib/money'
 import { uid } from '@/lib/id'
 import { fmtDateTime } from '@/lib/format'
 import { useSession } from '@/store/session'
-import type { Product, PurchaseItem, Supplier } from '@/types'
+import type { Product, Purchase, PurchaseItem, Supplier } from '@/types'
 
 export default function Compras() {
   const tenantId = useSession((s) => s.tenantId)!
@@ -21,10 +21,21 @@ export default function Compras() {
   const scopeIds = useScopeLocationIds()
   const [newOpen, setNewOpen] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
+  const [detail, setDetail] = useState<Purchase | null>(null)
+  const [q, setQ] = useState('')
 
   const purchases = useLiveQuery(
     () => (scopeIds.length ? db.purchases.where('locationId').anyOf(scopeIds).reverse().toArray() : []),
     [scopeIds.join(',')],
+  )
+
+  const query = q.trim().toLowerCase()
+  const filtered = (purchases ?? []).filter(
+    (c) =>
+      !query ||
+      c.number.toLowerCase().includes(query) ||
+      c.supplierName.toLowerCase().includes(query) ||
+      (c.supplierInvoice ?? '').toLowerCase().includes(query),
   )
 
   if (!locationId) return <EmptyState emoji="🏪" title="Sin local" hint="Selecciona un local arriba." />
@@ -42,26 +53,46 @@ export default function Compras() {
         </button>
       </div>
 
+      {(purchases?.length ?? 0) > 0 && (
+        <div className="mb-3">
+          <input
+            className="input"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar factura por número, proveedor o No. de factura…"
+          />
+        </div>
+      )}
+
       <div className="space-y-2">
-        {purchases?.map((c) => (
-          <div key={c.id} className="card flex items-center gap-3 p-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-700">
+        {filtered.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => setDetail(c)}
+            className="card flex w-full items-center gap-3 p-3 text-left transition active:scale-[0.99]"
+          >
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-700 dark:bg-purple-900/40">
               <Icon name="truck" className="h-5 w-5" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-slate-700">{c.number} · {c.supplierName}</p>
+              <p className="font-semibold text-slate-700 dark:text-slate-200">{c.number} · {c.supplierName}</p>
               <p className="truncate text-xs text-slate-400">{fmtDateTime(c.createdAt)} · {c.items.length} productos</p>
             </div>
             <div className="text-right">
-              <p className="font-bold text-slate-700">{cop(c.total)}</p>
+              <p className="font-bold text-slate-700 dark:text-slate-200">{cop(c.total)}</p>
               <span className={`chip ${c.paymentMethod === 'contado' ? 'bg-emerald-100 text-emerald-700' : c.paid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                 {c.paymentMethod === 'contado' ? 'Contado' : c.paid ? 'Pagada' : 'A crédito'}
               </span>
             </div>
-          </div>
+          </button>
         ))}
         {(purchases?.length ?? 0) === 0 && <EmptyState emoji="🧾" title="Sin compras" hint="Registra las facturas de tus proveedores." />}
+        {(purchases?.length ?? 0) > 0 && filtered.length === 0 && (
+          <p className="py-6 text-center text-sm text-slate-400">Ninguna factura coincide con “{q}”.</p>
+        )}
       </div>
+
+      {detail && <PurchaseDetailSheet purchase={detail} onClose={() => setDetail(null)} />}
 
       {newOpen && products && suppliers && (
         <NewPurchaseSheet
@@ -83,6 +114,77 @@ export default function Compras() {
         />
       )}
     </div>
+  )
+}
+
+// Valor centinela: entrada de mercancía propia, sin proveedor ni deuda.
+const INVENTORY = '__inv__'
+
+// --- Ficha / historial de una factura de compra ----------------------------
+function PurchaseDetailSheet({ purchase, onClose }: { purchase: Purchase; onClose: () => void }) {
+  const [paid, setPaid] = useState(purchase.paid)
+  const pendingCredit = purchase.paymentMethod === 'credito' && !paid
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={`Factura ${purchase.number}`}
+      footer={
+        pendingCredit ? (
+          <button
+            className="btn btn-success btn-lg w-full"
+            onClick={async () => {
+              await markPurchasePaid(purchase.id)
+              setPaid(true)
+              toast('success', 'Factura marcada como pagada · deuda actualizada')
+            }}
+          >
+            Marcar como pagada · {cop(purchase.total)}
+          </button>
+        ) : (
+          <button className="btn btn-secondary btn-lg w-full" onClick={onClose}>Cerrar</button>
+        )
+      }
+    >
+      <div className="space-y-4">
+        <div className="rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
+          <div className="flex justify-between"><span className="text-slate-500">Proveedor</span><span className="font-semibold text-slate-700 dark:text-slate-200">{purchase.supplierName}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">Fecha</span><span className="text-slate-600 dark:text-slate-300">{fmtDateTime(purchase.createdAt)}</span></div>
+          {purchase.supplierInvoice && <div className="flex justify-between"><span className="text-slate-500">No. factura</span><span className="text-slate-600 dark:text-slate-300">{purchase.supplierInvoice}</span></div>}
+          <div className="flex justify-between">
+            <span className="text-slate-500">Estado</span>
+            <span className={`chip ${purchase.paymentMethod === 'contado' || paid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+              {purchase.paymentMethod === 'contado' ? 'Contado' : paid ? 'Pagada' : 'A crédito'}
+            </span>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-xs text-slate-500 dark:bg-slate-800/60">
+              <tr><th className="px-2 py-1.5 text-left">Cant.</th><th className="px-2 py-1.5 text-left">Producto</th><th className="px-2 py-1.5 text-right">Vr. Unidad</th><th className="px-2 py-1.5 text-right">Vr. Total</th></tr>
+            </thead>
+            <tbody>
+              {purchase.items.map((it) => (
+                <tr key={it.productId} className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="px-2 py-1.5">{it.qty}</td>
+                  <td className="px-2 py-1.5"><span className="line-clamp-1">{it.name}</span></td>
+                  <td className="px-2 py-1.5 text-right text-slate-500">{cop(it.unitCost)}</td>
+                  <td className="px-2 py-1.5 text-right font-semibold">{cop(it.unitCost * it.qty)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="space-y-1 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
+          <div className="flex justify-between text-slate-500"><span>Subtotal</span><span>{cop(purchase.subtotal)}</span></div>
+          {(purchase.commercialDiscount ?? 0) > 0 && <div className="flex justify-between text-slate-500"><span>Descuento comercial</span><span>-{cop(purchase.commercialDiscount)}</span></div>}
+          {(purchase.weightAdjust ?? 0) !== 0 && <div className="flex justify-between text-slate-500"><span>Ajuste al peso</span><span>{purchase.weightAdjust > 0 ? '+' : ''}{cop(purchase.weightAdjust)}</span></div>}
+          <div className="flex justify-between border-t border-slate-200 pt-1 text-base font-bold dark:border-slate-700"><span>Total</span><span className="text-brand-700">{cop(purchase.total)}</span></div>
+        </div>
+      </div>
+    </Sheet>
   )
 }
 
@@ -188,6 +290,7 @@ function NewPurchaseSheet({ products, suppliers, tenantId, locationId, onClose }
   const [cost, setCost] = useState('')
   const [results, setResults] = useState<Product[]>([])
 
+  const isInventory = supplierId === INVENTORY
   const subtotal = items.reduce((s, it) => s + it.unitCost * it.qty, 0)
   const wAdj = (weightSign === 'restar' ? -1 : 1) * parseCop(weightAdjust)
   const total = Math.max(0, Math.round(subtotal - parseCop(commercialDiscount) + wAdj))
@@ -228,13 +331,16 @@ function NewPurchaseSheet({ products, suppliers, tenantId, locationId, onClose }
           disabled={!supplierId || !items.length}
           onClick={async () => {
             await recordPurchase({
-              tenantId, locationId, supplierId, supplierName: supplier?.name ?? 'Proveedor',
+              tenantId, locationId,
+              supplierId: isInventory ? '' : supplierId,
+              supplierName: isInventory ? 'Inventario' : (supplier?.name ?? 'Proveedor'),
               supplierInvoice: supplierInvoice.trim() || undefined,
               items, commercialDiscount: parseCop(commercialDiscount), weightAdjust: wAdj,
-              paymentMethod, dueDate: paymentMethod === 'credito' && dueDate ? dueDate : undefined,
+              paymentMethod: isInventory ? 'contado' : paymentMethod,
+              dueDate: !isInventory && paymentMethod === 'credito' && dueDate ? dueDate : undefined,
               userId: user!.id, userName: user!.name,
             })
-            toast('success', 'Compra guardada · stock y costo promedio actualizados')
+            toast('success', isInventory ? 'Entrada de inventario guardada · stock y costo actualizados' : 'Compra guardada · stock y costo promedio actualizados')
             onClose()
           }}
         >
@@ -271,22 +377,27 @@ function NewPurchaseSheet({ products, suppliers, tenantId, locationId, onClose }
             ) : (
               <select className="input" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
                 <option value="">Seleccione…</option>
+                <option value={INVENTORY}>📦 Inventario (entrada sin proveedor)</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             )}
           </div>
           <div>
             <label className="label">No. Factura proveedor</label>
-            <input className="input" value={supplierInvoice} onChange={(e) => setSupplierInvoice(e.target.value)} placeholder="Opcional" />
+            <input className="input" value={supplierInvoice} onChange={(e) => setSupplierInvoice(e.target.value)} placeholder={isInventory ? 'No aplica' : 'Opcional'} disabled={isInventory} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="label">Forma de pago</label>
-            <select className="input" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as any)}>
-              <option value="contado">Contado</option>
-              <option value="credito">A crédito (deuda)</option>
-            </select>
+            {isInventory ? (
+              <div className="input flex items-center text-slate-400">Sin pago (entrada propia)</div>
+            ) : (
+              <select className="input" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as any)}>
+                <option value="contado">Contado</option>
+                <option value="credito">A crédito (deuda)</option>
+              </select>
+            )}
           </div>
           <div>
             <label className="label">Descuento comercial</label>
@@ -304,7 +415,7 @@ function NewPurchaseSheet({ products, suppliers, tenantId, locationId, onClose }
               <input className="input" inputMode="numeric" value={weightAdjust} onChange={(e) => setWeightAdjust(e.target.value)} placeholder="$ 0" />
             </div>
           </div>
-          {paymentMethod === 'credito' && (
+          {!isInventory && paymentMethod === 'credito' && (
             <div>
               <label className="label">Fecha de pago</label>
               <input className="input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
@@ -359,7 +470,11 @@ function NewPurchaseSheet({ products, suppliers, tenantId, locationId, onClose }
           {wAdj !== 0 && <div className="flex justify-between text-slate-500"><span>Ajuste al peso</span><span>{wAdj > 0 ? '+' : ''}{cop(wAdj)}</span></div>}
           <div className="flex justify-between border-t border-slate-200 pt-1 text-base font-bold"><span>Total</span><span className="text-brand-700">{cop(total)}</span></div>
         </div>
-        <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500">Al guardar: suma al inventario, actualiza el costo promedio y el último proveedor. Si es a crédito, suma a la deuda del proveedor.</p>
+        <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800/60">
+          {isInventory
+            ? 'Entrada de inventario propio: suma al stock y actualiza el costo promedio. No crea deuda ni cambia el proveedor del producto.'
+            : 'Al guardar: suma al inventario, actualiza el costo promedio y el último proveedor. Si es a crédito, suma a la deuda del proveedor.'}
+        </p>
       </div>
     </Sheet>
   )

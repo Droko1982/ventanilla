@@ -15,6 +15,20 @@ export default defineConfig(({ command }) => ({
       '@': path.resolve(__dirname, 'src'),
     },
   },
+  build: {
+    // Separa las librerías grandes en chunks propios: se cachean entre
+    // despliegues (casi no cambian) y aligeran el bundle principal.
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-dexie': ['dexie', 'dexie-react-hooks'],
+          'vendor-charts': ['recharts'],
+          'vendor-qrcode': ['qrcode'],
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Html5Qrcode } from 'html5-qrcode'
+import type { Html5Qrcode } from 'html5-qrcode'
 import { Sheet } from './Sheet'
 
 // Escaneo con la CÁMARA del celular (código de barras o QR).
@@ -24,6 +24,9 @@ export function Scanner({
 
     const start = async () => {
       try {
+        // Carga la librería de cámara solo al abrir el escáner (fuera del arranque).
+        const { Html5Qrcode } = await import('html5-qrcode')
+        if (cancelled) return
         const scanner = new Html5Qrcode(regionId, { verbose: false })
         scannerRef.current = scanner
         await scanner.start(
