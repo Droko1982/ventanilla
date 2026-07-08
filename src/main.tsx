@@ -10,11 +10,16 @@ import App from './App'
 import './index.css'
 import { isCloudConfigured } from './data/api'
 import { initTheme } from './lib/theme'
+import { requestPersistentStorage } from './lib/backup'
 
 // Carga los datos de demo la primera vez y arranca la app.
 // Usamos HashRouter para que el refresco de página funcione en GitHub Pages.
 async function boot() {
   initTheme() // aplica modo claro/oscuro antes de pintar
+  // Pide al navegador que NO borre los datos locales (los datos viven en este
+  // dispositivo). Sin backend, es la mejor protección contra pérdida por purga
+  // del navegador. No bloquea el arranque.
+  requestPersistentStorage().catch(() => {})
   // El seed (datos de ejemplo) y la nube se cargan bajo demanda para no pesar
   // en el bundle principal (arranque más liviano en celular).
   // Solo sembramos el demo en equipos SIN nube. Una cuenta real conectada

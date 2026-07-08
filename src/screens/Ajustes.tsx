@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTenant, useLocations } from '@/hooks/data'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
@@ -14,6 +14,7 @@ import { cop } from '@/lib/money'
 import { fmtDate } from '@/lib/format'
 import { billingBreakdown } from '@/lib/billing'
 import { uid, randomPin } from '@/lib/id'
+import { markBackupDone, daysSinceBackup, isStoragePersisted } from '@/lib/backup'
 import { useSession } from '@/store/session'
 import { drawerSupported, drawerLinked, connectDrawer, unlinkDrawer, openCashDrawer, drawerMessage } from '@/lib/cashDrawer'
 import { scaleSupported, scaleLinked, connectScale, unlinkScale, readWeightOnce, scaleMessage } from '@/lib/scale'
@@ -35,6 +36,11 @@ export default function Ajustes() {
   const [empEdit, setEmpEdit] = useState<User | null>(null)
   const [empAdd, setEmpAdd] = useState(false)
   const [dianOpen, setDianOpen] = useState(false)
+  const [persisted, setPersisted] = useState(false)
+  const [backupInfo, setBackupInfo] = useState<{ days: number | null; persisted: boolean }>({ days: daysSinceBackup(), persisted: false })
+  useEffect(() => {
+    isStoragePersisted().then((p) => { setPersisted(p); setBackupInfo((b) => ({ ...b, persisted: p })) })
+  }, [])
 
   async function doExport() {
     const json = await exportAllData()
@@ -43,6 +49,8 @@ export default function Ajustes() {
     a.href = url
     a.download = 'ventanilla-respaldo.json'
     a.click()
+    markBackupDone()
+    setBackupInfo({ days: daysSinceBackup(), persisted })
     toast('success', 'Respaldo descargado')
   }
   function doImport(e: React.ChangeEvent<HTMLInputElement>) {
@@ -237,6 +245,34 @@ export default function Ajustes() {
       {/* Datos y respaldo */}
       <Section title="Datos y respaldo">
         <div className="space-y-2">
+          {/* Aviso: los datos viven solo en este dispositivo. */}
+          {(() => {
+            const days = backupInfo.days
+            const stale = days == null || days >= 7
+            return (
+              <div
+                className={
+                  'rounded-lg px-3 py-2 text-xs ' +
+                  (stale
+                    ? 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300'
+                    : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300')
+                }
+              >
+                {days == null
+                  ? '⚠️ Aún no has descargado ningún respaldo. Tus datos viven solo en este dispositivo.'
+                  : days === 0
+                    ? '✅ Respaldo descargado hoy.'
+                    : stale
+                      ? `⚠️ Tu último respaldo fue hace ${days} días. Descarga uno nuevo.`
+                      : `✅ Último respaldo hace ${days} ${days === 1 ? 'día' : 'días'}.`}
+                <div className="mt-1 opacity-80">
+                  {backupInfo.persisted
+                    ? '🔒 El navegador protege tus datos (almacenamiento persistente activo).'
+                    : '🛡️ Aún así, descarga un respaldo con frecuencia: el navegador podría borrar los datos al liberar espacio.'}
+                </div>
+              </div>
+            )
+          })()}
           <button onClick={doExport} className="btn btn-secondary w-full">
             ⬇️ Exportar respaldo (.json)
           </button>
@@ -246,6 +282,7 @@ export default function Ajustes() {
           </label>
           <p className="text-xs text-slate-400">
             Guarda o restaura todos los datos del dispositivo (productos, ventas, clientes, caja…).
+            Guarda el archivo en tu correo o en una USB para no perderlo.
           </p>
         </div>
       </Section>
