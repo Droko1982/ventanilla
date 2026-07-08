@@ -45,6 +45,9 @@ export interface Tenant {
   commissionPct?: number // % de comisión por vendedor (para reportes)
   autoReorder?: boolean // reabastecimiento automático: WhatsApp al proveedor al bajar el stock
   autoOpenDrawer?: boolean // abrir el cajón monedero automáticamente en ventas en efectivo
+  // Etiquetas de báscula: la balanza imprime un EAN-13 con el peso (o el precio)
+  // incrustado. Ej. "2 CCCCCC VVVVV D": prefijo 2 + código de producto + valor + control.
+  scaleLabel?: { enabled?: boolean; prefix?: string; embeds?: 'peso' | 'precio'; itemDigits?: number }
   // Pagos Bre-B (sistema interoperable del Banco de la República)
   breBKey?: string // la "llave" del comercio (celular, cédula, correo o alfanumérica)
   breBKeyType?: 'celular' | 'cedula' | 'correo' | 'alfanumerica'
@@ -310,6 +313,7 @@ export interface Customer {
   barrio?: string
   city?: string
   creditBalance: number // saldo de fiado pendiente
+  creditLimit?: number // cupo máximo de fiado (0/undefined = sin tope). Avisa al superarlo.
   totalSpent: number
   points: number // puntos de fidelización acumulados
   creditSince?: string // desde cuándo debe (para la antigüedad de la deuda)

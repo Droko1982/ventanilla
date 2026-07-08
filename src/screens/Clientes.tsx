@@ -178,6 +178,12 @@ function CustomerDetail({ customer, onClose }: { customer: Customer; onClose: ()
     return { n, avg, last }
   }, [sales])
 
+  // Estado de cuenta: movimientos de fiado (fía +) y abonos (−), más recientes primero.
+  const movements = useLiveQuery(async () => {
+    const all = await db.creditMovements.filter((m) => m.customerId === customer.id).toArray()
+    return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 30)
+  }, [customer.id])
+
   return (
     <Sheet open onClose={onClose} title={customer.name}>
       <div className="space-y-4">
@@ -207,6 +213,33 @@ function CustomerDetail({ customer, onClose }: { customer: Customer; onClose: ()
           {(customer.points ?? 0) > 0 && <p>⭐ Puntos de fidelización: {customer.points}</p>}
           {stats.last && <p>🕒 Última compra: {fmtDate(stats.last)}</p>}
         </div>
+
+        {/* Cupo de fiado (editable) */}
+        <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-2.5">
+          <span className="flex-1 text-sm text-slate-600">Cupo de fiado</span>
+          <input
+            className="input w-32 py-1.5 text-right text-sm"
+            inputMode="numeric"
+            defaultValue={customer.creditLimit ? String(customer.creditLimit) : ''}
+            placeholder="sin tope"
+            onBlur={async (e) => { await db.customers.update(customer.id, { creditLimit: parseCop(e.target.value) || undefined }); toast('success', 'Cupo actualizado') }}
+          />
+        </div>
+
+        {/* Estado de cuenta (movimientos de fiado y abonos) */}
+        {(movements?.length ?? 0) > 0 && (
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-600">Estado de cuenta (fiado)</p>
+            <div className="space-y-1">
+              {movements!.map((m) => (
+                <div key={m.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-1.5 text-sm">
+                  <span className="text-slate-500">{m.type === 'abono' ? '💵 Abono' : '📒 Fiado'} · {fmtDate(m.createdAt)}</span>
+                  <span className={`font-semibold ${m.delta < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{m.delta < 0 ? '−' : '+'}{cop(Math.abs(m.delta))}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {customer.creditBalance > 0 && (
           <>
@@ -249,6 +282,7 @@ function CustomerForm({ tenantId, onClose }: { tenantId: string; onClose: () => 
   const [address, setAddress] = useState('')
   const [barrio, setBarrio] = useState('')
   const [city, setCity] = useState('')
+  const [creditLimit, setCreditLimit] = useState('')
   return (
     <Sheet
       open
@@ -266,6 +300,7 @@ function CustomerForm({ tenantId, onClose }: { tenantId: string; onClose: () => 
               address: address.trim() || undefined,
               barrio: barrio.trim() || undefined,
               city: city.trim() || undefined,
+              creditLimit: parseCop(creditLimit) || undefined,
               creditBalance: 0, totalSpent: 0, points: 0, createdAt: new Date().toISOString(),
             })
             toast('success', 'Cliente creado')
@@ -287,6 +322,11 @@ function CustomerForm({ tenantId, onClose }: { tenantId: string; onClose: () => 
         <div className="grid grid-cols-2 gap-2">
           <div><label className="label">Barrio</label><input className="input" value={barrio} onChange={(e) => setBarrio(e.target.value)} /></div>
           <div><label className="label">Ciudad</label><input className="input" value={city} onChange={(e) => setCity(e.target.value)} /></div>
+        </div>
+        <div>
+          <label className="label">Cupo de fiado (opcional)</label>
+          <input className="input" inputMode="numeric" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="$ 0 = sin tope" />
+          <p className="mt-1 text-xs text-slate-400">Al fiar por encima de este monto, el POS avisa antes de continuar.</p>
         </div>
       </div>
     </Sheet>

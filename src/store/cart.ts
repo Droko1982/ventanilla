@@ -48,10 +48,22 @@ export interface SaleMeta {
   discountReason?: string
 }
 
+// Venta en espera (cuenta guardada): el cajero deja una venta a medias y atiende
+// a otro cliente, luego la retoma. Se guardan varias.
+export interface ParkedSale {
+  id: string
+  label: string
+  lines: CartLine[]
+  globalDiscount: number
+  meta: SaleMeta
+  at: number
+}
+
 interface CartState {
   lines: CartLine[]
   globalDiscount: number
   meta: SaleMeta
+  parked: ParkedSale[]
   addProduct: (p: Product, qty?: number) => void
   addLine: (line: CartLine) => void
   setQty: (productId: string, qty: number) => void
@@ -60,6 +72,9 @@ interface CartState {
   setGlobalDiscount: (d: number) => void
   setMeta: (m: Partial<SaleMeta>) => void
   clear: () => void
+  park: (label: string) => void
+  resume: (id: string) => void
+  removePark: (id: string) => void
 }
 
 // Persistimos el carrito en localStorage: si se recarga la página o se corta la
@@ -68,6 +83,7 @@ export const useCart = create<CartState>()(persist((set) => ({
   lines: [],
   globalDiscount: 0,
   meta: {},
+  parked: [],
 
   addProduct: (p, qty) =>
     set((s) => {
@@ -131,9 +147,23 @@ export const useCart = create<CartState>()(persist((set) => ({
   setGlobalDiscount: (d) => set({ globalDiscount: Math.max(0, d) }),
   setMeta: (m) => set((s) => ({ meta: { ...s.meta, ...m } })),
   clear: () => set({ lines: [], globalDiscount: 0, meta: {} }),
+  park: (label) => set((s) => {
+    if (!s.lines.length) return s
+    const id = 'park_' + Date.now() + '_' + Math.round(Math.random() * 1e6)
+    return {
+      parked: [...s.parked, { id, label: label.trim() || 'Cuenta', lines: s.lines, globalDiscount: s.globalDiscount, meta: s.meta, at: Date.now() }],
+      lines: [], globalDiscount: 0, meta: {},
+    }
+  }),
+  resume: (id) => set((s) => {
+    const p = s.parked.find((x) => x.id === id)
+    if (!p) return s
+    return { lines: p.lines, globalDiscount: p.globalDiscount, meta: p.meta, parked: s.parked.filter((x) => x.id !== id) }
+  }),
+  removePark: (id) => set((s) => ({ parked: s.parked.filter((x) => x.id !== id) })),
 }), {
   name: 'ventanilla-cart',
-  partialize: (s) => ({ lines: s.lines, globalDiscount: s.globalDiscount, meta: s.meta }),
+  partialize: (s) => ({ lines: s.lines, globalDiscount: s.globalDiscount, meta: s.meta, parked: s.parked }),
 }))
 
 // Cálculos derivados del carrito.

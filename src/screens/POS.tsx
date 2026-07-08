@@ -25,6 +25,7 @@ import { recordSale, adjustChangeOwed, createRemision } from '@/data/repo'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { receiptText, printReceipt } from '@/lib/receipt'
+import { parseScaleLabel, findByScaleItem } from '@/lib/scaleLabel'
 import { btPrint, btPrintSupported } from '@/lib/btprint'
 import { DaySalesSheet } from '@/components/DaySalesSheet'
 import { openCashDrawer } from '@/lib/cashDrawer'
@@ -57,6 +58,7 @@ export default function POS() {
   const [scanOpen, setScanOpen] = useState(false)
   const [weightProduct, setWeightProduct] = useState<Product | null>(null)
   const [cartOpen, setCartOpen] = useState(false)
+  const [parkedOpen, setParkedOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
   const [quickAdd, setQuickAdd] = useState(false)
   const [scanCreateCode, setScanCreateCode] = useState<string | undefined>()
@@ -161,10 +163,33 @@ export default function POS() {
     [cart, stockMap],
   )
 
+  // Etiqueta de báscula: si el código trae peso/precio incrustado, agrega el
+  // producto pesado directamente (sin abrir el diálogo de peso manual).
+  const tryScaleLabel = useCallback(
+    (code: string): boolean => {
+      const parsed = parseScaleLabel(code, tenant?.scaleLabel)
+      if (!parsed) return false
+      const p = findByScaleItem(products ?? [], parsed.itemCode, tenant?.scaleLabel?.prefix)
+      if (!p) { toast('error', `Etiqueta de báscula: producto ${parsed.itemCode} no encontrado`); return true }
+      let weight = parsed.weightKg
+      if (weight == null && parsed.price != null) weight = p.price > 0 ? parsed.price / p.price : 0
+      if (p.unit === 'peso' && weight && weight > 0) {
+        cart.addProduct(p, Number(weight.toFixed(3)))
+        toast('success', `${p.name} · ${weight.toFixed(3)} kg`)
+      } else {
+        cart.addProduct(p, 1)
+        toast('success', `${p.name} agregado`)
+      }
+      return true
+    },
+    [tenant, products, cart],
+  )
+
   const handleScan = useCallback(
     (code: string) => {
-      const found = (products ?? []).find((p) => p.barcode === code || p.internalCode === code)
       setScanOpen(false)
+      if (tryScaleLabel(code)) return
+      const found = (products ?? []).find((p) => p.barcode === code || p.internalCode === code)
       if (found) {
         if (found.active === false) { toast('error', `${found.name} está inactivo`); return }
         addToCart(found)
@@ -176,7 +201,7 @@ export default function POS() {
         toast('error', `Código ${code} no está registrado`)
       }
     },
-    [products, addToCart, canManage],
+    [products, addToCart, canManage, tryScaleLabel],
   )
 
   // Resuelve un código/nombre escrito en el modo mostrador y lo agrega.
@@ -184,6 +209,7 @@ export default function POS() {
     (code: string, qty: number) => {
       const q = code.trim()
       if (!q) return
+      if (tryScaleLabel(q)) return
       const ql = q.toLowerCase()
       const found =
         (products ?? []).find((p) => p.barcode === q || p.internalCode === q || p.internalCode?.toLowerCase() === ql) ??
@@ -201,7 +227,7 @@ export default function POS() {
       if (found.unit === 'peso') setWeightProduct(found)
       else { cart.addProduct(found, qty); toast('success', `${found.name} agregado`) }
     },
-    [products, canManage, cart, stockMap],
+    [products, canManage, cart, stockMap, tryScaleLabel],
   )
 
   // Lector físico USB/Bluetooth siempre activo en el POS
@@ -486,9 +512,29 @@ export default function POS() {
         <EmptyState emoji="🔍" title="Sin resultados" hint="Prueba otra búsqueda o agrega el producto." />
       )}
 
-      {/* Barra fija del carrito: revisar 🛒 · efectivo rápido 💵 · Cobrar (elige método) */}
+      {/* Acceso a cuentas en espera (visible aunque el carrito esté vacío) */}
+      {cart.parked.length > 0 && (
+        <button
+          onClick={() => setParkedOpen(true)}
+          className={`fixed ${count > 0 ? 'bottom-[112px]' : 'bottom-[70px]'} left-3 z-30 flex items-center gap-2 rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-white shadow-lg active:scale-95`}
+        >
+          ⏳ {cart.parked.length} en espera
+        </button>
+      )}
+
+      {/* Barra fija del carrito: en espera ⏸️ · revisar 🛒 · efectivo rápido 💵 · Cobrar */}
       {count > 0 && (
         <div className="fixed inset-x-0 bottom-[60px] z-30 mx-auto flex max-w-3xl items-center gap-2 px-3">
+          <button
+            onClick={() => {
+              const label = window.prompt('Nombre para la cuenta en espera (ej. cliente o mesa):', '')
+              if (label !== null) { cart.park(label); toast('success', 'Cuenta guardada en espera') }
+            }}
+            title="Guardar esta venta en espera para atender a otro cliente"
+            className="flex shrink-0 items-center justify-center rounded-2xl bg-amber-500 px-4 py-3.5 text-white shadow-lg active:scale-95"
+          >
+            <span className="text-xl">⏸️</span>
+          </button>
           <button
             onClick={() => setCartOpen(true)}
             title="Ver / editar el carrito"
@@ -533,6 +579,8 @@ export default function POS() {
       )}
 
       <CartSheet open={cartOpen} canDiscount={canDiscount} onClose={() => setCartOpen(false)} onCheckout={() => { setCartOpen(false); setPayOpen(true) }} />
+
+      <ParkedSheet open={parkedOpen} onClose={() => setParkedOpen(false)} />
 
       {payOpen && (
         <PaymentSheet
@@ -823,6 +871,42 @@ function ManualItemSheet({ onClose, onAdd }: { onClose: () => void; onAdd: (line
             </select>
           </div>
         </div>
+      </div>
+    </Sheet>
+  )
+}
+
+// --- Cuentas en espera: retomar o eliminar ventas guardadas ----------------
+function ParkedSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const cart = useCart()
+  if (!open) return null
+  return (
+    <Sheet open={open} onClose={onClose} title="Cuentas en espera">
+      <div className="space-y-2">
+        {cart.parked.length === 0 && <p className="py-6 text-center text-sm text-slate-400">No hay cuentas en espera.</p>}
+        {cart.parked.map((p) => {
+          const t = cartTotal(p.lines, p.globalDiscount)
+          const n = p.lines.reduce((s, l) => s + (l.unit === 'peso' ? 1 : l.qty), 0)
+          return (
+            <div key={p.id} className="flex items-center gap-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold text-slate-700 dark:text-slate-200">{p.label}</p>
+                <p className="text-xs text-slate-400">{n} ítem(s) · {cop(t)}</p>
+              </div>
+              <button
+                onClick={() => {
+                  if (cart.lines.length && !window.confirm('Hay una venta en curso que se perderá al retomar esta cuenta. ¿Continuar? (guarda la actual en espera primero si la necesitas)')) return
+                  cart.resume(p.id)
+                  onClose()
+                }}
+                className="btn btn-primary px-3 py-2 text-sm"
+              >
+                Retomar
+              </button>
+              <button onClick={() => cart.removePark(p.id)} className="px-1 text-rose-400" title="Eliminar cuenta">✕</button>
+            </div>
+          )
+        })}
       </div>
     </Sheet>
   )
@@ -1364,6 +1448,15 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
     if (submitting.current) return
     const payments = buildPayments()
     if (!payments) return
+    // Cupo de fiado: avisa si la parte fiada dejaría al cliente por encima de su tope.
+    const fiadoNow = payments.filter((p) => p.method === 'fiado').reduce((s, p) => s + p.amount, 0)
+    if (fiadoNow > 0 && selectedCustomer?.creditLimit && selectedCustomer.creditLimit > 0) {
+      const after = (selectedCustomer.creditBalance || 0) + fiadoNow
+      if (after > selectedCustomer.creditLimit &&
+        !window.confirm(`${selectedCustomer.name} quedaría debiendo ${cop(after)}, por encima de su cupo de ${cop(selectedCustomer.creditLimit)}.\n\n¿Fiar de todas formas?`)) {
+        return
+      }
+    }
     submitting.current = true
     try {
       await onConfirm(payments, {

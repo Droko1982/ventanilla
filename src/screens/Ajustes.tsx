@@ -224,6 +224,11 @@ export default function Ajustes() {
         <ScaleSection />
       </Section>
 
+      {/* Etiquetas de báscula (código con peso/precio incrustado) */}
+      <Section title="Etiquetas de báscula">
+        <ScaleLabelSection tenant={tenant} tenantId={tenantId} />
+      </Section>
+
       {/* Nube / multi-dispositivo */}
       <Section title="Nube (multi-dispositivo)">
         <CloudSection />
@@ -382,6 +387,54 @@ function BreBSection({ tenant, tenantId }: { tenant: Tenant; tenantId: string })
           <QRCode value={breBPayload({ breBKey: key })} size={160} />
           <p className="mt-2 text-sm font-bold text-slate-700">{key.trim()}</p>
         </div>
+      )}
+    </div>
+  )
+}
+
+function ScaleLabelSection({ tenant, tenantId }: { tenant: Tenant; tenantId: string }) {
+  const cfg = tenant.scaleLabel ?? {}
+  const enabled = cfg.enabled ?? false
+  const [prefix, setPrefix] = useState(cfg.prefix ?? '2')
+  const [embeds, setEmbeds] = useState<'peso' | 'precio'>(cfg.embeds ?? 'peso')
+  const [itemDigits, setItemDigits] = useState(String(cfg.itemDigits ?? 6))
+
+  async function persist(patch: Partial<{ enabled: boolean; prefix: string; embeds: 'peso' | 'precio'; itemDigits: number }>) {
+    await db.tenants.update(tenantId, {
+      scaleLabel: { enabled, prefix: prefix.trim() || '2', embeds, itemDigits: Math.max(1, parseInt(itemDigits || '6', 10)) || 6, ...patch },
+    })
+  }
+
+  return (
+    <div className="space-y-3">
+      <label className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
+        <input type="checkbox" checked={enabled} onChange={(e) => { persist({ enabled: e.target.checked }); toast('success', e.target.checked ? 'Etiquetas de báscula activadas' : 'Desactivadas') }} className="h-5 w-5" />
+        <span className="text-sm text-slate-600">Leer etiquetas de báscula (código de barras con peso o precio incrustado)</span>
+      </label>
+      {enabled && (
+        <>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="label">Prefijo</label>
+              <input className="input" inputMode="numeric" value={prefix} onChange={(e) => setPrefix(e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Dígitos código</label>
+              <input className="input" inputMode="numeric" value={itemDigits} onChange={(e) => setItemDigits(e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Incrusta</label>
+              <select className="input" value={embeds} onChange={(e) => setEmbeds(e.target.value as 'peso' | 'precio')}>
+                <option value="peso">Peso (g)</option>
+                <option value="precio">Precio ($)</option>
+              </select>
+            </div>
+          </div>
+          <button onClick={() => { persist({}); toast('success', 'Configuración de báscula guardada') }} className="btn btn-primary w-full text-sm">Guardar configuración</button>
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            La balanza imprime un código como <b>{prefix || '2'} + código del producto + {embeds === 'peso' ? 'peso' : 'precio'} + control</b>. Ponle a cada producto de granel ese mismo código (en su código de barras o interno). Al escanear la etiqueta, el POS agrega el producto con su {embeds === 'peso' ? 'peso' : 'precio'} automáticamente.
+          </p>
+        </>
       )}
     </div>
   )
