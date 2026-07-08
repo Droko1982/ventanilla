@@ -130,9 +130,15 @@ export const useCart = create<CartState>((set) => ({
   clear: () => set({ lines: [], globalDiscount: 0, meta: {} }),
 }))
 
-// Cálculos derivados del carrito
+// Cálculos derivados del carrito.
+// Redondeamos CADA línea a peso entero (COP) y luego sumamos, para que la suma de
+// las líneas que ve el cajero cuadre exactamente con el total (sin descuadres de
+// 1 peso por decimales, p. ej. con dos productos a granel).
+export function lineTotal(l: CartLine): number {
+  return Math.round(l.unitPrice * l.qty - l.lineDiscount - (l.promoSaving ?? 0))
+}
 export function cartSubtotal(lines: CartLine[]): number {
-  return lines.reduce((s, l) => s + l.unitPrice * l.qty - l.lineDiscount - (l.promoSaving ?? 0), 0)
+  return lines.reduce((s, l) => s + lineTotal(l), 0)
 }
 export function cartTotal(lines: CartLine[], globalDiscount: number): number {
   return Math.max(0, Math.round(cartSubtotal(lines) - globalDiscount))

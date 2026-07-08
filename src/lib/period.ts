@@ -68,6 +68,13 @@ export function salesInPeriod(sales: Sale[], p: Period): Sale[] {
   })
 }
 
+// Día calendario del día CONTABLE de la venta (consistente con caja/Z/reportes),
+// no la hora cruda de creación. Así las barras cuadran con el total del período.
+function saleDate(s: Sale): Date {
+  const [y, m, d] = saleDay(s).split('-').map(Number)
+  return new Date(y, (m || 1) - 1, d || 1)
+}
+
 /** Serie temporal con los "baldes" adecuados según la granularidad. */
 export function periodSeries(sales: Sale[], p: Period): Bucket[] {
   const inP = salesInPeriod(sales, p)
@@ -78,12 +85,14 @@ export function periodSeries(sales: Sale[], p: Period): Bucket[] {
       buckets[h].revenue += s.total
       buckets[h].count++
     }
-    return buckets.filter((b) => Number(b.label) >= 6 && Number(b.label) <= 22)
+    // Muestra el horario comercial (6–22 h) pero NUNCA oculta una hora con ventas,
+    // para que la suma de las barras sea igual al total del día.
+    return buckets.filter((b, h) => (h >= 6 && h <= 22) || b.count > 0)
   }
   if (p.granularity === 'semana') {
     const buckets: Bucket[] = DIAS.map((d) => ({ label: d, revenue: 0, count: 0 }))
     for (const s of inP) {
-      const idx = (new Date(s.createdAt).getDay() + 6) % 7
+      const idx = (saleDate(s).getDay() + 6) % 7
       buckets[idx].revenue += s.total
       buckets[idx].count++
     }
@@ -93,7 +102,7 @@ export function periodSeries(sales: Sale[], p: Period): Bucket[] {
     const days = new Date(p.end).getDate() === 1 ? new Date(new Date(p.end).getTime() - 86400000).getDate() : 31
     const buckets: Bucket[] = Array.from({ length: days }, (_, i) => ({ label: `${i + 1}`, revenue: 0, count: 0 }))
     for (const s of inP) {
-      const day = new Date(s.createdAt).getDate()
+      const day = saleDate(s).getDate()
       if (buckets[day - 1]) {
         buckets[day - 1].revenue += s.total
         buckets[day - 1].count++
@@ -104,7 +113,7 @@ export function periodSeries(sales: Sale[], p: Period): Bucket[] {
   // anio → por mes
   const buckets: Bucket[] = MESES.map((m) => ({ label: m, revenue: 0, count: 0 }))
   for (const s of inP) {
-    const mo = new Date(s.createdAt).getMonth()
+    const mo = saleDate(s).getMonth()
     buckets[mo].revenue += s.total
     buckets[mo].count++
   }

@@ -16,11 +16,11 @@ export function UpdateBanner() {
 
   if (!needRefresh) return null
   return (
-    <div className="fixed inset-x-0 bottom-20 z-[200] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-brand-200 bg-white px-4 py-3 shadow-2xl sm:bottom-6">
+    <div className="fixed inset-x-0 bottom-20 z-[200] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-brand-200 bg-white px-4 py-3 shadow-2xl dark:border-slate-700 dark:bg-slate-800 sm:bottom-6">
       <span className="text-xl">⬆️</span>
       <div className="flex-1 text-sm">
-        <p className="font-semibold text-slate-700">Hay una versión nueva</p>
-        <p className="text-xs text-slate-500">Actualiza cuando quieras; no pierdes lo que estás haciendo.</p>
+        <p className="font-semibold text-slate-700 dark:text-slate-100">Hay una versión nueva</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">Actualiza cuando quieras; no pierdes lo que estás haciendo.</p>
       </div>
       <button onClick={() => updateServiceWorker(true)} className="btn btn-primary px-4 py-2 text-sm">
         Actualizar

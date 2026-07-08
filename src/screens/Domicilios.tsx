@@ -21,6 +21,17 @@ const statusMeta: Record<DomicilioStatus, { label: string; chip: string }> = {
   cancelado: { label: 'Cancelado', chip: 'bg-rose-100 text-rose-700' },
 }
 
+// Mensaje de WhatsApp al cliente según el estado real del pedido.
+function avisoMsg(status: DomicilioStatus, name: string): string {
+  const n = name || 'cliente'
+  switch (status) {
+    case 'pendiente': return `Hola ${n}, estamos preparando tu pedido 📦`
+    case 'en_camino': return `Hola ${n}, tu pedido ya va en camino 🛵`
+    case 'entregado': return `Hola ${n}, tu pedido fue entregado ✓ ¡Gracias por tu compra!`
+    case 'cancelado': return `Hola ${n}, tu pedido fue cancelado. Cualquier duda, escríbenos.`
+  }
+}
+
 export default function Domicilios() {
   const tenantId = useSession((s) => s.tenantId)!
   const locationId = useActiveLocationId()
@@ -179,7 +190,7 @@ function DomicilioDetail({ dom, onClose }: { dom: Domicilio; onClose: () => void
 
         <div className="grid grid-cols-2 gap-2">
           <a href={mapsUrl} target="_blank" rel="noreferrer" className="btn btn-secondary text-sm">🗺️ Ver en mapa</a>
-          {dom.phone && <a href={waLink(dom.phone, `Hola ${dom.customerName}, tu pedido va en camino 🛵`)} target="_blank" rel="noreferrer" className="btn btn-success text-sm"><Icon name="whatsapp" className="h-4 w-4" /> Avisar</a>}
+          {dom.phone && <a href={waLink(dom.phone, avisoMsg(dom.status, dom.customerName))} target="_blank" rel="noreferrer" className="btn btn-success text-sm"><Icon name="whatsapp" className="h-4 w-4" /> Avisar</a>}
         </div>
 
         <div className="space-y-1.5 rounded-xl bg-slate-50 p-3 text-sm">

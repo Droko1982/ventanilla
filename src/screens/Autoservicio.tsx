@@ -130,7 +130,7 @@ export default function Autoservicio() {
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-slate-900/95">
           <p className="text-lg">PIN del cajero para salir</p>
           <input autoFocus type="password" inputMode="numeric" value={pinInput}
-            onChange={(e) => setPinInput(e.target.value)}
+            onChange={(e) => setPinInput(e.target.value)} aria-label="PIN del cajero"
             className="w-40 rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-center text-2xl tracking-widest" />
           <div className="flex gap-2">
             <button onClick={() => { setExitPin(null); setPinInput('') }} className="rounded-lg bg-white/10 px-4 py-2">Cancelar</button>
@@ -153,7 +153,7 @@ export default function Autoservicio() {
         </button>
         <input
           value={search} onChange={(e) => setSearch(e.target.value)}
-          placeholder="…o búscalo por nombre"
+          placeholder="…o búscalo por nombre" aria-label="Buscar producto por nombre"
           className="mb-2 w-full rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-white placeholder:text-white/40"
         />
         {results.length > 0 && (

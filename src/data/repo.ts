@@ -122,8 +122,13 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
     0,
   )
   const baseAfterDiscount = Math.max(0, subtotal - input.discount)
-  // Canje de puntos: cada punto vale `redeemVal` pesos, tope al total de la venta
-  const redeemPoints = loyaltyOn && input.customerId ? Math.max(0, Math.floor(input.redeemPoints ?? 0)) : 0
+  // Canje de puntos: cada punto vale `redeemVal` pesos. Se topa al SALDO REAL del
+  // cliente (no se puede canjear más de lo que tiene) y al total de la venta.
+  let redeemPoints = loyaltyOn && input.customerId ? Math.max(0, Math.floor(input.redeemPoints ?? 0)) : 0
+  if (redeemPoints > 0 && input.customerId) {
+    const cust = await db.customers.get(input.customerId)
+    redeemPoints = Math.min(redeemPoints, cust?.points ?? 0)
+  }
   const redeemDiscount = Math.min(redeemPoints * redeemVal, baseAfterDiscount)
   const total = Math.max(0, Math.round(baseAfterDiscount - redeemDiscount))
   // Red de seguridad: los pagos DEBEN sumar el total (tolerancia de $1 por redondeo).

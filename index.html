@@ -26,6 +26,14 @@
     <meta name="twitter:description" content="POS, inventario, caja y factura DIAN para tiendas en Colombia. Funciona sin internet." />
     <meta name="twitter:image" content="https://droko1982.github.io/ventanilla/og-image.jpg" />
     <title>Ventanilla — Ventas e Inventario</title>
+    <!-- Aplica el modo oscuro ANTES de pintar, para que no haya un parpadeo claro. -->
+    <script>
+      try {
+        var t = localStorage.getItem('ventanilla-theme');
+        if (t === 'dark' || (!t && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches))
+          document.documentElement.classList.add('dark');
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
