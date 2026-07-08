@@ -26,10 +26,18 @@
     <meta name="twitter:description" content="POS, inventario, caja y factura DIAN para tiendas en Colombia. Funciona sin internet." />
     <meta name="twitter:image" content="https://droko1982.github.io/ventanilla/og-image.jpg" />
     <title>Ventanilla — Ventas e Inventario</title>
-    <script type="module" crossorigin src="/ventanilla/assets/index-CKX6ZZvX.js"></script>
+    <!-- Aplica el modo oscuro ANTES de pintar, para que no haya un parpadeo claro. -->
+    <script>
+      try {
+        var t = localStorage.getItem('ventanilla-theme');
+        if (t === 'dark' || (!t && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches))
+          document.documentElement.classList.add('dark');
+      } catch (e) {}
+    </script>
+    <script type="module" crossorigin src="/ventanilla/assets/index-BaAZFali.js"></script>
     <link rel="modulepreload" crossorigin href="/ventanilla/assets/vendor-react-DLPumIxM.js">
     <link rel="modulepreload" crossorigin href="/ventanilla/assets/vendor-dexie-BBWTfmvu.js">
-    <link rel="stylesheet" crossorigin href="/ventanilla/assets/index-B_x0NwTK.css">
+    <link rel="stylesheet" crossorigin href="/ventanilla/assets/index-D_O-x9yu.css">
   <link rel="manifest" href="/ventanilla/manifest.webmanifest"></head>
   <body>
     <div id="root"></div>
