@@ -282,10 +282,14 @@ export default function Caja() {
           <button
             className="btn btn-primary btn-lg w-full"
             onClick={async () => {
-              await openCashSession({ tenantId, locationId, userId: user!.id, openingFloat: parseCop(base) })
-              toast('success', 'Caja abierta')
-              setBase('')
-              setOpenSheet(false)
+              try {
+                await openCashSession({ tenantId, locationId, userId: user!.id, openingFloat: parseCop(base) })
+                toast('success', 'Caja abierta')
+                setBase('')
+                setOpenSheet(false)
+              } catch (e) {
+                console.error(e); toast('error', 'No se pudo abrir la caja. Intenta de nuevo.')
+              }
             }}
           >
             Abrir con {cop(parseCop(base))}
@@ -306,7 +310,12 @@ export default function Caja() {
             className="btn btn-danger btn-lg w-full"
             onClick={async () => {
               if (!session) return
-              const cs = await closeCashSession({ sessionId: session.id, countedCash: countedNum, userId: user!.id, userName: user!.name })
+              let cs
+              try {
+                cs = await closeCashSession({ sessionId: session.id, countedCash: countedNum, userId: user!.id, userName: user!.name })
+              } catch (e) {
+                console.error(e); toast('error', 'No se pudo cerrar la caja. Intenta de nuevo.'); return
+              }
               if (cs)
                 toast(cs.difference === 0 ? 'success' : 'info', cs.difference === 0 ? 'Caja cuadrada ✓' : `Diferencia: ${cop(cs.difference!)}`)
               // Informe Z del día automático al cerrar (si está activado).
@@ -353,12 +362,16 @@ export default function Caja() {
           type={movSheet}
           onClose={() => setMovSheet(null)}
           onSubmit={async ({ amount, reason, isExpense }) => {
-            await addCashMovement({
-              tenantId, locationId, sessionId: session.id, type: movSheet,
-              amount, reason, isExpense, userId: user!.id, userName: user!.name,
-            })
-            toast('success', movSheet === 'ingreso' ? 'Ingreso registrado' : 'Egreso registrado')
-            setMovSheet(null)
+            try {
+              await addCashMovement({
+                tenantId, locationId, sessionId: session.id, type: movSheet,
+                amount, reason, isExpense, userId: user!.id, userName: user!.name,
+              })
+              toast('success', movSheet === 'ingreso' ? 'Ingreso registrado' : 'Egreso registrado')
+              setMovSheet(null)
+            } catch (e) {
+              console.error(e); toast('error', 'No se pudo registrar el movimiento. Intenta de nuevo.')
+            }
           }}
         />
       )}
