@@ -28,7 +28,7 @@ export default function Cartera() {
 
   const creditRems = useMemo(() => {
     const list = (remisiones ?? [])
-      .filter((r) => r.onCredit && r.status !== 'anulada' && r.total - (r.abonado ?? 0) > 0)
+      .filter((r) => r.onCredit && r.status === 'emitida' && r.total - (r.abonado ?? 0) > 0)
       .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? ''))
     if (tab === 'atrasadas') return list.filter((r) => r.dueDate && daysUntil(r.dueDate) < 0)
     return list

@@ -68,6 +68,16 @@ export default function POS() {
   const [displayOpen, setDisplayOpen] = useState(false)
   const [receipt, setReceipt] = useState<Sale | null>(null)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
+
+  // Reimprime el recibo de la última venta del local (desde el mostrador).
+  async function onPrintLast() {
+    if (!locationId || !tenant) return toast('error', 'Configura la tienda en Ajustes')
+    const rows = await db.sales.where('locationId').equals(locationId).filter((s) => s.status === 'completada').toArray()
+    const last = rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+    const loc = locations?.find((l) => l.id === locationId)
+    if (!last) return toast('info', 'Aún no hay ventas para imprimir')
+    if (loc) printReceipt(last, tenant, loc)
+  }
   // Candado anti-doble-venta: el ref bloquea sincrónicamente un segundo toque
   // antes de que React re-renderice; el estado deshabilita el botón visualmente.
   const processingRef = useRef(false)
@@ -333,6 +343,7 @@ export default function POS() {
           onPay={() => setPayOpen(true)}
           onScan={() => setScanOpen(true)}
           onManual={() => setManualOpen(true)}
+          onPrintLast={onPrintLast}
         />
       ) : (
         <>
@@ -819,7 +830,7 @@ function ManualItemSheet({ onClose, onAdd }: { onClose: () => void; onAdd: (line
 
 // --- Modo mostrador (formulario clásico tipo SEITEM) -----------------------
 function CounterEntry({
-  products, allProducts, customers, vendedores, canDiscount, docMode, setDocMode, onAddCode, onAddProduct, onPay, onScan, onManual,
+  products, allProducts, customers, vendedores, canDiscount, docMode, setDocMode, onAddCode, onAddProduct, onPay, onScan, onManual, onPrintLast,
 }: {
   products: Product[]
   allProducts: Product[]
@@ -833,6 +844,7 @@ function CounterEntry({
   onPay: () => void
   onScan: () => void
   onManual: () => void
+  onPrintLast: () => void
 }) {
   const cart = useCart()
   const subtotal = cartSubtotal(cart.lines)
@@ -885,6 +897,11 @@ function CounterEntry({
             : 'Mostrador 2 · Factura electrónica (DIAN). Elige el cliente y su documento al cobrar.'}
         </p>
       )}
+
+      {/* Reimprimir el recibo de la última venta sin salir del mostrador. */}
+      <button onClick={onPrintLast} className="btn btn-secondary w-full py-2 text-sm">
+        🖨️ Imprimir última venta
+      </button>
 
       <div className="grid grid-cols-2 gap-2">
         <div>

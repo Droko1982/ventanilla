@@ -27,6 +27,8 @@ export default function Documentos() {
   const products = useProducts()
   const sales = useScopeSales()
   const scopeIds = useScopeLocationIds()
+  const tenant = useTenant()
+  const locations = useLocations()
   const [tab, setTab] = useState<'facturas' | 'remisiones'>('facturas')
   const [newFactura, setNewFactura] = useState(false)
   const [newRemision, setNewRemision] = useState(false)
@@ -107,6 +109,19 @@ export default function Documentos() {
             <button onClick={() => setNewFactura(true)} className="btn btn-primary flex-1">
               <Icon name="plus" className="h-5 w-5" /> Nueva factura electrónica
             </button>
+            {facturas.length > 0 && tenant && (
+              <button
+                onClick={() => {
+                  const loc = locations?.find((l) => l.id === facturas[0].locationId)
+                  if (loc) printFactura(facturas[0], tenant, loc)
+                  else toast('error', 'No se encontró el local de la factura')
+                }}
+                className="btn btn-secondary px-3"
+                title={`Imprimir la última factura (${facturas[0].dianDocNumber ?? ''})`}
+              >
+                <Icon name="print" className="h-5 w-5" /> Última
+              </button>
+            )}
             <button onClick={exportFacturas} className="btn btn-secondary px-3" title="Exportar el registro de facturas a CSV (contabilidad / respaldo)">
               ⬇️ Exportar
             </button>

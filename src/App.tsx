@@ -10,6 +10,7 @@ import { getToken, getRole } from '@/data/api'
 import { AppLayout } from '@/components/AppLayout'
 import { ToastContainer } from '@/components/Toast'
 import { UpdateBanner } from '@/components/UpdateBanner'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Spinner } from '@/components/ui'
 
 // El POS y el Login se cargan de una vez (lo primero que usa un cajero).
@@ -79,6 +80,7 @@ export default function App() {
     <>
       <ToastContainer />
       <UpdateBanner />
+      <ErrorBoundary>
       <Suspense fallback={<Spinner label="Cargando…" />}>
         {!role ? (
           <Login />
@@ -89,6 +91,7 @@ export default function App() {
           getToken() && getRole() === 'superadmin' ? <SuperAdmin /> : <Login />
         ) : (
           <AppLayout>
+            <ErrorBoundary key={pathname}>
             <Routes>
               {/* Accesibles para cajero y dueño */}
               <Route path="/" element={<POS />} />
@@ -118,9 +121,11 @@ export default function App() {
               <Route path="/auditoria" element={<RequireAdmin><Auditoria /></RequireAdmin>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </ErrorBoundary>
           </AppLayout>
         )}
       </Suspense>
+      </ErrorBoundary>
     </>
   )
 }

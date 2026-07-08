@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { cop } from '@/lib/money'
+import { cop, kg } from '@/lib/money'
 import { subscribeCartView, type CartView } from '@/lib/customerScreen'
 
 // Pantalla del cliente (2º monitor, estilo supermercado/autoservicio): muestra
@@ -29,7 +29,7 @@ export default function PantallaCliente() {
               <div key={i} className="flex items-center justify-between border-b border-white/10 pb-3 text-2xl">
                 <span>
                   <span className="mr-2">{l.emoji}</span>{l.name}
-                  <span className="ml-2 text-white/40">{l.unit === 'peso' ? `${l.qty} kg` : `x${l.qty}`}</span>
+                  <span className="ml-2 text-white/40">{l.unit === 'peso' ? kg(l.qty) : `x${l.qty}`}</span>
                 </span>
                 <span className="font-bold tabular-nums">{cop(l.lineTotal)}</span>
               </div>

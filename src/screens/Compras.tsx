@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
-import { useActiveLocationId, useProducts, useSuppliers, useCurrentUser, useScopeLocationIds } from '@/hooks/data'
+import { useActiveLocationId, useProducts, useSuppliers, useCurrentUser, useScopeLocationIds, useLocations } from '@/hooks/data'
 import { recordPurchase, recordSupplierReturn, markPurchasePaid } from '@/data/repo'
 import { Sheet } from '@/components/Sheet'
 import { EmptyState, PageHeader } from '@/components/ui'
@@ -19,23 +19,32 @@ export default function Compras() {
   const products = useProducts()
   const suppliers = useSuppliers()
   const scopeIds = useScopeLocationIds()
+  const locations = useLocations()
   const [newOpen, setNewOpen] = useState(false)
   const [returnOpen, setReturnOpen] = useState(false)
   const [detail, setDetail] = useState<Purchase | null>(null)
   const [q, setQ] = useState('')
+  const [storeFilter, setStoreFilter] = useState('all')
 
   const purchases = useLiveQuery(
     () => (scopeIds.length ? db.purchases.where('locationId').anyOf(scopeIds).reverse().toArray() : []),
     [scopeIds.join(',')],
   )
 
+  // Tiendas visibles (para separar el historial de compras por local: cada
+  // tienda puede comprarle al proveedor a un precio distinto).
+  const scopeLocations = (locations ?? []).filter((l) => scopeIds.includes(l.id))
+  const multiStore = scopeLocations.length > 1
+  const locName = (id: string) => scopeLocations.find((l) => l.id === id)?.name ?? 'Local'
+
   const query = q.trim().toLowerCase()
   const filtered = (purchases ?? []).filter(
     (c) =>
-      !query ||
-      c.number.toLowerCase().includes(query) ||
-      c.supplierName.toLowerCase().includes(query) ||
-      (c.supplierInvoice ?? '').toLowerCase().includes(query),
+      (storeFilter === 'all' || c.locationId === storeFilter) &&
+      (!query ||
+        c.number.toLowerCase().includes(query) ||
+        c.supplierName.toLowerCase().includes(query) ||
+        (c.supplierInvoice ?? '').toLowerCase().includes(query)),
   )
 
   if (!locationId) return <EmptyState emoji="🏪" title="Sin local" hint="Selecciona un local arriba." />
@@ -54,13 +63,22 @@ export default function Compras() {
       </div>
 
       {(purchases?.length ?? 0) > 0 && (
-        <div className="mb-3">
+        <div className="mb-3 space-y-2">
           <input
             className="input"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Buscar factura por número, proveedor o No. de factura…"
           />
+          {/* Filtro por tienda: cada local puede comprar a distinto precio */}
+          {multiStore && (
+            <div className="no-scrollbar flex gap-2 overflow-x-auto">
+              <FilterChip active={storeFilter === 'all'} onClick={() => setStoreFilter('all')}>Todas las tiendas</FilterChip>
+              {scopeLocations.map((l) => (
+                <FilterChip key={l.id} active={storeFilter === l.id} onClick={() => setStoreFilter(l.id)}>{l.name}</FilterChip>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -76,7 +94,7 @@ export default function Compras() {
             </span>
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-slate-700 dark:text-slate-200">{c.number} · {c.supplierName}</p>
-              <p className="truncate text-xs text-slate-400">{fmtDateTime(c.createdAt)} · {c.items.length} productos</p>
+              <p className="truncate text-xs text-slate-400">{fmtDateTime(c.createdAt)}{multiStore ? ` · 🏪 ${locName(c.locationId)}` : ''} · {c.items.length} productos</p>
             </div>
             <div className="text-right">
               <p className="font-bold text-slate-700 dark:text-slate-200">{cop(c.total)}</p>
@@ -92,7 +110,7 @@ export default function Compras() {
         )}
       </div>
 
-      {detail && <PurchaseDetailSheet purchase={detail} onClose={() => setDetail(null)} />}
+      {detail && <PurchaseDetailSheet purchase={detail} storeName={multiStore ? locName(detail.locationId) : undefined} onClose={() => setDetail(null)} />}
 
       {newOpen && products && suppliers && (
         <NewPurchaseSheet
@@ -120,8 +138,23 @@ export default function Compras() {
 // Valor centinela: entrada de mercancía propia, sin proveedor ni deuda.
 const INVENTORY = '__inv__'
 
+function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+        active
+          ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200'
+          : 'border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
 // --- Ficha / historial de una factura de compra ----------------------------
-function PurchaseDetailSheet({ purchase, onClose }: { purchase: Purchase; onClose: () => void }) {
+function PurchaseDetailSheet({ purchase, storeName, onClose }: { purchase: Purchase; storeName?: string; onClose: () => void }) {
   const [paid, setPaid] = useState(purchase.paid)
   const pendingCredit = purchase.paymentMethod === 'credito' && !paid
   return (
@@ -149,6 +182,7 @@ function PurchaseDetailSheet({ purchase, onClose }: { purchase: Purchase; onClos
       <div className="space-y-4">
         <div className="rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/60">
           <div className="flex justify-between"><span className="text-slate-500">Proveedor</span><span className="font-semibold text-slate-700 dark:text-slate-200">{purchase.supplierName}</span></div>
+          {storeName && <div className="flex justify-between"><span className="text-slate-500">Tienda</span><span className="text-slate-600 dark:text-slate-300">🏪 {storeName}</span></div>}
           <div className="flex justify-between"><span className="text-slate-500">Fecha</span><span className="text-slate-600 dark:text-slate-300">{fmtDateTime(purchase.createdAt)}</span></div>
           {purchase.supplierInvoice && <div className="flex justify-between"><span className="text-slate-500">No. factura</span><span className="text-slate-600 dark:text-slate-300">{purchase.supplierInvoice}</span></div>}
           <div className="flex justify-between">

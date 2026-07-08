@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
 import { useActiveLocationId, useSuppliers, useCurrentUser, useLocations, useTenant } from '@/hooks/data'
-import { suggestReorder, createPurchaseOrder, receivePurchase, markPurchaseOrderPaid, runAutoReorder, paySupplierDebt, type ReorderSuggestion } from '@/data/repo'
+import { suggestReorder, createPurchaseOrder, receivePurchase, markPurchaseOrderPaid, markPurchasePaid, runAutoReorder, paySupplierDebt, type ReorderSuggestion } from '@/data/repo'
 import { Sheet } from '@/components/Sheet'
 import { Segmented, EmptyState, PageHeader } from '@/components/ui'
 import { Icon } from '@/components/icons'
@@ -55,7 +55,12 @@ export default function Proveedores() {
     () => (orders ?? []).filter((po) => po.status === 'recibido' && !po.paid),
     [orders],
   )
-  const totalDebt = payables.reduce((s, po) => s + poDebt(po), 0)
+  // Facturas de compra a crédito sin pagar (Compras): también son cuentas por pagar.
+  const creditPurchases = useLiveQuery(
+    () => (locationId ? db.purchases.where('locationId').equals(locationId).and((p) => p.paymentMethod === 'credito' && !p.paid).reverse().toArray() : []),
+    [locationId],
+  )
+  const totalDebt = payables.reduce((s, po) => s + poDebt(po), 0) + (creditPurchases ?? []).reduce((s, p) => s + p.total, 0)
 
   return (
     <div>
@@ -204,16 +209,31 @@ export default function Proveedores() {
             </div>
             <span className="text-3xl">💳</span>
           </div>
-          {payables.length === 0 && <EmptyState emoji="✅" title="Sin cuentas por pagar" hint="No le debes a ningún proveedor." />}
+          {payables.length === 0 && (creditPurchases?.length ?? 0) === 0 && <EmptyState emoji="✅" title="Sin cuentas por pagar" hint="No le debes a ningún proveedor." />}
           {payables.map((po) => (
             <div key={po.id} className="card flex items-center gap-3 p-3">
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-slate-700">{supplierById.get(po.supplierId)?.name ?? 'Proveedor'}</p>
-                <p className="text-xs text-slate-400">Recibido {fmtDateTime(po.receivedAt ?? po.createdAt)} · {po.items.length} productos</p>
+                <p className="text-xs text-slate-400">Pedido recibido {fmtDateTime(po.receivedAt ?? po.createdAt)} · {po.items.length} productos</p>
               </div>
               <span className="font-bold text-rose-600">{cop(poDebt(po))}</span>
               <button
                 onClick={async () => { await markPurchaseOrderPaid(po.id); toast('success', 'Marcado como pagado') }}
+                className="btn btn-success px-3 py-2 text-xs"
+              >
+                Pagar
+              </button>
+            </div>
+          ))}
+          {(creditPurchases ?? []).map((p) => (
+            <div key={p.id} className="card flex items-center gap-3 p-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-slate-700">{p.supplierName}</p>
+                <p className="text-xs text-slate-400">Factura {p.number} · {fmtDateTime(p.createdAt)} · {p.items.length} productos</p>
+              </div>
+              <span className="font-bold text-rose-600">{cop(p.total)}</span>
+              <button
+                onClick={async () => { await markPurchasePaid(p.id); toast('success', 'Factura marcada como pagada') }}
                 className="btn btn-success px-3 py-2 text-xs"
               >
                 Pagar

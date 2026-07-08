@@ -445,6 +445,25 @@ export async function returnSaleItems(
     const subtotal = sale.items.reduce((s, it) => s + it.unitPrice * it.qty - it.lineDiscount, 0)
     sale.subtotal = Math.round(subtotal)
     sale.total = Math.max(0, origTotal - refund)
+    // Reduce los pagos a prorrata del reembolso para mantener el invariante
+    // sum(payments) == total. Así, tras una devolución: el efectivo esperado del
+    // arqueo baja igual que el cajón físico (el efectivo devuelto sale de caja) y
+    // el "por método" del Informe Z sigue cuadrando con el total.
+    if (refund > 0 && origTotal > 0) {
+      let remaining = refund
+      const reduced = sale.payments.map((p) => {
+        const cut = Math.min(p.amount, Math.round((refund * p.amount) / origTotal))
+        remaining -= cut
+        return { ...p, amount: p.amount - cut }
+      })
+      for (const p of reduced) {
+        if (remaining <= 0) break
+        const extra = Math.min(p.amount, remaining)
+        p.amount -= extra
+        remaining -= extra
+      }
+      sale.payments = reduced.filter((p) => p.amount > 0)
+    }
     if (!sale.creditNoteNumber) sale.creditNoteNumber = nextCreditNoteNumber()
     if (sale.items.length === 0) sale.status = 'devuelta'
     await db.sales.put(sale)

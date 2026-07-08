@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
@@ -31,6 +31,7 @@ export default function Inventory() {
   const locations = useLocations()
   const stock = useStockForLocation(locationId)
   const user = useCurrentUser()
+  const tenant = useTenant()
   const canManage = can(user, 'canManageInventory')
   const navigate = useNavigate()
 
@@ -38,7 +39,8 @@ export default function Inventory() {
   const [view, setView] = useState<'todos' | 'bajo' | 'vencer' | 'inactivos'>('todos')
   const [addOpen, setAddOpen] = useState(false)
   const [editProduct, setEditProduct] = useState<Product | null>(null)
-  const [detail, setDetail] = useState<{ product: Product; stock: Stock } | null>(null)
+  const [detail, setDetail] = useState<{ product: Product; stock: Stock; focus?: 'convert' | 'kardex' } | null>(null)
+  const [menuFor, setMenuFor] = useState<{ product: Product; stock: Stock } | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [countOpen, setCountOpen] = useState(false)
 
@@ -150,34 +152,42 @@ export default function Inventory() {
           const cat = catMap.get(product.categoryId)
           const inactive = product.active === false
           return (
-            <button
+            <div
               key={product.id}
-              onClick={() => setDetail({ product, stock })}
-              className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left shadow-sm active:scale-[0.99] ${
-                inactive ? 'border-dashed border-slate-300 bg-slate-50 opacity-60' : 'border-slate-100 bg-white'
+              className={`flex w-full items-center gap-2 rounded-2xl border p-3 shadow-sm ${
+                inactive ? 'border-dashed border-slate-300 bg-slate-50 opacity-60 dark:border-slate-700 dark:bg-slate-800/40' : 'border-slate-100 bg-white dark:border-slate-800 dark:bg-slate-900'
               }`}
             >
-              <ProductThumb photo={product.photo} emoji={product.imageEmoji} size={44} />
-              <div className="min-w-0 flex-1">
-                <p className={`truncate text-sm font-semibold ${inactive ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{product.name}</p>
-                <p className="text-xs text-slate-400">
-                  {cat?.emoji} {cat?.name} · {cop(product.price)}
-                  {product.unit === 'peso' ? '/kg' : ''}
-                </p>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {inactive && <span className="chip bg-slate-200 text-slate-500">Inactivo</span>}
-                  {low && !inactive && <span className="chip bg-amber-100 text-amber-700">Reordenar</span>}
-                  {dExp !== null && dExp <= 7 && <span className="chip bg-rose-100 text-rose-700">Vence en {dExp}d</span>}
-                  {dExp !== null && dExp > 7 && dExp <= 30 && <span className="chip bg-orange-100 text-orange-600">Vence en {dExp}d</span>}
+              <button onClick={() => setDetail({ product, stock })} className="flex min-w-0 flex-1 items-center gap-3 text-left active:scale-[0.99]">
+                <ProductThumb photo={product.photo} emoji={product.imageEmoji} size={44} />
+                <div className="min-w-0 flex-1">
+                  <p className={`truncate text-sm font-semibold ${inactive ? 'text-slate-400 line-through' : 'text-slate-700 dark:text-slate-200'}`}>{product.name}</p>
+                  <p className="text-xs text-slate-400">
+                    {cat?.emoji} {cat?.name} · {cop(product.price)}
+                    {product.unit === 'peso' ? '/kg' : ''}
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {inactive && <span className="chip bg-slate-200 text-slate-500">Inactivo</span>}
+                    {low && !inactive && <span className="chip bg-amber-100 text-amber-700">Reordenar</span>}
+                    {dExp !== null && dExp <= 7 && <span className="chip bg-rose-100 text-rose-700">Vence en {dExp}d</span>}
+                    {dExp !== null && dExp > 7 && dExp <= 30 && <span className="chip bg-orange-100 text-orange-600">Vence en {dExp}d</span>}
+                  </div>
                 </div>
-              </div>
-              <div className="text-right">
-                <p className={`text-lg font-bold ${low ? 'text-amber-600' : 'text-slate-700'}`}>
-                  {product.unit === 'peso' ? kg(stock.quantity) : stock.quantity}
-                </p>
-                <p className="text-[11px] text-slate-400">umbral {stock.reorderThreshold}</p>
-              </div>
-            </button>
+                <div className="text-right">
+                  <p className={`text-lg font-bold ${low ? 'text-amber-600' : 'text-slate-700 dark:text-slate-200'}`}>
+                    {product.unit === 'peso' ? kg(stock.quantity) : stock.quantity}
+                  </p>
+                  <p className="text-[11px] text-slate-400">umbral {stock.reorderThreshold}</p>
+                </div>
+              </button>
+              <button
+                onClick={() => setMenuFor({ product, stock })}
+                aria-label={`Herramientas de ${product.name}`}
+                className="shrink-0 rounded-lg px-2 py-3 text-xl leading-none text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                ⋮
+              </button>
+            </div>
           )
         })}
         {rows.length === 0 && <EmptyState emoji="📦" title="Sin productos" hint="Agrega productos o cambia el filtro." />}
@@ -195,6 +205,7 @@ export default function Inventory() {
         <ProductDetailSheet
           product={detail.product}
           stock={detail.stock}
+          focus={detail.focus}
           onClose={() => setDetail(null)}
           onEdit={() => {
             setEditProduct(detail.product)
@@ -205,6 +216,20 @@ export default function Inventory() {
           userName={user!.name}
           tenantId={tenantId}
           locationId={locationId}
+        />
+      )}
+
+      {/* Menú rápido de herramientas por producto (kardex, modificar, ver, etiqueta, desempacar). */}
+      {menuFor && (
+        <ProductRowMenu
+          product={menuFor.product}
+          canManage={canManage}
+          businessName={tenant?.businessName ?? 'Ventanilla'}
+          onClose={() => setMenuFor(null)}
+          onVer={() => { setDetail({ product: menuFor.product, stock: menuFor.stock }); setMenuFor(null) }}
+          onKardex={() => { setDetail({ product: menuFor.product, stock: menuFor.stock, focus: 'kardex' }); setMenuFor(null) }}
+          onDesempacar={() => { setDetail({ product: menuFor.product, stock: menuFor.stock, focus: 'convert' }); setMenuFor(null) }}
+          onModificar={() => { setEditProduct(menuFor.product); setMenuFor(null) }}
         />
       )}
 
@@ -305,17 +330,24 @@ function CountSheet({
 
 // --- Detalle de producto: ajustar stock, ver otros locales, trasladar -------
 function ProductDetailSheet({
-  product, stock, onClose, onEdit, canManage, userId, userName, tenantId, locationId,
+  product, stock, onClose, onEdit, canManage, userId, userName, tenantId, locationId, focus,
 }: {
   product: Product; stock: Stock; onClose: () => void; onEdit: () => void
   canManage: boolean; userId: string; userName: string; tenantId: string; locationId: string
+  focus?: 'convert' | 'kardex'
 }) {
   const locations = useLocations()
   const tenant = useTenant()
   const suppliers = useSuppliers()
   const allProducts = useProducts()
   const supplierName = suppliers?.find((s) => s.id === product.supplierId)?.name
-  const [convertOpen, setConvertOpen] = useState(false)
+  const [convertOpen, setConvertOpen] = useState(focus === 'convert')
+  // Si se abrió desde el menú "Kardex", desplaza a esa sección.
+  useEffect(() => {
+    if (focus !== 'kardex') return
+    const t = setTimeout(() => document.getElementById('kardex-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250)
+    return () => clearTimeout(t)
+  }, [focus])
   const [newQty, setNewQty] = useState(String(stock.quantity))
   const allStock = useLiveQuery(() => db.stock.where('productId').equals(product.id).toArray(), [product.id])
   const movements = useLiveQuery(
@@ -328,12 +360,13 @@ function ProductDetailSheet({
   const [transferTo, setTransferTo] = useState('')
   const [transferQty, setTransferQty] = useState('')
   const dExp = stock.nearestExpiry ? daysUntil(stock.nearestExpiry) : null
-  // Edición rápida de costo/precio/rentabilidad desde el detalle.
+  // Edición rápida de costo/precio/rentabilidad/IVA desde el detalle.
   const [pCost, setPCost] = useState(String(product.cost))
   const [pPrice, setPPrice] = useState(String(product.price))
+  const [pIva, setPIva] = useState(product.ivaRate)
   async function savePricing() {
-    await db.products.update(product.id, { cost: parseCop(pCost), price: parseCop(pPrice) })
-    toast('success', 'Costo y precio actualizados')
+    await db.products.update(product.id, { cost: parseCop(pCost), price: parseCop(pPrice), ivaRate: pIva })
+    toast('success', 'Precio, costo e IVA actualizados')
   }
 
   async function applyDiscount() {
@@ -373,7 +406,7 @@ function ProductDetailSheet({
         {canManage && (
           <div className="rounded-xl border border-slate-200 p-3">
             <p className="mb-2 text-sm font-semibold text-slate-600">Precio y rentabilidad</p>
-            <PriceMarginEditor cost={pCost} price={pPrice} setCost={setPCost} setPrice={setPPrice} priceLabel={product.unit === 'peso' ? 'Precio/kg' : 'Precio'} showCost={canManage} />
+            <PriceMarginEditor cost={pCost} price={pPrice} setCost={setPCost} setPrice={setPPrice} priceLabel={product.unit === 'peso' ? 'Precio/kg' : 'Precio'} showCost={canManage} iva={pIva} setIva={setPIva} unit={product.unit} />
             <button onClick={savePricing} className="btn btn-primary mt-2 w-full text-sm">Guardar precio</button>
           </div>
         )}
@@ -525,7 +558,7 @@ function ProductDetailSheet({
         )}
 
         {/* Kardex: historial de movimientos del producto en este local */}
-        <div>
+        <div id="kardex-section">
           <p className="mb-2 text-sm font-semibold text-slate-600">Movimientos (kardex)</p>
           {(movements?.length ?? 0) === 0 ? (
             <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-400">Sin movimientos aún.</p>
@@ -548,9 +581,30 @@ function ProductDetailSheet({
   )
 }
 
+// --- Menú rápido de herramientas por producto (desde la lista) --------------
+function ProductRowMenu({ product, canManage, businessName, onClose, onVer, onKardex, onDesempacar, onModificar }: {
+  product: Product; canManage: boolean; businessName: string
+  onClose: () => void; onVer: () => void; onKardex: () => void; onDesempacar: () => void; onModificar: () => void
+}) {
+  const itemCls = 'flex w-full items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left text-sm font-medium text-slate-700 active:scale-[0.99] disabled:opacity-40 dark:border-slate-700 dark:text-slate-200'
+  return (
+    <Sheet open onClose={onClose} title={product.name}>
+      <div className="space-y-2">
+        <p className="text-xs text-slate-400">Herramientas del producto</p>
+        <button onClick={onVer} className={itemCls}><span className="text-lg">👁️</span> Ver información</button>
+        <button onClick={onKardex} className={itemCls}><span className="text-lg">📜</span> Kardex (movimientos)</button>
+        <button onClick={onModificar} disabled={!canManage} className={itemCls}><span className="text-lg">✏️</span> Modificar producto</button>
+        <button onClick={() => { printLabel(product, businessName); onClose() }} className={itemCls}><span className="text-lg">🏷️</span> Imprimir etiqueta</button>
+        <button onClick={onDesempacar} disabled={!canManage} className={itemCls}><span className="text-lg">📦</span> Desempacar / convertir</button>
+      </div>
+    </Sheet>
+  )
+}
+
 const MOV_LABEL: Record<string, string> = {
   venta: 'Venta', entrada: 'Entrada', traslado_salida: 'Traslado (salida)',
   traslado_entrada: 'Traslado (entrada)', ajuste: 'Ajuste', devolucion: 'Devolución', remision: 'Remisión',
+  inicial: 'Stock inicial', merma: 'Baja / merma', baja: 'Baja',
 }
 
 // --- Desempacar / convertir presentación (caja → unidades) -----------------

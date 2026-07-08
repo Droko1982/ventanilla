@@ -160,11 +160,12 @@ function TopBar() {
           >
             💬 Soporte por WhatsApp
           </a>
-          {!isCloudConfigured() && (
+          {!isCloudConfigured() && role === 'admin' && (
             <button
               className="btn btn-secondary w-full"
               disabled={resetting}
               onClick={async () => {
+                if (!window.confirm('¿Reiniciar el demo? Se BORRAN los datos actuales (ventas, inventario, caja, cartera) y se cargan los de ejemplo. No se puede deshacer.')) return
                 setResetting(true)
                 await resetDemo()
                 // Vuelve a ser un demo "puro" y recarga para refrescar las vistas

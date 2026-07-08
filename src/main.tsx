@@ -34,4 +34,19 @@ async function boot() {
   )
 }
 
-boot()
+// Si el arranque falla (p. ej. IndexedDB bloqueado en modo incógnito o
+// almacenamiento restringido), mostramos un aviso legible en vez de una
+// pantalla en blanco.
+boot().catch((e) => {
+  console.error('Fallo al arrancar:', e)
+  const root = document.getElementById('root')
+  if (root) {
+    root.innerHTML =
+      '<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;font-family:system-ui,sans-serif;color:#334155">' +
+      '<div style="font-size:44px">📦</div>' +
+      '<h1 style="font-size:18px;font-weight:700;margin:0">No se pudo abrir Ventanilla</h1>' +
+      '<p style="font-size:14px;max-width:22rem;color:#64748b">Tu navegador podría estar bloqueando el almacenamiento local (modo incógnito o permisos). Actívalo o usa una ventana normal, y recarga.</p>' +
+      '<button onclick="location.reload()" style="background:#0d9488;color:#fff;border:0;border-radius:10px;padding:10px 18px;font-weight:600">Recargar</button>' +
+      '</div>'
+  }
+})
