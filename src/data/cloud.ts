@@ -59,8 +59,10 @@ function registerHooks() {
 
 async function push() {
   if (!dirty.size) return
+  const sent: string[] = [] // llaves realmente enviadas (para no borrar lo que entre durante el POST)
   const records: any[] = []
-  for (const d of dirty.values()) {
+  for (const [key, d] of dirty.entries()) {
+    sent.push(key)
     if (d.deleted) {
       records.push({ table: d.table, recordId: d.recordId, deleted: true, data: { id: d.recordId } })
     } else {
@@ -71,7 +73,9 @@ async function push() {
   }
   if (!records.length) return
   await api('/sync', { method: 'POST', body: { records } })
-  dirty.clear()
+  // Solo se saca de la cola lo que se envió: un cambio hecho DURANTE la subida
+  // (p.ej. una venta cobrada) queda pendiente para el próximo push, no se pierde.
+  for (const key of sent) dirty.delete(key)
   persistDirty()
 }
 

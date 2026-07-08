@@ -1295,6 +1295,7 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
   const [note, setNote] = useState('')
   const [transmitDian, setTransmitDian] = useState(tenant?.dian.enabled ?? true)
   const [split, setSplit] = useState<{ method: PaymentMethod; amount: number }[]>([])
+  const [splitAmount, setSplitAmount] = useState('') // monto de la parcialidad a agregar en pago mixto
   const [redeem, setRedeem] = useState(false)
 
   // Fidelización: puntos disponibles del cliente seleccionado y su canje
@@ -1524,12 +1525,33 @@ function PaymentSheet({ total, defaultCustomerId, onClose, onConfirm }: { total:
               </div>
             ))}
             {splitRemaining > 0 && (
-              <div className="grid grid-cols-3 gap-1.5">
-                {(['efectivo', 'nequi', 'daviplata', 'tarjeta', 'transferencia', 'otro', 'fiado'] as PaymentMethod[]).map((m) => (
-                  <button key={m} onClick={() => setSplit([...split, { method: m, amount: splitRemaining }])} className="rounded-lg border border-slate-200 bg-white py-1.5 text-xs font-medium capitalize">
-                    + {m}
-                  </button>
-                ))}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <input
+                    className="input flex-1 py-1.5 text-sm"
+                    inputMode="numeric"
+                    value={splitAmount}
+                    onChange={(e) => setSplitAmount(e.target.value)}
+                    placeholder={`Monto (deja vacío = ${cop(splitRemaining)})`}
+                  />
+                  <button onClick={() => setSplitAmount(String(splitRemaining))} className="shrink-0 rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-500">Resto</button>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(['efectivo', 'nequi', 'daviplata', 'tarjeta', 'transferencia', 'otro', 'fiado'] as PaymentMethod[]).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => {
+                        const amt = Math.min(splitRemaining, parseCop(splitAmount) || splitRemaining)
+                        if (amt <= 0) return
+                        setSplit([...split, { method: m, amount: amt }])
+                        setSplitAmount('')
+                      }}
+                      className="rounded-lg border border-slate-200 bg-white py-1.5 text-xs font-medium capitalize"
+                    >
+                      + {m}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>

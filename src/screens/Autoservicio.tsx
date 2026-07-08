@@ -171,14 +171,14 @@ export default function Autoservicio() {
         <div className="space-y-2">
           {lines.length === 0 ? (
             <p className="mt-16 text-center text-2xl text-white/30">Escanea para empezar…</p>
-          ) : lines.map((l) => (
+          ) : priced.map(({ l, unitPrice, lineDiscount }) => (
             <div key={l.product.id} className="flex items-center gap-3 rounded-xl bg-white/5 p-2.5 text-lg">
               <ProductThumb photo={l.product.photo} emoji={l.product.imageEmoji} size={40} />
               <span className="flex-1 truncate">{l.product.name}</span>
               <button onClick={() => setQty(l.product.id, l.qty - 1)} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10"><Icon name="minus" className="h-5 w-5" /></button>
               <span className="w-7 text-center font-bold">{l.qty}</span>
               <button onClick={() => setQty(l.product.id, l.qty + 1)} className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-500"><Icon name="plus" className="h-5 w-5" /></button>
-              <span className="w-24 text-right font-bold tabular-nums">{cop(l.product.price * l.qty)}</span>
+              <span className="w-24 text-right font-bold tabular-nums">{cop(unitPrice * l.qty - lineDiscount)}</span>
             </div>
           ))}
         </div>

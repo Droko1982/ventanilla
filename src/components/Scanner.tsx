@@ -38,6 +38,9 @@ export function Scanner({
           },
           () => {},
         )
+        // Si se cerró el escáner mientras arrancaba la cámara, apágala ya (evita
+        // que la cámara/LED queden encendidos por una condición de carrera).
+        if (cancelled) { scanner.stop().then(() => scanner.clear()).catch(() => {}) }
       } catch (e) {
         if (!cancelled) setError('No se pudo abrir la cámara. Revisa los permisos del navegador.')
       }

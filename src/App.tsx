@@ -76,6 +76,21 @@ export default function App() {
     )
   }
 
+  // Autoservicio (kiosco): se monta SIN la barra de navegación, para que el
+  // cliente no pueda salir al POS/Caja del dueño sin el PIN de salida.
+  if (pathname === '/autoservicio' && role && role !== 'superadmin') {
+    return (
+      <>
+        <ToastContainer />
+        <ErrorBoundary>
+          <Suspense fallback={<Spinner label="Cargando…" />}>
+            <Autoservicio />
+          </Suspense>
+        </ErrorBoundary>
+      </>
+    )
+  }
+
   return (
     <>
       <ToastContainer />
@@ -96,7 +111,6 @@ export default function App() {
               {/* Accesibles para cajero y dueño */}
               <Route path="/" element={<POS />} />
               <Route path="/pos" element={<POS />} />
-              <Route path="/autoservicio" element={<Autoservicio />} />
               <Route path="/inventario" element={<Inventory />} />
               <Route path="/caja" element={<Caja />} />
               <Route path="/mas" element={<Mas />} />

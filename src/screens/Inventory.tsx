@@ -370,9 +370,10 @@ function ProductDetailSheet({
   }
 
   async function applyDiscount() {
-    const newPrice = Math.round(product.price * 0.85)
-    await db.products.update(product.id, { price: newPrice })
-    toast('success', `Descuento aplicado: ${cop(product.price)} → ${cop(newPrice)}`)
+    // Promoción REVERSIBLE (no pisa el precio base): al quitarla, el precio vuelve
+    // solo. Antes bajaba el precio de lista para siempre y se acumulaba al reabastecer.
+    await db.products.update(product.id, { promoType: 'percent', promoValue: 15 })
+    toast('success', `Promoción −15% aplicada a "${product.name}" (reversible desde Editar)`)
     onClose()
   }
 
@@ -477,12 +478,13 @@ function ProductDetailSheet({
             <button
               className="btn btn-primary px-4"
               onClick={async () => {
-                await adjustStock({
-                  tenantId, locationId, productId: product.id,
-                  newQty: Number(newQty), userId, userName, reason: 'Ajuste manual',
-                })
-                toast('success', 'Stock actualizado')
-                onClose()
+                const q = parseFloat((newQty || '').replace(',', '.'))
+                if (!Number.isFinite(q) || q < 0) { toast('error', 'Escribe una cantidad válida (0 o más)'); return }
+                try {
+                  await adjustStock({ tenantId, locationId, productId: product.id, newQty: q, userId, userName, reason: 'Ajuste manual' })
+                  toast('success', 'Stock actualizado')
+                  onClose()
+                } catch (e) { console.error(e); toast('error', 'No se pudo ajustar el stock') }
               }}
             >
               Guardar
@@ -525,13 +527,18 @@ function ProductDetailSheet({
                 className="btn btn-secondary px-3"
                 disabled={!transferTo || !transferQty}
                 onClick={async () => {
-                  await transferStock({
-                    tenantId, fromLocationId: locationId, toLocationId: transferTo,
-                    productId: product.id, qty: Number(transferQty), userId, userName,
-                  })
-                  toast('success', 'Traslado registrado')
-                  setTransferQty('')
-                  setTransferTo('')
+                  const q = parseFloat((transferQty || '').replace(',', '.'))
+                  if (!Number.isFinite(q) || q <= 0) { toast('error', 'Escribe una cantidad válida'); return }
+                  if (q > stock.quantity) { toast('error', `Solo hay ${product.unit === 'peso' ? kg(stock.quantity) : stock.quantity} para trasladar`); return }
+                  try {
+                    await transferStock({
+                      tenantId, fromLocationId: locationId, toLocationId: transferTo,
+                      productId: product.id, qty: q, userId, userName,
+                    })
+                    toast('success', 'Traslado registrado')
+                    setTransferQty('')
+                    setTransferTo('')
+                  } catch (e) { console.error(e); toast('error', 'No se pudo trasladar') }
                 }}
               >
                 Mover
@@ -733,8 +740,10 @@ function ImportSheet({
       if (!name) continue
       const cat = categories.find((c) => c.name.toLowerCase() === (categoria || '').toLowerCase()) ?? categories[0]
       const code = (codigo || '').trim()
-      // IVA: respeta 0% (excluido). Solo si viene vacío/ilegible usa 19%.
-      const ivaNum = Number((iva || '').replace(',', '.'))
+      // IVA: respeta el 0% escrito (excluido), pero si la columna viene VACÍA usa 19%
+      // (vacío ≠ 0; Number('') sería 0 y dejaría todo excluido por error).
+      const ivaTrim = (iva || '').trim()
+      const ivaNum = ivaTrim === '' ? NaN : Number(ivaTrim.replace(',', '.'))
       const ivaRate = Number.isFinite(ivaNum) ? ivaNum : 19
       // Unidad: peso/granel/kg/gramo → por peso; lo demás → por unidad.
       const unit = /peso|granel|kg|gramo|kilo/.test((unidad || '').toLowerCase()) ? 'peso' : 'unidad'

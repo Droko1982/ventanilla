@@ -5,7 +5,7 @@ import {
   useActiveLocationId, useProducts, useCurrentUser, useTenant, useLocations,
   useCustomers, useScopeSales, useScopeLocationIds,
 } from '@/hooks/data'
-import { createRemision, convertRemisionToFactura, voidRemision, voidSale, recordSale, transmitDian } from '@/data/repo'
+import { createRemision, convertRemisionToFactura, voidRemision, voidSale, recordSale, transmitDian, findOrCreateCustomer } from '@/data/repo'
 import { can } from '@/lib/permissions'
 import { ProductPicker, itemsTotal } from '@/components/ProductPicker'
 import { Sheet } from '@/components/Sheet'
@@ -252,16 +252,22 @@ function NewFacturaSheet({ products, tenantId, locationId, onClose, onCreated }:
           onClick={async () => {
             if (!doc.trim() || !name.trim()) return toast('error', 'La factura requiere documento y nombre del cliente')
             const total = t.total
-            const sale = await recordSale({
-              tenantId, locationId, userId: user!.id, userName: user!.name,
-              items, discount: parseCop(discount),
-              payments: [{ method, amount: total, confirmed: method !== 'fiado' }],
-              customerName: name.trim(), customerDoc: doc.trim(), customerIdType: idType,
-              customerAddress: address.trim() || undefined, customerEmail: email.trim() || undefined,
-              transmitDian: true, docType: 'factura',
-            })
-            toast('success', 'Factura electrónica generada')
-            onCreated(sale)
+            try {
+              // Si es "A crédito" (fiado), la deuda debe quedar a nombre de un cliente:
+              // se busca/crea por nombre para que aparezca en Cartera.
+              const customerId = method === 'fiado' ? await findOrCreateCustomer(tenantId, { name: name.trim(), address: address.trim() || undefined }) : undefined
+              const sale = await recordSale({
+                tenantId, locationId, userId: user!.id, userName: user!.name,
+                items, discount: parseCop(discount),
+                payments: [{ method, amount: total, confirmed: method !== 'fiado' }],
+                customerId,
+                customerName: name.trim(), customerDoc: doc.trim(), customerIdType: idType,
+                customerAddress: address.trim() || undefined, customerEmail: email.trim() || undefined,
+                transmitDian: true, docType: 'factura',
+              })
+              toast('success', 'Factura electrónica generada')
+              onCreated(sale)
+            } catch (e) { console.error(e); toast('error', (e as Error).message || 'No se pudo generar la factura') }
           }}
         >
           Generar y transmitir · {cop(t.total)}
@@ -493,12 +499,17 @@ function RemisionDetail({ rem, onClose }: { rem: Remision; onClose: () => void }
                 <button
                   className="btn btn-primary w-full"
                   onClick={async () => {
-                    const sale = await convertRemisionToFactura(rem.id, [{ method, amount: rem.total, confirmed: method !== 'fiado' }], { userId: user!.id, userName: user!.name })
+                    try {
+                    // Solo se cobra el SALDO (total − abonos ya recibidos); el abono
+                    // previo lo incluye convertRemisionToFactura para no cobrar de más.
+                    const saldo = Math.max(0, rem.total - (rem.abonado ?? 0))
+                    const sale = await convertRemisionToFactura(rem.id, [{ method, amount: saldo, confirmed: method !== 'fiado' }], { userId: user!.id, userName: user!.name })
                     if (sale) toast('success', `Factura ${sale.dianDocNumber} generada`)
                     onClose()
+                    } catch (e) { console.error(e); toast('error', (e as Error).message || 'No se pudo convertir la remisión') }
                   }}
                 >
-                  Confirmar factura · {cop(rem.total)}
+                  Confirmar factura · saldo {cop(Math.max(0, rem.total - (rem.abonado ?? 0)))}
                 </button>
               </div>
             ) : (

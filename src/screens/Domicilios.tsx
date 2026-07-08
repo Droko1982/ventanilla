@@ -116,13 +116,15 @@ function NewDomicilioSheet({ products, tenantId, locationId, onClose }: {
           className="btn btn-primary btn-lg w-full"
           disabled={!name.trim() || !address.trim() || !items.length}
           onClick={async () => {
-            await createDomicilio({
-              tenantId, locationId, userId: user!.id, userName: user!.name,
-              customerName: name.trim(), phone: phone.trim() || undefined, address: address.trim(),
-              barrio: barrio.trim() || undefined, items, paymentMethod: method, repartidor: repartidor.trim() || undefined,
-            })
-            toast('success', 'Domicilio creado · stock despachado')
-            onClose()
+            try {
+              await createDomicilio({
+                tenantId, locationId, userId: user!.id, userName: user!.name,
+                customerName: name.trim(), phone: phone.trim() || undefined, address: address.trim(),
+                barrio: barrio.trim() || undefined, items, paymentMethod: method, repartidor: repartidor.trim() || undefined,
+              })
+              toast('success', 'Domicilio creado · stock despachado')
+              onClose()
+            } catch (e) { console.error(e); toast('error', (e as Error).message || 'No se pudo crear el domicilio') }
           }}
         >
           Crear domicilio · {cop(total)}

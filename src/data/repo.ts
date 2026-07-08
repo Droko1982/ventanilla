@@ -117,8 +117,10 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
   const loyaltyOn = !!tenant?.loyaltyEnabled
   const redeemVal = tenant?.loyaltyRedeemValue ?? 20
   const perThousand = tenant?.loyaltyPointsPerThousand ?? 1
+  // Redondeo POR LÍNEA (igual que el carrito), para que el total cuadre exacto con
+  // la suma de líneas y no se rechace una venta de varios productos a granel.
   const subtotal = input.items.reduce(
-    (s, it) => s + it.unitPrice * it.qty - it.lineDiscount,
+    (s, it) => s + Math.round(it.unitPrice * it.qty - it.lineDiscount),
     0,
   )
   const baseAfterDiscount = Math.max(0, subtotal - input.discount)
@@ -137,12 +139,15 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
   if (Math.abs(paySum - total) > 1) {
     throw new Error(`Los pagos ($${paySum.toLocaleString('es-CO')}) no cuadran con el total ($${total.toLocaleString('es-CO')}).`)
   }
+  // El fiado DEBE quedar a nombre de un cliente; si no, la deuda se pierde (sale en
+  // el Informe Z pero no en Cartera). Igual que ya lo valida el POS.
+  const fiadoTotal = input.payments.filter((p) => p.method === 'fiado').reduce((s, p) => s + p.amount, 0)
+  if (fiadoTotal > 0 && !input.customerId) {
+    throw new Error('Elige el cliente para el fiado: la deuda debe quedar a nombre de alguien.')
+  }
   const now = new Date().toISOString()
   let crossedThreshold = false // ¿algún producto bajó del umbral en esta venta?
   const docType = input.docType ?? (input.customerDoc ? 'factura' : 'tiquete_pos')
-  // Solo se consume el consecutivo si REALMENTE se transmite (evita saltos de
-  // numeración fiscal en ventas que no generan documento).
-  const docNumber = input.transmitDian ? (docType === 'factura' ? nextFacturaNumber() : nextDianNumber()) : undefined
   // Caja abierta del local → día contable (día de apertura). Si no hay caja
   // abierta, el día contable es el de hoy (calendario).
   const openSession = await db.cashSessions
@@ -174,7 +179,7 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
     status: 'completada',
     dianStatus: input.transmitDian ? 'enviado' : 'pendiente',
     dianDocType: docType,
-    dianDocNumber: input.transmitDian ? docNumber : undefined,
+    dianDocNumber: undefined, // se asigna tras validar el stock (evita huecos de numeración)
     remisionId: input.remisionId,
     redeemPoints: redeemPoints || undefined,
     createdAt: now,
@@ -197,6 +202,12 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
         }
       }
     }
+  }
+
+  // Consecutivo fiscal SOLO después de pasar todas las validaciones, para no
+  // gastar (y saltar) un número si la venta se rechaza.
+  if (input.transmitDian) {
+    sale.dianDocNumber = docType === 'factura' ? nextFacturaNumber() : nextDianNumber()
   }
 
   await db.transaction(
@@ -422,6 +433,7 @@ export async function returnSaleItems(
   const origTotal = sale.total
   const tenant = await db.tenants.get(sale.tenantId)
   let refund = 0
+  let cashRefund = 0 // parte del reembolso pagada en efectivo (para mover la caja)
   await db.transaction('rw', [db.sales, db.stock, db.stockMovements, db.customers, db.creditMovements], async () => {
     let returnedGross = 0
     for (const r of filtered) {
@@ -461,11 +473,16 @@ export async function returnSaleItems(
     const subtotal = sale.items.reduce((s, it) => s + it.unitPrice * it.qty - it.lineDiscount, 0)
     sale.subtotal = Math.round(subtotal)
     sale.total = Math.max(0, origTotal - refund)
+    // Reajusta el descuento para que (subtotal − descuento) == total. Si no, el
+    // desglose de IVA queda incoherente ("IVA fantasma") en el recibo reimpreso,
+    // el CSV contable y el Informe Z tras devolver parte de una venta con descuento.
+    sale.discount = Math.max(0, sale.subtotal - sale.total)
     // Reduce los pagos a prorrata del reembolso para mantener el invariante
     // sum(payments) == total. Así, tras una devolución: el efectivo esperado del
     // arqueo baja igual que el cajón físico (el efectivo devuelto sale de caja) y
     // el "por método" del Informe Z sigue cuadrando con el total.
     if (refund > 0 && origTotal > 0) {
+      const cashBefore = sale.payments.filter((p) => p.method === 'efectivo').reduce((s, p) => s + p.amount, 0)
       let remaining = refund
       const reduced = sale.payments.map((p) => {
         const cut = Math.min(p.amount, Math.round((refund * p.amount) / origTotal))
@@ -479,6 +496,8 @@ export async function returnSaleItems(
         remaining -= extra
       }
       sale.payments = reduced.filter((p) => p.amount > 0)
+      const cashAfter = sale.payments.filter((p) => p.method === 'efectivo').reduce((s, p) => s + p.amount, 0)
+      cashRefund = cashBefore - cashAfter
     }
     if (!sale.creditNoteNumber) sale.creditNoteNumber = nextCreditNoteNumber()
     if (sale.items.length === 0) sale.status = 'devuelta'
@@ -494,6 +513,19 @@ export async function returnSaleItems(
     entityId: sale.id,
     detail: `Devolución por ${refund} · nota crédito ${sale.creditNoteNumber}`,
   })
+  // Si el efectivo devuelto NO es de la caja abierta ahora (p.ej. devolución al día
+  // siguiente), regístralo como egreso en la caja de HOY para que el arqueo refleje
+  // el efectivo que salió. Si es la misma caja, ya bajó al reducir los pagos (no se duplica).
+  if (cashRefund > 0) {
+    const open = await db.cashSessions.where('locationId').equals(sale.locationId).and((c) => c.status === 'abierta').first()
+    if (open && open.id !== sale.cashSessionId) {
+      await addCashMovement({
+        tenantId: sale.tenantId, locationId: sale.locationId, sessionId: open.id, type: 'egreso',
+        amount: cashRefund, reason: `Reembolso devolución${sale.creditNoteNumber ? ' ' + sale.creditNoteNumber : ''}`,
+        isExpense: false, userId, userName,
+      })
+    }
+  }
   return refund
 }
 
@@ -508,8 +540,12 @@ export async function adjustStock(args: {
   reason: string
 }): Promise<void> {
   const stockId = `${args.locationId}:${args.productId}`
-  const st = await db.stock.get(stockId)
-  if (!st) return
+  // Crea la fila si falta (p.ej. producto en un local creado después): así se puede
+  // ajustar/cargar stock en un local nuevo en vez de que el botón no haga nada.
+  const st = (await db.stock.get(stockId)) ?? {
+    id: stockId, tenantId: args.tenantId, locationId: args.locationId, productId: args.productId,
+    quantity: 0, reorderThreshold: 4, reorderTarget: 12, updatedAt: new Date().toISOString(),
+  }
   const delta = Number((args.newQty - st.quantity).toFixed(3))
   st.quantity = args.newQty
   st.updatedAt = new Date().toISOString()
@@ -797,10 +833,18 @@ export async function runAutoReorder(tenantId: string, locationId: string, userI
 // Marcar un pedido como pagado al proveedor (cuentas por pagar).
 export async function markPurchaseOrderPaid(poId: string): Promise<void> {
   const po = await db.purchaseOrders.get(poId)
-  if (!po) return
+  if (!po || po.paid) return
   po.paid = true
   po.paidAt = new Date().toISOString()
   await db.purchaseOrders.put(po)
+  // Al pagar el pedido recibido, baja la deuda del proveedor en su ficha.
+  if (po.status === 'recibido' && po.supplierId) {
+    const owed = Math.round(po.items.reduce((a, it) => a + (it.receivedQty ?? it.suggestedQty) * it.cost, 0))
+    if (owed > 0) {
+      const sup = await db.suppliers.get(po.supplierId)
+      if (sup) { sup.debt = Math.max(0, (sup.debt ?? 0) - owed); await db.suppliers.put(sup) }
+    }
+  }
 }
 
 // Recibir mercancía: confirmar qué llegó de verdad y sumar al stock.
@@ -861,6 +905,15 @@ export async function receivePurchase(
     po.receivedAt = now
     await db.purchaseOrders.put(po)
   })
+  // La mercancía recibida y aún NO pagada es deuda con el proveedor: se suma a su
+  // ficha (Directorio) para que coincida con "Por pagar".
+  if (!po.paid && po.supplierId) {
+    const owed = Math.round(po.items.reduce((a, it) => a + (it.receivedQty ?? it.suggestedQty) * it.cost, 0))
+    if (owed > 0) {
+      const sup = await db.suppliers.get(po.supplierId)
+      if (sup) { sup.debt = (sup.debt ?? 0) + owed; await db.suppliers.put(sup) }
+    }
+  }
   await audit({
     tenantId: po.tenantId,
     locationId: po.locationId,
@@ -1375,13 +1428,16 @@ export async function generateZReport(
       ivaAgg.set(ln.rate, cur)
     }
   }
+  // Idempotencia: si ya hay un Z (no acumulado) de este local y día, se ACTUALIZA
+  // ese mismo (mismo id y número) en vez de crear otro con consecutivo duplicado.
+  const prior = cumulative ? undefined : await db.zReports.where('locationId').equals(locationId).and((r) => !r.cumulative && r.date === dateStr).first()
   const existing = await db.zReports.where('tenantId').equals(tenantId).count()
   // Cuadre exacto del consolidado: base + IVA == total (revenue). El IVA absorbe
   // el centavo del redondeo, igual que en cada documento.
   const rRevenue = Math.round(revenue)
   const rBase = Math.round(base)
   const z: ZReport = {
-    id: uid('z'), tenantId, locationId, number: `Z-${String(existing + 1).padStart(4, '0')}`,
+    id: prior?.id ?? uid('z'), tenantId, locationId, number: prior?.number ?? `Z-${String(existing + 1).padStart(4, '0')}`,
     date: dateStr, cumulative, count, revenue: rRevenue,
     base: rBase, iva: rRevenue - rBase,
     ivaByRate: [...ivaAgg.entries()].map(([rate, v]) => ({ rate, base: Math.round(v.base), iva: Math.round(v.iva) })).sort((a, b) => a.rate - b.rate),
@@ -1625,6 +1681,13 @@ export async function convertRemisionToFactura(
 ): Promise<Sale | null> {
   const rem = await db.remisiones.get(remisionId)
   if (!rem || rem.status !== 'emitida') return null
+  // Si la remisión ya tenía abonos, esos pagos YA se recibieron: se incluyen como
+  // pago previo para que el cliente solo pague el saldo y no se le cobre de más
+  // (el que convierte solo cobra el saldo restante: total − abonado).
+  const abonado = Math.min(rem.abonado ?? 0, rem.total)
+  const allPayments: Payment[] = abonado > 0
+    ? [{ method: 'efectivo', amount: abonado, confirmed: true }, ...payments]
+    : payments
   const sale = await recordSale({
     tenantId: rem.tenantId,
     locationId: rem.locationId,
@@ -1632,7 +1695,7 @@ export async function convertRemisionToFactura(
     userName: fiscal.userName,
     items: rem.items,
     discount: rem.discount,
-    payments,
+    payments: allPayments,
     customerId: rem.customerId,
     customerDoc: rem.customerDoc,
     customerName: rem.customerName,
@@ -1729,12 +1792,13 @@ export async function createDomicilio(input: CreateDomicilioInput): Promise<Domi
   const customerId = input.paymentMethod === 'fiado'
     ? await findOrCreateCustomer(input.tenantId, { name: input.customerName, phone: input.phone, address: input.address })
     : undefined
+  const tenant = await db.tenants.get(input.tenantId)
   const sale = await recordSale({
     tenantId: input.tenantId, locationId: input.locationId, userId: input.userId, userName: input.userName,
     items: input.items, discount: 0,
     payments: [{ method: input.paymentMethod, amount: total, confirmed: input.paymentMethod !== 'fiado' }],
     customerId, customerName: input.customerName, customerAddress: input.address,
-    note: input.note, transmitDian: true,
+    note: input.note, transmitDian: tenant?.dian?.enabled ?? false,
   })
   const dom: Domicilio = {
     id: uid('dom'), tenantId: input.tenantId, locationId: input.locationId,
@@ -1782,12 +1846,12 @@ export async function exportAllData(): Promise<string> {
 export async function importAllData(json: string): Promise<void> {
   const data = JSON.parse(json) as Record<string, unknown>
   await db.transaction('rw', db.tables, async () => {
+    // Limpia TODAS las tablas primero (aunque no estén en el respaldo), para no dejar
+    // datos del estado actual que referencien registros que el respaldo no trae.
+    for (const t of db.tables) await t.clear()
     for (const t of db.tables) {
       const rows = data[t.name]
-      if (Array.isArray(rows)) {
-        await t.clear()
-        await t.bulkPut(rows)
-      }
+      if (Array.isArray(rows)) await t.bulkPut(rows)
     }
   })
 }
