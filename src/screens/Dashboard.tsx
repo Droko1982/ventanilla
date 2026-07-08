@@ -21,7 +21,8 @@ import { useSession } from '@/store/session'
 import { DaySalesSheet } from '@/components/DaySalesSheet'
 
 const methodColors: Record<string, string> = {
-  efectivo: '#10b981', nequi: '#8b5cf6', tarjeta: '#3b82f6', transferencia: '#f59e0b', fiado: '#ef4444',
+  efectivo: '#10b981', nequi: '#8b5cf6', tarjeta: '#3b82f6', transferencia: '#f59e0b',
+  daviplata: '#ec4899', otro: '#64748b', fiado: '#ef4444',
 }
 const methodLabels: Record<string, string> = {
   efectivo: 'Efectivo', nequi: 'Nequi', daviplata: 'Daviplata', tarjeta: 'Tarjeta', transferencia: 'Transferencia', otro: 'Otro', fiado: 'Fiado',
@@ -72,7 +73,11 @@ export default function Dashboard() {
   const deadStock = useMemo(() => {
     if (!products || !sales) return 0
     const soldIds = new Set(filterByRange(sales, 30).flatMap((s) => s.items.map((i) => i.productId)))
-    return (stock ?? []).filter((s) => s.quantity > 0 && !soldIds.has(s.productId)).length
+    // Cuenta PRODUCTOS distintos (no filas de stock por local), para que la cifra
+    // coincida con /reportes y no se duplique en negocios con varios locales.
+    const dead = new Set<string>()
+    for (const s of stock ?? []) if (s.quantity > 0 && !soldIds.has(s.productId)) dead.add(s.productId)
+    return dead.size
   }, [products, sales, stock])
 
   const hello = user?.name.split(' ')[0] ?? ''

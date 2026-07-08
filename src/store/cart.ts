@@ -23,7 +23,7 @@ export interface CartLine {
 // Precio de la línea según la cantidad. El precio al por mayor y la promoción
 // NO se apilan: el cliente recibe el MEJOR de los dos. El 2x1 solo aplica por
 // unidad (no tiene sentido en productos por peso).
-function priceLine(
+export function priceLine(
   l: Pick<CartLine, 'basePrice' | 'unitPrice' | 'wholesalePrice' | 'wholesaleMinQty' | 'promoType' | 'promoValue' | 'unit'>,
   qty: number,
 ): { unitPrice: number; promoSaving: number } {

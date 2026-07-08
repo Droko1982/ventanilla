@@ -39,7 +39,7 @@ const icons: Record<ToastKind, string> = { success: '✓', error: '✕', info: '
 export function ToastContainer() {
   const items = useToastStore((s) => s.items)
   return (
-    <div className="fixed inset-x-0 top-3 z-[100] flex flex-col items-center gap-2 px-4">
+    <div role="status" aria-live="polite" className="fixed inset-x-0 top-3 z-[100] flex flex-col items-center gap-2 px-4">
       {items.map((t) => (
         <div
           key={t.id}

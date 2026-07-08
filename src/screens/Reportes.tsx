@@ -10,6 +10,7 @@ import { StatCard, Money, Segmented, PageHeader, EmptyState } from '@/components
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
 import { cop } from '@/lib/money'
+import { downloadCSV } from '@/lib/csv'
 import { waLink } from '@/lib/whatsapp'
 import { useSession } from '@/store/session'
 
@@ -46,20 +47,12 @@ export default function Reportes() {
   }, [ranged, userName])
 
   function exportContable() {
-    const header = 'fecha,documento,tipo,cliente,base,iva,total,metodo'
-    const rows = ranged
-      .filter((s) => s.status !== 'anulada')
-      .map((s) => {
-        const t = ivaBreakdown(s.items, s.discount)
-        const metodo = s.payments.map((p) => p.method).join('|')
-        const fecha = saleDay(s) // día contable local (no UTC), consistente con caja/Z
-        return `${fecha},${s.dianDocNumber ?? ''},${s.dianDocType},"${s.customerName ?? ''}",${t.base},${t.iva},${s.total},${metodo}`
-      })
-    const csv = [header, ...rows].join('\n')
-    const a = document.createElement('a')
-    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv)
-    a.download = `contable-ventanilla-${days}d.csv`
-    a.click()
+    const rows: (string | number)[][] = [['fecha', 'documento', 'tipo', 'cliente', 'base', 'iva', 'total', 'metodo']]
+    for (const s of ranged.filter((s) => s.status !== 'anulada')) {
+      const t = ivaBreakdown(s.items, s.discount)
+      rows.push([saleDay(s), s.dianDocNumber ?? '', s.dianDocType, s.customerName ?? '', t.base, t.iva, s.total, s.payments.map((p) => p.method).join('|')])
+    }
+    downloadCSV(rows, `contable-ventanilla-${days}d.csv`)
     toast('success', 'Reporte contable exportado')
   }
   const summary = useMemo(() => summarize(ranged), [ranged])
@@ -117,14 +110,9 @@ export default function Reportes() {
 
   function exportCSV() {
     const stats = productStats(ranged).sort((a, b) => b.revenue - a.revenue)
-    const header = 'producto,unidades,ingresos,utilidad'
-    const rows = stats.map((s) => `"${s.name}",${Math.round(s.qty)},${Math.round(s.revenue)},${Math.round(s.profit)}`)
-    const csv = [header, ...rows].join('\n')
-    const url = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `reporte-ventanilla-${days}d.csv`
-    a.click()
+    const rows: (string | number)[][] = [['producto', 'unidades', 'ingresos', 'utilidad']]
+    for (const s of stats) rows.push([s.name, Math.round(s.qty), Math.round(s.revenue), Math.round(s.profit)])
+    downloadCSV(rows, `reporte-ventanilla-${days}d.csv`)
     toast('success', 'Reporte exportado (CSV)')
   }
 

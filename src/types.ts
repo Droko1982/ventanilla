@@ -214,6 +214,7 @@ export interface Sale {
   discountReason?: string // motivo del descuento
   editedFromId?: string // si es una edición de otra venta (auditoría)
   remisionId?: string // si la factura se generó a partir de una remisión
+  redeemPoints?: number // puntos de fidelización canjeados en esta venta (para devolverlos si se anula)
   returns?: { productId: string; qty: number; at: string }[] // devoluciones parciales
   creditNoteNumber?: string // nota crédito por devolución
   debitNoteNumber?: string // nota débito (cargo adicional)

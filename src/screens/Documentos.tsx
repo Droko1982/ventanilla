@@ -17,6 +17,7 @@ import { fmtDateTime, timeAgo } from '@/lib/format'
 import { saleDay, localYMD, todayYMD } from '@/lib/businessDay'
 import { ivaBreakdown } from '@/lib/documents'
 import { facturaText, remisionText, printFactura, printRemision } from '@/lib/docprint'
+import { downloadCSV } from '@/lib/csv'
 import { waLink, mailtoLink } from '@/lib/whatsapp'
 import { useSession } from '@/store/session'
 import type { Sale, Remision, SaleItem, PaymentMethod } from '@/types'
@@ -68,11 +69,7 @@ export default function Documentos() {
       const br = ivaBreakdown(f.items, f.discount)
       rows.push([f.dianDocNumber ?? '', saleDay(f), f.customerName ?? 'Consumidor final', String(br.base), String(br.iva), String(f.total), f.dianStatus ?? ''])
     }
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
-    const a = document.createElement('a')
-    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv)
-    a.download = `facturas-${todayYMD()}.csv`
-    a.click()
+    downloadCSV(rows, `facturas-${todayYMD()}.csv`)
   }
 
   if (!locationId) return <EmptyState emoji="🏪" title="Sin local" hint="Selecciona un local arriba." />

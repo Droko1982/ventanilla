@@ -1,6 +1,11 @@
 import { type ReactNode, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 
+// Pila de hojas abiertas: solo la de más arriba responde a Escape (así abrir el
+// escáner desde un formulario y pulsar Escape no cierra ambos), y el scroll del
+// fondo queda bloqueado mientras haya alguna hoja abierta.
+const sheetStack: (() => void)[] = []
+
 // Hoja inferior (bottom sheet) — patrón móvil para formularios y acciones.
 // Se desliza desde abajo, ocupa el ancho en celular y se centra en escritorio.
 export function Sheet({
@@ -18,9 +23,19 @@ export function Sheet({
 }) {
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    const close = () => onClose()
+    sheetStack.push(close)
+    if (sheetStack.length === 1) document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && sheetStack[sheetStack.length - 1] === close) onClose()
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      const i = sheetStack.indexOf(close)
+      if (i >= 0) sheetStack.splice(i, 1)
+      if (sheetStack.length === 0) document.body.style.overflow = ''
+    }
   }, [open, onClose])
 
   if (!open) return null
@@ -33,7 +48,7 @@ export function Sheet({
       {/* El contenedor desplaza si el contenido es más alto que la pantalla, así
           el encabezado (✕) nunca queda tapado en ventanas bajas. */}
       <div className="relative flex min-h-full items-end justify-center sm:items-center sm:py-6">
-        <div className="animate-slide-up relative flex w-full max-w-lg flex-col rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+        <div role="dialog" aria-modal="true" aria-label={title} className="animate-slide-up relative flex w-full max-w-lg flex-col rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
           {/* Encabezado pegajoso: el ✕ siempre visible al desplazar */}
           <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-3xl border-b border-slate-100 bg-white px-5 py-4">
             <h3 className="text-lg font-bold text-slate-800">{title}</h3>

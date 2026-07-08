@@ -171,6 +171,7 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
     dianDocType: docType,
     dianDocNumber: input.transmitDian ? docNumber : undefined,
     remisionId: input.remisionId,
+    redeemPoints: redeemPoints || undefined,
     createdAt: now,
     cashSessionId: openSession?.id,
     businessDate,
@@ -341,7 +342,10 @@ async function revertCustomerAggregates(
   c.totalSpent = Math.max(0, (c.totalSpent ?? 0) - amount)
   if (tenant?.loyaltyEnabled) {
     const earnedRevert = Math.floor(amount / 1000) * (tenant.loyaltyPointsPerThousand ?? 1)
-    c.points = Math.max(0, (c.points ?? 0) - earnedRevert)
+    // Devuelve al cliente los puntos que canjeó (a prorrata del monto devuelto),
+    // ya que la venta se anula/devuelve y no debió costarle esos puntos.
+    const redeemBack = baseTotal > 0 ? Math.round(((sale.redeemPoints ?? 0) * amount) / baseTotal) : 0
+    c.points = Math.max(0, (c.points ?? 0) - earnedRevert + redeemBack)
   }
   await db.customers.put(c)
 }
@@ -353,28 +357,34 @@ export async function voidSale(saleId: string, userId: string, userName: string)
   const tenant = await db.tenants.get(sale.tenantId) // fuera de la transacción (solo lectura)
   await db.transaction('rw', [db.sales, db.stock, db.stockMovements, db.customers, db.creditMovements], async () => {
     sale.status = 'anulada'
+    // Numera la nota crédito de la anulación (como en la devolución parcial).
+    if (!sale.creditNoteNumber) sale.creditNoteNumber = nextCreditNoteNumber()
     await db.sales.put(sale)
-    // Devuelve el stock
-    for (const it of sale.items) {
-      const st = await db.stock.get(`${sale.locationId}:${it.productId}`)
-      if (st) {
-        st.quantity = Number((st.quantity + it.qty).toFixed(3))
-        st.updatedAt = now
-        await db.stock.put(st)
+    // Devuelve el stock — salvo si la venta nació de una remisión (el stock ya lo
+    // maneja la remisión) y sin tocar servicios/recargas/manuales (no tienen stock).
+    if (!sale.remisionId) {
+      for (const it of sale.items) {
+        if (it.productId.startsWith('srv:') || it.productId.startsWith('man:')) continue
+        const st = await db.stock.get(`${sale.locationId}:${it.productId}`)
+        if (st) {
+          st.quantity = Number((st.quantity + it.qty).toFixed(3))
+          st.updatedAt = now
+          await db.stock.put(st)
+        }
+        await db.stockMovements.put({
+          id: uid('mv'),
+          tenantId: sale.tenantId,
+          locationId: sale.locationId,
+          productId: it.productId,
+          type: 'devolucion',
+          qty: it.qty,
+          refId: sale.id,
+          userId,
+          createdAt: now,
+        })
       }
-      await db.stockMovements.put({
-        id: uid('mv'),
-        tenantId: sale.tenantId,
-        locationId: sale.locationId,
-        productId: it.productId,
-        type: 'devolucion',
-        qty: it.qty,
-        refId: sale.id,
-        userId,
-        createdAt: now,
-      })
     }
-    // Revierte fiado, total gastado y puntos otorgados del cliente.
+    // Revierte fiado, total gastado y puntos (otorgados y canjeados) del cliente.
     await revertCustomerAggregates(sale, sale.total, sale.total, tenant, userId, now)
   })
   await audit({
@@ -420,8 +430,9 @@ export async function returnSaleItems(
       const ratio = oldQty > 0 ? (oldQty - qty) / oldQty : 0
       item.lineDiscount = Math.round(item.lineDiscount * ratio)
       item.qty = Number((oldQty - qty).toFixed(3))
-      // Devuelve el stock (servicios "srv:" y manuales "man:" no tienen inventario)
-      if (!item.productId.startsWith('srv:') && !item.productId.startsWith('man:')) {
+      // Devuelve el stock (servicios "srv:" y manuales "man:" no tienen inventario;
+      // y si la venta nació de una remisión, el stock lo maneja la remisión).
+      if (!sale.remisionId && !item.productId.startsWith('srv:') && !item.productId.startsWith('man:')) {
         const st = await db.stock.get(`${sale.locationId}:${item.productId}`)
         if (st) {
           st.quantity = Number((st.quantity + qty).toFixed(3))
@@ -798,7 +809,7 @@ export async function receivePurchase(
   const po = await db.purchaseOrders.get(poId)
   if (!po) return
   const now = new Date().toISOString()
-  await db.transaction('rw', [db.purchaseOrders, db.stock, db.stockMovements], async () => {
+  await db.transaction('rw', [db.purchaseOrders, db.stock, db.stockMovements, db.products], async () => {
     for (const it of po.items) {
       const qty = received[it.productId] ?? 0
       it.receivedQty = qty
@@ -808,10 +819,25 @@ export async function receivePurchase(
       if (realCost != null && realCost > 0) it.cost = realCost
       if (qty > 0) {
         const st = await db.stock.get(`${po.locationId}:${it.productId}`)
+        const prevQty = st?.quantity ?? 0
         if (st) {
           st.quantity = Number((st.quantity + qty).toFixed(3))
           st.updatedAt = now
           await db.stock.put(st)
+        } else {
+          await db.stock.put({
+            id: `${po.locationId}:${it.productId}`, tenantId: po.tenantId, locationId: po.locationId,
+            productId: it.productId, quantity: qty, reorderThreshold: 4, reorderTarget: 12, updatedAt: now,
+          })
+        }
+        // Producto: último costo + COSTO PROMEDIO ponderado (igual que la factura de compra).
+        const p = await db.products.get(it.productId)
+        if (p && it.cost > 0) {
+          const oldAvg = p.avgCost ?? p.cost
+          const denom = prevQty + qty
+          p.cost = it.cost
+          p.avgCost = denom > 0 ? Math.round((oldAvg * prevQty + it.cost * qty) / denom) : it.cost
+          await db.products.put(p)
         }
         await db.stockMovements.put({
           id: uid('mv'),

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useActiveLocationId, useProducts, useCurrentUser, useTenant } from '@/hooks/data'
 import { db } from '@/data/db'
 import { recordSale } from '@/data/repo'
+import { priceLine } from '@/store/cart'
 import { Scanner } from '@/components/Scanner'
 import { ProductThumb } from '@/components/ui'
 import { QRCode } from '@/components/QRCode'
@@ -28,6 +29,7 @@ export default function Autoservicio() {
   const [search, setSearch] = useState('')
   const [pay, setPay] = useState(false)
   const [done, setDone] = useState(false)
+  const [processing, setProcessing] = useState(false)
   const [exitPin, setExitPin] = useState<string | null>(null)
   const [pinInput, setPinInput] = useState('')
 
@@ -41,7 +43,15 @@ export default function Autoservicio() {
     return m
   }, [products])
 
-  const total = lines.reduce((s, l) => s + l.product.price * l.qty, 0)
+  // Precios por línea con el MISMO cálculo del POS (respeta por-mayor y promos).
+  const priced = lines.map((l) => {
+    const pr = priceLine(
+      { basePrice: l.product.price, unitPrice: l.product.price, wholesalePrice: l.product.wholesalePrice, wholesaleMinQty: l.product.wholesaleMinQty, promoType: l.product.promoType, promoValue: l.product.promoValue, unit: l.product.unit },
+      l.qty,
+    )
+    return { l, unitPrice: pr.unitPrice, lineDiscount: pr.promoSaving }
+  })
+  const total = priced.reduce((s, x) => s + x.unitPrice * x.l.qty - x.lineDiscount, 0)
   const count = lines.reduce((s, l) => s + l.qty, 0)
 
   function add(p: Product) {
@@ -67,17 +77,24 @@ export default function Autoservicio() {
   }, [products, search])
 
   async function finalize(method: PaymentMethod) {
-    if (!lines.length || !locationId) return
-    const items: SaleItem[] = lines.map((l) => ({
-      productId: l.product.id, name: l.product.name, unit: l.product.unit, qty: l.qty,
-      unitPrice: l.product.price, lineDiscount: 0, ivaRate: l.product.ivaRate, cost: l.product.cost,
-    }))
-    await recordSale({
-      tenantId, locationId, userId: user?.id ?? 'autoservicio', userName: 'Autoservicio',
-      items, discount: 0, payments: [{ method, amount: total, confirmed: method !== 'fiado' }],
-      transmitDian: tenant?.dian.enabled ?? false, note: 'Venta de autoservicio',
-    })
-    setDone(true)
+    if (!lines.length || !locationId || processing) return // candado: evita doble cobro por doble toque
+    setProcessing(true)
+    try {
+      const items: SaleItem[] = priced.map((x) => ({
+        productId: x.l.product.id, name: x.l.product.name, unit: x.l.product.unit, qty: x.l.qty,
+        unitPrice: x.unitPrice, lineDiscount: x.lineDiscount, ivaRate: x.l.product.ivaRate, cost: x.l.product.cost,
+      }))
+      await recordSale({
+        tenantId, locationId, userId: user?.id ?? 'autoservicio', userName: 'Autoservicio',
+        items, discount: 0, payments: [{ method, amount: total, confirmed: method !== 'fiado' }],
+        transmitDian: tenant?.dian.enabled ?? false, note: 'Venta de autoservicio',
+      })
+      setDone(true)
+    } catch {
+      toast('error', 'No se pudo completar el pago. Intenta de nuevo o paga en caja.')
+    } finally {
+      setProcessing(false)
+    }
   }
 
   function reset() {
@@ -195,8 +212,8 @@ export default function Autoservicio() {
               </div>
             )}
             <div className="flex w-full max-w-xs flex-col gap-2">
-              <button onClick={() => finalize('transferencia')} className="btn btn-lg w-full bg-cyan-500">Ya pagué con Bre-B / Nequi</button>
-              <button onClick={() => finalize('efectivo')} className="btn btn-lg w-full bg-white text-slate-800">Pagar en caja (efectivo)</button>
+              <button onClick={() => finalize('transferencia')} disabled={processing} className="btn btn-lg w-full bg-cyan-500 disabled:opacity-50">{processing ? 'Procesando…' : 'Ya pagué con Bre-B / Nequi'}</button>
+              <button onClick={() => finalize('efectivo')} disabled={processing} className="btn btn-lg w-full bg-white text-slate-800 disabled:opacity-50">{processing ? 'Procesando…' : 'Pagar en caja (efectivo)'}</button>
             </div>
           </div>
         </div>

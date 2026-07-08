@@ -671,23 +671,50 @@ function ImportSheet({
   const [preview, setPreview] = useState<string[][]>([])
   const [count, setCount] = useState(0)
 
+  // Parser CSV que respeta comillas (campos con comas dentro) y detecta si el
+  // separador es coma o punto y coma (Excel en español suele exportar con ";").
   function parseCSV(text: string): string[][] {
-    return text
-      .split(/\r?\n/)
-      .filter((l) => l.trim())
-      .map((line) => line.split(/[;,]/).map((c) => c.trim()))
+    const firstLine = text.split(/\r?\n/)[0] ?? ''
+    const delim = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ';' : ','
+    const rows: string[][] = []
+    let row: string[] = []
+    let field = ''
+    let inQuotes = false
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i]
+      if (inQuotes) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++ } else inQuotes = false
+        } else field += ch
+      } else if (ch === '"') inQuotes = true
+      else if (ch === delim) { row.push(field); field = '' }
+      else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = '' }
+      else if (ch === '\r') { /* ignora CR */ }
+      else field += ch
+    }
+    if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row) }
+    return rows.map((r) => r.map((c) => c.trim())).filter((r) => r.some((c) => c))
+  }
+
+  // Lee el archivo respetando tildes/ñ: UTF-8 y, si sale corrupto (Excel viejo),
+  // reintenta con Windows-1252 (Latin-1), el encoding típico de Excel en español.
+  async function readText(file: File): Promise<string> {
+    const buf = await file.arrayBuffer()
+    const utf8 = new TextDecoder('utf-8').decode(buf)
+    if (utf8.includes('�')) {
+      try { return new TextDecoder('windows-1252').decode(buf) } catch { /* sin soporte */ }
+    }
+    return utf8
   }
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const rows = parseCSV(reader.result as string)
+    readText(file).then((text) => {
+      const rows = parseCSV(text)
       setPreview(rows.slice(0, 6))
       setCount(Math.max(0, rows.length - 1))
-    }
-    reader.readAsText(file)
+    })
   }
 
   async function doImport() {
@@ -696,30 +723,46 @@ function ImportSheet({
     const fileInput = document.getElementById('csv-file') as HTMLInputElement
     const file = fileInput?.files?.[0]
     if (!file) return
-    const text = await file.text()
+    const text = await readText(file)
     const rows = parseCSV(text)
     const body = rows.slice(1) // saltar encabezado
     let imported = 0
+    let updated = 0
     for (const r of body) {
       const [name, codigo, categoria, precio, costo, iva, unidad, stockQty] = r
       if (!name) continue
       const cat = categories.find((c) => c.name.toLowerCase() === (categoria || '').toLowerCase()) ?? categories[0]
+      const code = (codigo || '').trim()
+      // IVA: respeta 0% (excluido). Solo si viene vacío/ilegible usa 19%.
+      const ivaNum = Number((iva || '').replace(',', '.'))
+      const ivaRate = Number.isFinite(ivaNum) ? ivaNum : 19
+      // Unidad: peso/granel/kg/gramo → por peso; lo demás → por unidad.
+      const unit = /peso|granel|kg|gramo|kilo/.test((unidad || '').toLowerCase()) ? 'peso' : 'unidad'
+      const price = parseInt((precio || '0').replace(/[^\d]/g, ''), 10) || 0
+      const cost = parseInt((costo || '0').replace(/[^\d]/g, ''), 10) || 0
+      // Dedupe por código de barras: si ya existe, ACTUALIZA (no duplica).
+      const existing = code ? await db.products.where('barcode').equals(code).first() : undefined
+      const nowIso = new Date().toISOString()
+      if (existing) {
+        await db.products.update(existing.id, { name, categoryId: cat?.id ?? existing.categoryId, unit, price, cost, ivaRate })
+        updated++
+        continue // no recrea stock (ya existe); solo actualiza el catálogo
+      }
       const pid = uid('p')
       await db.products.put({
         id: pid, tenantId, name,
-        barcode: codigo || undefined,
-        internalCode: codigo ? undefined : `VEN-${100000 + imported}`,
+        barcode: code || undefined,
+        internalCode: code ? undefined : `VEN-${100000 + imported}`,
         categoryId: cat?.id ?? '',
-        unit: (unidad || '').toLowerCase().startsWith('p') ? 'peso' : 'unidad',
-        price: parseInt((precio || '0').replace(/[^\d]/g, ''), 10) || 0,
-        cost: parseInt((costo || '0').replace(/[^\d]/g, ''), 10) || 0,
-        ivaRate: Number(iva) || 19,
+        unit,
+        price,
+        cost,
+        ivaRate,
         perishable: false, imageEmoji: '📦', active: true,
-        createdAt: new Date().toISOString(),
+        createdAt: nowIso,
       })
-      const nowIso = new Date().toISOString()
       for (const loc of locations) {
-        const locQty = loc.id === locationId ? (parseInt(stockQty || '0', 10) || 0) : 0
+        const locQty = loc.id === locationId ? (parseInt((stockQty || '0').replace(/[^\d]/g, ''), 10) || 0) : 0
         await db.stock.put({
           id: `${loc.id}:${pid}`, tenantId, locationId: loc.id, productId: pid,
           quantity: locQty,
@@ -734,7 +777,7 @@ function ImportSheet({
       }
       imported++
     }
-    toast('success', `${imported} productos importados`)
+    toast('success', `${imported} productos nuevos${updated ? ` · ${updated} actualizados` : ''}`)
     onClose()
   }
 

@@ -20,8 +20,19 @@ const dateTimeFmt = new Intl.DateTimeFormat('es-CO', {
   hour12: true,
 })
 
+// Interpreta una cadena "YYYY-MM-DD" (solo fecha, ej. vencimiento o fecha de
+// pago) como fecha LOCAL de Colombia y no como UTC. Si trae hora (timestamp
+// completo) o ya es Date, se usa tal cual. Evita que un vencimiento se muestre
+// (o se cuente como atrasado) un día antes por la diferencia horaria (UTC-5).
+export function toLocalDate(iso: string | Date): Date {
+  if (iso instanceof Date) return iso
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  return new Date(iso)
+}
+
 export function fmtDate(iso: string | Date): string {
-  return dateFmt.format(new Date(iso))
+  return dateFmt.format(toLocalDate(iso))
 }
 
 export function fmtTime(iso: string | Date): string {
@@ -54,7 +65,13 @@ export function startOfToday(): number {
   return d.getTime()
 }
 
+// Días calendario (en hora local) entre hoy y la fecha dada. Positivo = futuro,
+// 0 = hoy, negativo = atrasado. Compara días calendario, no milisegundos, para
+// que "vence hoy" sea 0 y no dependa de la hora ni de la zona horaria.
 export function daysUntil(iso: string): number {
-  const d = new Date(iso).getTime()
-  return Math.ceil((d - Date.now()) / 86400000)
+  const target = toLocalDate(iso)
+  target.setHours(0, 0, 0, 0)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.round((target.getTime() - today.getTime()) / 86400000)
 }

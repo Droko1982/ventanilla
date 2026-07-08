@@ -6,6 +6,7 @@ import { StatCard, Money, EmptyState, PageHeader, Segmented } from '@/components
 import { Icon } from '@/components/icons'
 import { toast } from '@/components/Toast'
 import { cop, kg } from '@/lib/money'
+import { downloadCSV } from '@/lib/csv'
 import type { Product, Stock } from '@/types'
 
 // Reporte de Inventario General (como el de SEITEM): costo promedio, utilidad %,
@@ -58,19 +59,12 @@ export default function ReporteInventario() {
   }
 
   function exportCSV() {
-    const header = 'producto,codigo,barras,categoria,seccion,inv_final,costo_promedio,precio_venta,utilidad_%,stock_sugerido'
-    const lines = rows.map((r) => {
+    const data: (string | number)[][] = [['producto', 'codigo', 'barras', 'categoria', 'seccion', 'inv_final', 'costo_promedio', 'precio_venta', 'utilidad_%', 'stock_sugerido']]
+    for (const r of rows) {
       const cat = catMap.get(r.p.categoryId)?.name ?? ''
-      return [
-        `"${r.p.name}"`, r.p.internalCode ?? '', r.p.barcode ?? '', `"${cat}"`, `"${r.p.section ?? ''}"`,
-        r.st.quantity, r.p.avgCost ?? r.p.cost, r.p.price, util(r.p), r.st.reorderTarget,
-      ].join(',')
-    })
-    const csv = [header, ...lines].join('\n')
-    const a = document.createElement('a')
-    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv)
-    a.download = `inventario-general-${activeLoc?.name ?? ''}.csv`
-    a.click()
+      data.push([r.p.name, r.p.internalCode ?? '', r.p.barcode ?? '', cat, r.p.section ?? '', r.st.quantity, r.p.avgCost ?? r.p.cost, r.p.price, util(r.p), r.st.reorderTarget])
+    }
+    downloadCSV(data, `inventario-general-${activeLoc?.name ?? ''}.csv`)
     toast('success', 'Inventario exportado (CSV)')
   }
 
