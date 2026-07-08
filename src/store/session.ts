@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { db } from '@/data/db'
+import { useCart } from './cart'
 import type { Role, User } from '@/types'
 
 // ============================================================================
@@ -107,6 +108,8 @@ export const useSession = create<SessionState>()(
       },
 
       logout() {
+        // Limpia el carrito para que una venta a medias no pase al siguiente cajero.
+        try { useCart.getState().clear() } catch { /* */ }
         set({
           userId: null,
           role: null,

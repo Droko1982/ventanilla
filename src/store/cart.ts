@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type { Product } from '@/types'
 
 // Carrito de la venta en curso (POS). Vive en memoria; se vacía al cobrar.
@@ -61,7 +62,9 @@ interface CartState {
   clear: () => void
 }
 
-export const useCart = create<CartState>((set) => ({
+// Persistimos el carrito en localStorage: si se recarga la página o se corta la
+// luz a mitad de una venta grande, no se pierde lo que ya se agregó.
+export const useCart = create<CartState>()(persist((set) => ({
   lines: [],
   globalDiscount: 0,
   meta: {},
@@ -128,6 +131,9 @@ export const useCart = create<CartState>((set) => ({
   setGlobalDiscount: (d) => set({ globalDiscount: Math.max(0, d) }),
   setMeta: (m) => set((s) => ({ meta: { ...s.meta, ...m } })),
   clear: () => set({ lines: [], globalDiscount: 0, meta: {} }),
+}), {
+  name: 'ventanilla-cart',
+  partialize: (s) => ({ lines: s.lines, globalDiscount: s.globalDiscount, meta: s.meta }),
 }))
 
 // Cálculos derivados del carrito.
