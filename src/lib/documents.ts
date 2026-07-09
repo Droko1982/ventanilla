@@ -185,6 +185,14 @@ export function formaPago(payments: { method: string }[]): 'Contado' | 'Crédito
   return payments.some((p) => p.method === 'fiado') ? 'Crédito' : 'Contado'
 }
 
+// Escapa texto para interpolar con seguridad en el HTML de impresión (evita que un
+// campo del negocio — nombre, responsabilidades, resolución — inyecte marcado).
+export function esc(s: unknown): string {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c
+  ))
+}
+
 // Nombre correcto del tipo de documento (terminología DIAN vigente).
 export function docTypeLabel(t?: string): string {
   if (t === 'factura') return 'Factura electrónica de venta'

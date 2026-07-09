@@ -1,7 +1,7 @@
 import type { Sale, Tenant, Location } from '@/types'
 import { cop, kg } from './money'
 import { fmtDateTime } from './format'
-import { docTotals, taxOptsFromTenant, taxSummary, pieResolucion, dianLegend, formaPago, docTypeLabel } from './documents'
+import { docTotals, taxOptsFromTenant, taxSummary, pieResolucion, dianLegend, formaPago, docTypeLabel, esc } from './documents'
 
 // Construye el texto del recibo (para WhatsApp/correo) y permite imprimirlo
 // en una impresora térmica (vía la ventana de impresión del navegador).
@@ -52,12 +52,12 @@ export function printReceipt(sale: Sale, tenant: Tenant, location: Location): vo
     .map((it) => {
       const qty = it.unit === 'peso' ? kg(it.qty) : `${it.qty}`
       const line = it.unitPrice * it.qty - it.lineDiscount
-      return `<tr><td>${it.name}<br><small>${qty} x ${cop(it.unitPrice)}</small></td><td style="text-align:right">${cop(line)}</td></tr>`
+      return `<tr><td>${esc(it.name)}<br><small>${qty} x ${cop(it.unitPrice)}</small></td><td style="text-align:right">${cop(line)}</td></tr>`
     })
     .join('')
 
   const pays = sale.payments
-    .map((p) => `<div style="display:flex;justify-content:space-between"><span>${methodLabel[p.method] ?? p.method}</span><span>${cop(p.amount)}</span></div>`)
+    .map((p) => `<div style="display:flex;justify-content:space-between"><span>${esc(methodLabel[p.method] ?? p.method)}</span><span>${cop(p.amount)}</span></div>`)
     .join('')
 
   const t = docTotals(sale.items, sale.discount, taxOptsFromTenant(tenant))
@@ -80,11 +80,11 @@ export function printReceipt(sale: Sale, tenant: Tenant, location: Location): vo
     .tot { font-size:16px; font-weight:bold; display:flex; justify-content:space-between; }
     small { color:#333; }
   </style></head><body>
-    <h2>${tenant.businessName}</h2>
-    <div class="c">${location.name}<br>${location.address}<br>NIT ${tenant.nit}${respons ? `<br>${respons}` : ''}</div>
+    <h2>${esc(tenant.businessName)}</h2>
+    <div class="c">${esc(location.name)}<br>${esc(location.address)}<br>NIT ${esc(tenant.nit)}${respons ? `<br>${esc(respons)}` : ''}</div>
     <hr>
     <div class="c">${fmtDateTime(sale.createdAt)}</div>
-    ${sale.dianDocNumber ? `<div class="c">${docTypeLabel(sale.dianDocType)} No. ${sale.dianDocNumber}</div>` : ''}
+    ${sale.dianDocNumber ? `<div class="c">${docTypeLabel(sale.dianDocType)} No. ${esc(sale.dianDocNumber)}</div>` : ''}
     <hr>
     <table>${rows}</table>
     <hr>
@@ -95,7 +95,7 @@ export function printReceipt(sale: Sale, tenant: Tenant, location: Location): vo
     <hr>
     ${pays}
     <hr>
-    <div class="c">${pie ? `${pie}<br>` : ''}${dianLegend(tenant.dian)}<br>¡Gracias por su compra! 🛒</div>
+    <div class="c">${pie ? `${esc(pie)}<br>` : ''}${dianLegend(tenant.dian)}<br>¡Gracias por su compra! 🛒</div>
   </body></html>`
 
   const w = window.open('', '_blank', 'width=320,height=600')

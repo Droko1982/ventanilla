@@ -1,7 +1,7 @@
 import type { Sale, Remision, Tenant, Location } from '@/types'
 import { cop, kg } from './money'
 import { fmtDateTime } from './format'
-import { docTotals, taxOptsFromTenant, taxSummary, pieResolucion, dianLegend, formaPago } from './documents'
+import { docTotals, taxOptsFromTenant, taxSummary, pieResolucion, dianLegend, formaPago, esc } from './documents'
 
 // Texto e impresión de FACTURA ELECTRÓNICA DE VENTA y REMISIÓN.
 
@@ -92,7 +92,7 @@ export function printFactura(sale: Sale, tenant: Tenant, location: Location) {
   const rows = sale.items
     .map((it) => {
       const q = it.unit === 'peso' ? kg(it.qty) : `${it.qty}`
-      return `<tr><td>${it.name}<br><small>${q} x ${cop(it.unitPrice)}</small></td><td style="text-align:right">${cop(it.unitPrice * it.qty - it.lineDiscount)}</td></tr>`
+      return `<tr><td>${esc(it.name)}<br><small>${q} x ${cop(it.unitPrice)}</small></td><td style="text-align:right">${cop(it.unitPrice * it.qty - it.lineDiscount)}</td></tr>`
     })
     .join('')
   const taxRows = taxSummary(t)
@@ -103,33 +103,33 @@ export function printFactura(sale: Sale, tenant: Tenant, location: Location) {
     .filter(Boolean)
     .join(' · ')
   printHtml('Factura', `
-    <h2>${tenant.businessName}</h2>
-    <div class="c">NIT ${tenant.nit}${respons ? `<br>${respons}` : ''}<br>${location.name}<br>${location.address}</div>
-    <hr><div class="c"><b>FACTURA ELECTRÓNICA DE VENTA</b><br>No. ${sale.dianDocNumber ?? '(pendiente)'}<br>${fmtDateTime(sale.createdAt)}</div><hr>
-    ${sale.customerName ? `<div class="c">${sale.customerName}<br>${sale.customerIdType ?? 'CC'} ${sale.customerDoc ?? ''}<br>${sale.customerAddress ?? ''}</div><hr>` : ''}
+    <h2>${esc(tenant.businessName)}</h2>
+    <div class="c">NIT ${esc(tenant.nit)}${respons ? `<br>${esc(respons)}` : ''}<br>${esc(location.name)}<br>${esc(location.address)}</div>
+    <hr><div class="c"><b>FACTURA ELECTRÓNICA DE VENTA</b><br>No. ${esc(sale.dianDocNumber ?? '(pendiente)')}<br>${fmtDateTime(sale.createdAt)}</div><hr>
+    ${sale.customerName ? `<div class="c">${esc(sale.customerName)}<br>${sale.customerIdType ?? 'CC'} ${esc(sale.customerDoc ?? '')}<br>${esc(sale.customerAddress ?? '')}</div><hr>` : ''}
     <table>${rows}</table><hr>
     ${taxRows}
     ${sale.discount > 0 ? `<div class="row"><span>Descuento</span><span>-${cop(sale.discount)}</span></div>` : ''}
     <div class="tot"><span>TOTAL</span><span>${cop(sale.total)}</span></div>
     <div class="row"><span>Forma de pago</span><span>${formaPago(sale.payments)}</span></div>
-    <hr><div class="c">${pie ? `${pie}<br>` : ''}${dianLegend(tenant.dian)} · ¡Gracias!</div>`)
+    <hr><div class="c">${pie ? `${esc(pie)}<br>` : ''}${dianLegend(tenant.dian)} · ¡Gracias!</div>`)
 }
 
 export function printRemision(rem: Remision, tenant: Tenant, location: Location) {
   const rows = rem.items
     .map((it) => {
       const q = it.unit === 'peso' ? kg(it.qty) : `${it.qty}`
-      return `<tr><td>${it.name}<br><small>${q} x ${cop(it.unitPrice)}</small></td><td style="text-align:right">${cop(it.unitPrice * it.qty - it.lineDiscount)}</td></tr>`
+      return `<tr><td>${esc(it.name)}<br><small>${q} x ${cop(it.unitPrice)}</small></td><td style="text-align:right">${cop(it.unitPrice * it.qty - it.lineDiscount)}</td></tr>`
     })
     .join('')
   printHtml('Remisión', `
-    <h2>${tenant.businessName}</h2>
-    <div class="c">NIT ${tenant.nit}<br>${location.name}<br>${location.address}</div>
-    <hr><div class="c"><b>REMISIÓN / NOTA DE ENTREGA</b><br>No. ${rem.number}<br>${fmtDateTime(rem.createdAt)}</div><hr>
-    <div class="c">${rem.customerName}<br>${rem.customerDoc ?? ''}<br>${rem.customerAddress ?? ''}</div><hr>
+    <h2>${esc(tenant.businessName)}</h2>
+    <div class="c">NIT ${esc(tenant.nit)}<br>${esc(location.name)}<br>${esc(location.address)}</div>
+    <hr><div class="c"><b>REMISIÓN / NOTA DE ENTREGA</b><br>No. ${esc(rem.number)}<br>${fmtDateTime(rem.createdAt)}</div><hr>
+    <div class="c">${esc(rem.customerName)}<br>${esc(rem.customerDoc ?? '')}<br>${esc(rem.customerAddress ?? '')}</div><hr>
     <table>${rows}</table><hr>
     ${rem.discount > 0 ? `<div class="row"><span>Descuento</span><span>-${cop(rem.discount)}</span></div>` : ''}
     <div class="tot"><span>TOTAL</span><span>${cop(rem.total)}</span></div>
-    ${rem.note ? `<hr><div class="c">Obs: ${rem.note}</div>` : ''}
+    ${rem.note ? `<hr><div class="c">Obs: ${esc(rem.note)}</div>` : ''}
     <hr><div class="c">Documento de entrega — no es factura.</div>`)
 }

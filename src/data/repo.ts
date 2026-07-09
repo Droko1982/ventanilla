@@ -83,9 +83,8 @@ function nextSeq(key: string, base: number, prefix: string): string {
 
 // Numeración fiscal derivada de la RESOLUCIÓN configurada (prefijo y número inicial),
 // con caída segura a los valores por defecto si el negocio aún no la configuró (así
-// no se rompen instalaciones existentes). El contador de localStorage actúa de piso,
-// de modo que renovar la resolución nunca reutiliza un consecutivo ya emitido.
-interface NumCfg { key: string; prefix: string; base: number; to?: number }
+// no se rompen instalaciones existentes).
+interface NumCfg { key: string; prefix: string; base: number; to?: number; legacyPrefix: string }
 function numberingCfg(dian: DianConfig | undefined, kind: 'pos' | 'fe'): NumCfg {
   const fb = kind === 'fe'
     ? { key: 'ventanilla-seq-fe', prefix: 'FE-', base: 940 }
@@ -93,9 +92,26 @@ function numberingCfg(dian: DianConfig | undefined, kind: 'pos' | 'fe'): NumCfg 
   const r = kind === 'fe' ? dian?.fe : dian?.pos
   const prefix = r?.prefix ? `${r.prefix}-` : fb.prefix
   const base = r?.from != null ? r.from - 1 : fb.base
-  return { key: fb.key, prefix, base, to: r?.to }
+  return { key: fb.key, prefix, base, to: r?.to, legacyPrefix: fb.prefix }
 }
-function nextSeqCfg(cfg: NumCfg): string { return nextSeq(cfg.key, cfg.base, cfg.prefix) }
+// El contador vive por SERIE (clave por prefijo) para que al renovar a un prefijo/
+// rango nuevo el consecutivo reinicie en su `from` (y no emita números fuera de
+// rango). El contador antiguo (clave sin prefijo) se migra la primera vez SOLO para
+// la serie por defecto, de modo que instalaciones existentes no reinicien ni dupliquen.
+function seriesKey(cfg: NumCfg): string { return `${cfg.key}::${cfg.prefix}` }
+function readSeqCurrent(cfg: NumCfg): number {
+  let stored = NaN
+  try { stored = Number(localStorage.getItem(seriesKey(cfg))) } catch { /* */ }
+  if ((!Number.isFinite(stored) || stored < cfg.base) && cfg.prefix === cfg.legacyPrefix) {
+    try { const legacy = Number(localStorage.getItem(cfg.key)); if (Number.isFinite(legacy)) stored = legacy } catch { /* */ }
+  }
+  return Number.isFinite(stored) && stored >= cfg.base ? stored : cfg.base
+}
+function nextSeqCfg(cfg: NumCfg): string {
+  const n = readSeqCurrent(cfg) + 1
+  try { localStorage.setItem(seriesKey(cfg), String(n)) } catch { /* */ }
+  return `${cfg.prefix}${n}`
+}
 
 export function nextDianNumber(dian?: DianConfig): string { return nextSeqCfg(numberingCfg(dian, 'pos')) }
 export function nextFacturaNumber(dian?: DianConfig): string { return nextSeqCfg(numberingCfg(dian, 'fe')) }
@@ -109,11 +125,7 @@ export function nextDebitNoteNumber(): string { return nextSeq('ventanilla-seq-n
 export function resolutionStatus(dian: DianConfig | undefined, kind: 'pos' | 'fe') {
   const cfg = numberingCfg(dian, kind)
   const r = kind === 'fe' ? dian?.fe : dian?.pos
-  let current = cfg.base
-  try {
-    const s = Number(localStorage.getItem(cfg.key))
-    if (Number.isFinite(s) && s >= cfg.base) current = s
-  } catch { /* */ }
+  const current = readSeqCurrent(cfg)
   const to = r?.to
   const remaining = to != null ? to - current : undefined
   const warn = dian?.warnThreshold ?? 50
@@ -1490,7 +1502,7 @@ export async function generateZReport(
   let count = 0, revenue = 0, base = 0, iva = 0, discounts = 0, returnsCount = 0
   const byMethod: Record<string, number> = {}
   const byDocType: Record<string, number> = {}
-  const ivaAgg = new Map<number, { base: number; iva: number }>()
+  const ivaAgg = new Map<string, { rate: number; kind: 'iva' | 'inc'; base: number; iva: number }>()
   for (const s of sales) {
     // Día contable (día de apertura de la caja), no la medianoche del reloj: así
     // el cierre incluye las ventas de después de medianoche del mismo turno.
@@ -1504,9 +1516,10 @@ export async function generateZReport(
     const br = docTotals(s.items, s.discount, taxOpts)
     base += br.base; iva += br.iva + br.inc
     for (const ln of br.lines) {
-      const cur = ivaAgg.get(ln.rate) ?? { base: 0, iva: 0 }
+      const key = `${ln.kind}|${ln.rate}`
+      const cur = ivaAgg.get(key) ?? { rate: ln.rate, kind: ln.kind, base: 0, iva: 0 }
       cur.base += ln.base; cur.iva += ln.tax
-      ivaAgg.set(ln.rate, cur)
+      ivaAgg.set(key, cur)
     }
   }
   // Idempotencia: si ya hay un Z (no acumulado) de este local y día, se ACTUALIZA
@@ -1521,9 +1534,9 @@ export async function generateZReport(
   // Desglose por tarifa reconciliado: la suma de las tarifas cuadra EXACTO con el
   // consolidado (base e impuestos del Z); el redondeo se absorbe en la tarifa de
   // mayor base. Incluye IVA e INC (para que un restaurante también cuadre).
-  const ivaByRate = [...ivaAgg.entries()]
-    .map(([rate, v]) => ({ rate, base: Math.round(v.base), iva: Math.round(v.iva) }))
-    .sort((a, b) => a.rate - b.rate)
+  const ivaByRate = [...ivaAgg.values()]
+    .map((v) => ({ rate: v.rate, base: Math.round(v.base), iva: Math.round(v.iva), kind: v.kind }))
+    .sort((a, b) => (a.kind === b.kind ? a.rate - b.rate : a.kind === 'iva' ? -1 : 1))
   if (ivaByRate.length) {
     let top = ivaByRate[0]
     for (const r of ivaByRate) if (r.base > top.base) top = r

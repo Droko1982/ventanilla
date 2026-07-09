@@ -87,7 +87,7 @@ function ZDetail({ z, onClose }: { z: ZReport; onClose: () => void }) {
   function print() {
     const rows = (s: Record<string, number>, labels: Record<string, string>) =>
       Object.entries(s).map(([k, v]) => `<div class="row"><span>${labels[k] ?? k}</span><span>${cop(v)}</span></div>`).join('')
-    const ivas = z.ivaByRate.map((l) => `<div class="row"><span>IVA ${l.rate}%</span><span>${cop(l.iva)}</span></div>`).join('')
+    const ivas = z.ivaByRate.map((l) => `<div class="row"><span>${l.kind === 'inc' ? 'INC' : 'IVA'} ${l.rate}%</span><span>${cop(l.iva)}</span></div>`).join('')
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${z.number}</title>
       <style>*{font-family:'Courier New',monospace}body{width:300px;margin:0 auto;padding:10px}h2{text-align:center;margin:4px 0}.c{text-align:center;font-size:12px}hr{border:none;border-top:1px dashed #000;margin:6px 0}.row{display:flex;justify-content:space-between;font-size:12px}.tot{display:flex;justify-content:space-between;font-size:15px;font-weight:bold}</style>
       </head><body>
@@ -124,8 +124,8 @@ function ZDetail({ z, onClose }: { z: ZReport; onClose: () => void }) {
           {Object.entries(z.byDocType).map(([d, v]) => <Row key={d} label={docLabels[d] ?? d} value={cop(v)} />)}
         </Section>
         {z.ivaByRate.length > 0 && (
-          <Section title="IVA discriminado">
-            {z.ivaByRate.map((l) => <Row key={l.rate} label={`IVA ${l.rate}% (base ${cop(l.base)})`} value={cop(l.iva)} />)}
+          <Section title="Impuestos discriminados">
+            {z.ivaByRate.map((l) => <Row key={`${l.kind ?? 'iva'}-${l.rate}`} label={`${l.kind === 'inc' ? 'INC' : 'IVA'} ${l.rate}% (base ${cop(l.base)})`} value={cop(l.iva)} />)}
           </Section>
         )}
         <div className="flex justify-between text-sm text-slate-500">

@@ -323,7 +323,7 @@ export interface ZReport {
   revenue: number
   base: number
   iva: number
-  ivaByRate: { rate: number; base: number; iva: number }[]
+  ivaByRate: { rate: number; base: number; iva: number; kind?: 'iva' | 'inc' }[]
   byMethod: Record<string, number>
   byDocType: Record<string, number>
   discounts: number
