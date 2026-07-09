@@ -327,7 +327,8 @@ export default function Ajustes() {
       <Section title="Acerca de Ventanilla">
         <div className="space-y-1 text-sm text-slate-600">
           <p className="font-semibold text-slate-800">Ventanilla — Ventas e Inventario</p>
-          <p>Plataforma desarrollada por el <b>Dr. Mauricio Rodríguez Herrera</b>.</p>
+          <p className="text-xs text-slate-400">Versión 1.0</p>
+          <p>Creada y desarrollada por el <b>Dr. Mauricio Rodríguez Herrera</b>, creador y propietario de la plataforma.</p>
           <p className="text-xs text-slate-400">© {new Date().getFullYear()} Dr. Mauricio Rodríguez Herrera. Todos los derechos reservados.</p>
         </div>
       </Section>

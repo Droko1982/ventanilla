@@ -1,5 +1,7 @@
 # Ventanilla — Backend (API)
 
+> Creado y de propiedad del **Dr. Mauricio Rodríguez Herrera**. © Todos los derechos reservados.
+
 API multi-tenant para Ventanilla: **autenticación**, **sincronización offline-first** y **integraciones** (Wompi, WhatsApp Cloud API, DIAN). Node + Express + Prisma + PostgreSQL.
 
 El frontend (la PWA) sigue funcionando **sin internet** con su base local (Dexie); cuando se conecta a este API, **sincroniza** y habilita multi-dispositivo, pasarela de pago, WhatsApp automático y transmisión DIAN real.

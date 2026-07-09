@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Backend de Ventanilla — API multi-tenant, auth, sincronización offline-first e integraciones (Wompi, WhatsApp, DIAN).",
+  "author": "Dr. Mauricio Rodríguez Herrera",
+  "license": "UNLICENSED",
+  "copyright": "© Dr. Mauricio Rodríguez Herrera. Todos los derechos reservados.",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",

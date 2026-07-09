@@ -1,7 +1,10 @@
-# 🏪 Ventanilla
+# 🏪 Ventanilla · v1.0
 
 **Plataforma SaaS de ventas e inventario para tiendas y ventanillas en Colombia.**
 POS, inventario, caja, **facturación electrónica (DIAN)**, remisiones, reportes y multi-local — desde el celular y **funciona sin internet** (PWA).
+
+> **Creada, desarrollada y de propiedad del Dr. Mauricio Rodríguez Herrera.**
+> © Dr. Mauricio Rodríguez Herrera. Todos los derechos reservados.
 
 ---
 
@@ -100,9 +103,11 @@ SMOKE_URL="https://droko1982.github.io/ventanilla/" node scripts/smoke.mjs   # c
 ```
 (requiere `npm i -D puppeteer` para correrlo)
 
-## 🧾 Nota sobre la DIAN
+## 🧾 Cumplimiento DIAN
 
-En el demo la transmisión a la DIAN está **simulada** para mostrar el flujo completo (numeración FE/POS/NC, IVA discriminado, estados enviado/pendiente, nota crédito). En producción cada cliente conecta su proveedor autorizado (Alegra, Factus o el software de la DIAN) con su resolución de numeración.
+La representación de los documentos sigue las reglas de la normativa colombiana: **régimen tributario del emisor** (responsable / **no responsable de IVA**), **IVA e INC discriminados**, clasificación **gravado / exento / excluido**, **numeración derivada de la resolución** (prefijo, rango y vigencia, con avisos de rango por agotarse), **notas crédito/débito con su concepto DIAN y referencia** al documento original, y **adquiriente "consumidor final"** cuando no se identifica. Los documentos **nunca afirman una validación falsa**: en modo demo se rotulan como simulados.
+
+La transmisión a la DIAN está **simulada** en el demo (no se computan CUFE/CUDE, que requieren un proveedor real). En producción cada cliente conecta su **proveedor tecnológico autorizado** (Alegra, Factus o el software gratuito de la DIAN) con su propia resolución de numeración.
 
 ## ☁️ Backend y nube (multi-dispositivo)
 
@@ -119,9 +124,16 @@ npm run smoke                  # verifica el API
 
 Conectar la app a la nube: **Ajustes → Nube (multi-dispositivo)** (URL del API + correo + contraseña), o define `VITE_API_URL` al compilar. Guía completa de despliegue en [`server/README.md`](server/README.md).
 
-## 🗺️ Próximas funciones sugeridas
+## 🗺️ Próximas funciones (opcionales)
 
-Combos/promociones, programa de puntos, variantes/modificadores de producto, cotizaciones/proformas, impuesto al consumo (INC), pasarela de pago de la mensualidad (Wompi/PSE) y WhatsApp Business API para envío 100% automático (hoy queda el mensaje listo con un toque).
+> **Filosofía:** antes que “más funciones”, la app debe seguir siendo **sencilla e intuitiva** para cajeros sin experiencia en ofimática. Lo de abajo solo se agrega si aporta valor real sin complicar el uso.
+
+Candidatas: combos/promociones, variantes/modificadores de producto, cotizaciones/proformas y producto vendido por caja **y** unidad en una sola ficha. Las integraciones de **pago (Wompi/PSE)**, **WhatsApp Cloud API** y **transmisión DIAN real** ya están implementadas en el backend y se activan con las llaves del cliente.
+
+## 👤 Créditos y propiedad
+
+**Ventanilla** fue **creada, desarrollada y es propiedad del Dr. Mauricio Rodríguez Herrera.**
+© Dr. Mauricio Rodríguez Herrera. Todos los derechos reservados. Uso no autorizado prohibido.
 
 ---
 
