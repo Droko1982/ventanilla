@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTenant, useLocations } from '@/hooks/data'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '@/data/db'
-import { exportAllData, importAllData, requestMonthlyCheckout } from '@/data/repo'
+import { exportAllData, importAllData, requestMonthlyCheckout, resolutionStatus } from '@/data/repo'
 import { cloudLogin, cloudRegister, isCloudConfigured, getApiUrl, clearCloud } from '@/data/api'
 import { startCloud, stopCloud, syncNow } from '@/data/cloud'
 import { clearLocalData } from '@/data/seed'
@@ -154,6 +154,19 @@ export default function Ajustes() {
           <p className="text-sm text-slate-600">Resolución: {tenant.dian.resolutionNumber}</p>
           <p className="text-xs text-slate-400">{tenant.dian.resolutionRange}</p>
           <p className="text-xs text-slate-500">{tenant.vatResponsible === false ? 'No responsable de IVA' : 'Responsable de IVA'}</p>
+          {(() => {
+            const st = resolutionStatus(tenant.dian, 'pos')
+            const cls = st.vencida || st.agotado ? 'text-rose-600' : st.near ? 'text-amber-600' : 'text-slate-400'
+            return (
+              <p className={`text-xs ${cls}`}>
+                Consecutivo POS: {st.prefix}{st.current}
+                {st.remaining != null && !st.agotado && ` · quedan ${st.remaining}`}
+                {st.agotado && ' · RANGO AGOTADO'}
+                {st.near && !st.agotado && ' · por agotarse'}
+                {st.vencida && ' · resolución vencida'}
+              </p>
+            )
+          })()}
           <button onClick={() => setDianOpen(true)} className="btn btn-secondary mt-3 w-full text-sm">
             Configurar conexión DIAN
           </button>

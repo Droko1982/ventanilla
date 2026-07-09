@@ -53,11 +53,12 @@ const tenant: Tenant = {
     enabled: true,
     provider: 'alegra',
     resolutionNumber: '18760000001',
-    resolutionRange: 'POS1 1 al 20000',
+    resolutionRange: 'POS1 5000 al 25000',
     technicalKey: 'demo-clave-tecnica-xxxx',
     testMode: true,
-    pos: { prefix: 'POS1', from: 1, to: 20000, resolutionDate: '2025-01-15', validityMonths: 24 },
-    fe: { prefix: 'FE', from: 1, to: 5000, resolutionDate: '2025-01-15', validityMonths: 24 },
+    // from por encima del histórico demo (POS1 1000-4999, FE 941-942) para no colisionar.
+    pos: { prefix: 'POS1', from: 5000, to: 25000, resolutionDate: '2025-01-15', validityMonths: 24 },
+    fe: { prefix: 'FE', from: 1000, to: 6000, resolutionDate: '2025-01-15', validityMonths: 24 },
     incRate: 8,
     uvtValue: 49799, // valor UVT de ejemplo (editable en Ajustes)
     posMaxUvt: 5,

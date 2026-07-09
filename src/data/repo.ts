@@ -25,8 +25,9 @@ import type {
   ZReport,
   Domicilio,
   DomicilioStatus,
+  DianConfig,
 } from '@/types'
-import { ivaBreakdown, docTotals, taxOptsFromTenant } from '@/lib/documents'
+import { docTotals, taxOptsFromTenant } from '@/lib/documents'
 
 // ============================================================================
 // Lógica de negocio (mutaciones) y consultas reutilizables.
@@ -79,11 +80,53 @@ function nextSeq(key: string, base: number, prefix: string): string {
   try { localStorage.setItem(key, String(n)) } catch { /* ignore */ }
   return `${prefix}${n}`
 }
-export function nextDianNumber(): string { return nextSeq('ventanilla-seq-pos', 5000, 'POS1-') }
-export function nextFacturaNumber(): string { return nextSeq('ventanilla-seq-fe', 940, 'FE-') }
+
+// Numeración fiscal derivada de la RESOLUCIÓN configurada (prefijo y número inicial),
+// con caída segura a los valores por defecto si el negocio aún no la configuró (así
+// no se rompen instalaciones existentes). El contador de localStorage actúa de piso,
+// de modo que renovar la resolución nunca reutiliza un consecutivo ya emitido.
+interface NumCfg { key: string; prefix: string; base: number; to?: number }
+function numberingCfg(dian: DianConfig | undefined, kind: 'pos' | 'fe'): NumCfg {
+  const fb = kind === 'fe'
+    ? { key: 'ventanilla-seq-fe', prefix: 'FE-', base: 940 }
+    : { key: 'ventanilla-seq-pos', prefix: 'POS1-', base: 5000 }
+  const r = kind === 'fe' ? dian?.fe : dian?.pos
+  const prefix = r?.prefix ? `${r.prefix}-` : fb.prefix
+  const base = r?.from != null ? r.from - 1 : fb.base
+  return { key: fb.key, prefix, base, to: r?.to }
+}
+function nextSeqCfg(cfg: NumCfg): string { return nextSeq(cfg.key, cfg.base, cfg.prefix) }
+
+export function nextDianNumber(dian?: DianConfig): string { return nextSeqCfg(numberingCfg(dian, 'pos')) }
+export function nextFacturaNumber(dian?: DianConfig): string { return nextSeqCfg(numberingCfg(dian, 'fe')) }
 export function nextRemisionNumber(): string { return nextSeq('ventanilla-seq-rem', 120, 'REM-') }
 export function nextCreditNoteNumber(): string { return nextSeq('ventanilla-seq-nc', 300, 'NC-') }
 export function nextDebitNoteNumber(): string { return nextSeq('ventanilla-seq-nd', 200, 'ND-') }
+
+// Estado de la resolución de numeración: consecutivo actual, saldo del rango y si
+// está por agotarse o vencida. Solo informativo (nunca bloquea la emisión). Devuelve
+// known=false si faltan datos, para no avisar en falso.
+export function resolutionStatus(dian: DianConfig | undefined, kind: 'pos' | 'fe') {
+  const cfg = numberingCfg(dian, kind)
+  const r = kind === 'fe' ? dian?.fe : dian?.pos
+  let current = cfg.base
+  try {
+    const s = Number(localStorage.getItem(cfg.key))
+    if (Number.isFinite(s) && s >= cfg.base) current = s
+  } catch { /* */ }
+  const to = r?.to
+  const remaining = to != null ? to - current : undefined
+  const warn = dian?.warnThreshold ?? 50
+  const near = remaining != null && remaining >= 0 && remaining <= warn
+  const agotado = remaining != null && remaining <= 0
+  let vencida = false
+  if (r?.resolutionDate && r?.validityMonths) {
+    const exp = new Date(r.resolutionDate)
+    exp.setMonth(exp.getMonth() + r.validityMonths)
+    vencida = new Date() > exp
+  }
+  return { prefix: cfg.prefix, current, to, remaining, near, agotado, vencida, known: to != null || (r?.resolutionDate != null && r?.validityMonths != null) }
+}
 
 // Documento de referencia (factura/tiquete original) que exige la DIAN en toda
 // nota crédito/débito. El CUFE/CUDE real no se computa (sistema simulado), por eso
@@ -238,7 +281,7 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
   // Consecutivo fiscal SOLO después de pasar todas las validaciones, para no
   // gastar (y saltar) un número si la venta se rechaza.
   if (input.transmitDian) {
-    sale.dianDocNumber = docType === 'factura' ? nextFacturaNumber() : nextDianNumber()
+    sale.dianDocNumber = docType === 'factura' ? nextFacturaNumber(tenant?.dian) : nextDianNumber(tenant?.dian)
   }
 
   await db.transaction(
@@ -1636,7 +1679,8 @@ export async function transmitDian(saleId: string): Promise<void> {
   if (!sale) return
   sale.dianStatus = 'enviado'
   if (!sale.dianDocNumber) {
-    sale.dianDocNumber = sale.dianDocType === 'factura' ? nextFacturaNumber() : nextDianNumber()
+    const tenant = await db.tenants.get(sale.tenantId)
+    sale.dianDocNumber = sale.dianDocType === 'factura' ? nextFacturaNumber(tenant?.dian) : nextDianNumber(tenant?.dian)
   }
   await db.sales.put(sale)
 }
