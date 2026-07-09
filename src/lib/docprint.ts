@@ -1,14 +1,16 @@
 import type { Sale, Remision, Tenant, Location } from '@/types'
 import { cop, kg } from './money'
 import { fmtDateTime } from './format'
-import { ivaBreakdown } from './documents'
+import { docTotals, taxOptsFromTenant, taxSummary, pieResolucion, dianLegend, formaPago } from './documents'
 
 // Texto e impresión de FACTURA ELECTRÓNICA DE VENTA y REMISIÓN.
 
 export function facturaText(sale: Sale, tenant: Tenant, location: Location): string {
-  const t = ivaBreakdown(sale.items, sale.discount)
+  const t = docTotals(sale.items, sale.discount, taxOptsFromTenant(tenant))
   const L: string[] = []
   L.push(`*${tenant.businessName}* — NIT ${tenant.nit}`)
+  if (tenant.taxResponsibilities) L.push(tenant.taxResponsibilities)
+  if (tenant.vatResponsible === false) L.push('No responsable de IVA')
   L.push(`${location.name}, ${location.address}`)
   L.push('================================')
   L.push(`*FACTURA ELECTRÓNICA DE VENTA*`)
@@ -25,12 +27,14 @@ export function facturaText(sale: Sale, tenant: Tenant, location: Location): str
     L.push(`  ${q} ${cop(it.unitPrice)}   ${cop(it.unitPrice * it.qty - it.lineDiscount)}`)
   }
   L.push('--------------------------------')
-  L.push(`Base gravable: ${cop(t.base)}`)
-  for (const ln of t.lines) if (ln.iva > 0) L.push(`IVA ${ln.rate}%: ${cop(ln.iva)}`)
+  for (const r of taxSummary(t)) L.push(`${r.label}: ${cop(r.amount)}`)
   if (sale.discount > 0) L.push(`Descuento: -${cop(sale.discount)}`)
   L.push(`*TOTAL: ${cop(sale.total)}*`)
+  L.push(`Forma de pago: ${formaPago(sale.payments)}`)
   L.push('================================')
-  L.push('Factura electrónica validada por la DIAN')
+  const pie = pieResolucion(tenant.dian, 'fe')
+  if (pie) L.push(pie)
+  L.push(dianLegend(tenant.dian))
   L.push('¡Gracias por su compra!')
   return L.join('\n')
 }
@@ -84,25 +88,31 @@ function printHtml(title: string, inner: string) {
 }
 
 export function printFactura(sale: Sale, tenant: Tenant, location: Location) {
-  const t = ivaBreakdown(sale.items, sale.discount)
+  const t = docTotals(sale.items, sale.discount, taxOptsFromTenant(tenant))
   const rows = sale.items
     .map((it) => {
       const q = it.unit === 'peso' ? kg(it.qty) : `${it.qty}`
       return `<tr><td>${it.name}<br><small>${q} x ${cop(it.unitPrice)}</small></td><td style="text-align:right">${cop(it.unitPrice * it.qty - it.lineDiscount)}</td></tr>`
     })
     .join('')
-  const ivas = t.lines.filter((l) => l.iva > 0).map((l) => `<div class="row"><span>IVA ${l.rate}%</span><span>${cop(l.iva)}</span></div>`).join('')
+  const taxRows = taxSummary(t)
+    .map((r) => `<div class="row"><span>${r.label}</span><span>${cop(r.amount)}</span></div>`)
+    .join('')
+  const pie = pieResolucion(tenant.dian, 'fe')
+  const respons = [tenant.taxResponsibilities, tenant.vatResponsible === false ? 'No responsable de IVA' : '']
+    .filter(Boolean)
+    .join(' · ')
   printHtml('Factura', `
     <h2>${tenant.businessName}</h2>
-    <div class="c">NIT ${tenant.nit}<br>${location.name}<br>${location.address}</div>
+    <div class="c">NIT ${tenant.nit}${respons ? `<br>${respons}` : ''}<br>${location.name}<br>${location.address}</div>
     <hr><div class="c"><b>FACTURA ELECTRÓNICA DE VENTA</b><br>No. ${sale.dianDocNumber ?? '(pendiente)'}<br>${fmtDateTime(sale.createdAt)}</div><hr>
     ${sale.customerName ? `<div class="c">${sale.customerName}<br>${sale.customerIdType ?? 'CC'} ${sale.customerDoc ?? ''}<br>${sale.customerAddress ?? ''}</div><hr>` : ''}
     <table>${rows}</table><hr>
-    <div class="row"><span>Base gravable</span><span>${cop(t.base)}</span></div>
-    ${ivas}
+    ${taxRows}
     ${sale.discount > 0 ? `<div class="row"><span>Descuento</span><span>-${cop(sale.discount)}</span></div>` : ''}
     <div class="tot"><span>TOTAL</span><span>${cop(sale.total)}</span></div>
-    <hr><div class="c">Validada por la DIAN · ¡Gracias!</div>`)
+    <div class="row"><span>Forma de pago</span><span>${formaPago(sale.payments)}</span></div>
+    <hr><div class="c">${pie ? `${pie}<br>` : ''}${dianLegend(tenant.dian)} · ¡Gracias!</div>`)
 }
 
 export function printRemision(rem: Remision, tenant: Tenant, location: Location) {

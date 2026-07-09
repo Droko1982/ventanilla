@@ -232,17 +232,22 @@ export function SaleDetail({
           </button>
         )}
         {sale.creditNoteNumber && (
-          <p className="rounded-xl bg-amber-50 p-2 text-center text-xs text-amber-700">Nota crédito: {sale.creditNoteNumber}</p>
+          <p className="rounded-xl bg-amber-50 p-2 text-center text-xs text-amber-700">
+            Nota crédito {sale.creditNoteNumber}{sale.creditNoteConcept ? ` · ${NC_CONCEPTS[sale.creditNoteConcept]}` : ''}
+            {sale.referencedDoc ? ` (ref. ${sale.referencedDoc.number})` : ''}
+          </p>
         )}
         {sale.debitNoteNumber && (
-          <p className="rounded-xl bg-blue-50 p-2 text-center text-xs text-blue-700">Nota débito {sale.debitNoteNumber}: +{cop(sale.debitNoteAmount ?? 0)}</p>
+          <p className="rounded-xl bg-blue-50 p-2 text-center text-xs text-blue-700">
+            Nota débito {sale.debitNoteNumber}: +{cop(sale.debitNoteAmount ?? 0)}{sale.debitNoteConcept ? ` · ${ND_CONCEPTS[sale.debitNoteConcept]}` : ''}
+          </p>
         )}
 
         {ndOpen && (
           <Sheet open onClose={() => setNdOpen(false)} title="Nota débito">
             <DebitNoteForm
-              onApply={async (amount, reason) => {
-                const n = await generateDebitNote(sale.id, amount, reason, user!.id, user!.name)
+              onApply={async (amount, reason, concept) => {
+                const n = await generateDebitNote(sale.id, amount, reason, user!.id, user!.name, concept)
                 toast('success', `Nota débito ${n} generada`)
                 setNdOpen(false)
                 onClose()
@@ -323,15 +328,29 @@ function ReturnSheet({
   )
 }
 
-function DebitNoteForm({ onApply }: { onApply: (amount: number, reason: string) => void }) {
+// Conceptos DIAN de las notas (Anexo Técnico).
+const NC_CONCEPTS: Record<number, string> = { 1: 'Devolución', 2: 'Anulación', 3: 'Rebaja', 4: 'Descuento', 5: 'Otros' }
+const ND_CONCEPTS: Record<number, string> = { 1: 'Intereses', 2: 'Gastos por cobrar', 3: 'Cambio de valor', 4: 'Otros' }
+
+function DebitNoteForm({ onApply }: { onApply: (amount: number, reason: string, concept: 1 | 2 | 3 | 4) => void }) {
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
+  const [concept, setConcept] = useState<1 | 2 | 3 | 4>(4)
   return (
     <div className="space-y-3">
       <p className="text-sm text-slate-500">Cargo adicional sobre esta venta (ej. interés por mora, recargo). Si tiene cliente, suma a su saldo.</p>
       <input autoFocus className="input text-center text-xl font-bold" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="$ 0" />
+      <div>
+        <label className="label">Concepto (DIAN)</label>
+        <select className="input" value={concept} onChange={(e) => setConcept(Number(e.target.value) as 1 | 2 | 3 | 4)}>
+          <option value={1}>Intereses</option>
+          <option value={2}>Gastos por cobrar</option>
+          <option value={3}>Cambio de valor</option>
+          <option value={4}>Otros</option>
+        </select>
+      </div>
       <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Motivo" />
-      <button className="btn btn-primary w-full" disabled={parseCop(amount) <= 0} onClick={() => onApply(parseCop(amount), reason.trim() || 'Cargo adicional')}>
+      <button className="btn btn-primary w-full" disabled={parseCop(amount) <= 0} onClick={() => onApply(parseCop(amount), reason.trim() || 'Cargo adicional', concept)}>
         Generar nota débito
       </button>
     </div>

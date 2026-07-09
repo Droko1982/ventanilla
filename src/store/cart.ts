@@ -17,6 +17,8 @@ export interface CartLine {
   promoSaving?: number // ahorro por promoción (calculado según la cantidad)
   lineDiscount: number
   ivaRate: number
+  taxKind?: 'iva' | 'inc'
+  taxCategory?: 'gravado' | 'exento' | 'excluido'
   cost: number
   emoji?: string
 }
@@ -113,6 +115,8 @@ export const useCart = create<CartState>()(persist((set) => ({
         unitPrice: p.price,
         lineDiscount: 0,
         ivaRate: p.ivaRate,
+        taxKind: p.taxKind,
+        taxCategory: p.taxCategory,
         cost: p.cost,
         emoji: p.imageEmoji,
       }

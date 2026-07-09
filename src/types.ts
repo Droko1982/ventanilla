@@ -39,6 +39,10 @@ export interface Tenant {
   createdAt: string
   // Configuración DIAN del cliente (cada cliente conecta su propio proveedor)
   dian: DianConfig
+  // Condición tributaria del emisor (para la representación del documento).
+  vatResponsible?: boolean // ¿responsable de IVA? (default true). Si false, no discrimina IVA.
+  taxRegime?: 'ordinario' | 'simple' // régimen (opcional)
+  taxResponsibilities?: string // texto libre: "Responsable de IVA", "O-13", "R-99-PN", etc.
   // Conteo de locales (lo usa el panel del Super-Admin para el cobro escalonado)
   locationCount?: number
   monthlyGoal?: number // meta de ventas del mes (opcional)
@@ -79,13 +83,31 @@ export interface Device {
   blocked?: boolean // true si excede la licencia (no debe operar)
 }
 
+// Datos estructurados de una resolución de numeración DIAN (por tipo de documento).
+export interface DianResolution {
+  prefix?: string // prefijo autorizado (ej. "POS1", "FE")
+  resNumber?: string // número de la resolución (si difiere del general)
+  from?: number // número inicial autorizado del rango
+  to?: number // número final autorizado del rango
+  resolutionDate?: string // fecha de expedición (ISO)
+  validityMonths?: number // meses de vigencia (configurable; no se fija por defecto)
+}
+
 export interface DianConfig {
   enabled: boolean
   provider: 'alegra' | 'factus' | 'dian_gratuito' | 'otro' | 'ninguno'
   resolutionNumber: string
-  resolutionRange: string // ej. "POS1 1 al 5000"
+  resolutionRange: string // ej. "POS1 1 al 5000" (texto libre, se conserva)
   technicalKey: string
   testMode: boolean // en demo siempre true
+  // Estructura de la resolución por documento (opcional; la numeración cae a los
+  // valores por defecto si no está configurada, para no romper instalaciones).
+  pos?: DianResolution // documento equivalente POS
+  fe?: DianResolution // factura electrónica de venta
+  warnThreshold?: number // avisar cuando queden ≤ N consecutivos (default 50)
+  uvtValue?: number // valor de la UVT del año (regla de las 5 UVT); sin valor fijo en código
+  posMaxUvt?: number // umbral del tiquete en UVT (sugerido 5)
+  incRate?: number // tarifa del Impuesto Nacional al Consumo, restaurantes (sugerido 8)
 }
 
 // --- Local / ventanilla física ----------------------------------------------
@@ -140,6 +162,8 @@ export interface Product {
   price: number // precio de venta (por unidad, o por kg si unit='peso')
   cost: number // costo de compra (para margen)
   ivaRate: number // 0, 5, 19 (lo necesita la DIAN)
+  taxKind?: 'iva' | 'inc' // tipo de impuesto: IVA (default) o INC (restaurantes/bares)
+  taxCategory?: 'gravado' | 'exento' | 'excluido' // clasificación DIAN (default gravado)
   supplierId?: string // último proveedor
   avgCost?: number // costo promedio ponderado (se recalcula al comprar)
   section?: string // sección / posición en la tienda (ej. "Góndola 3")
@@ -180,6 +204,8 @@ export interface SaleItem {
   unitPrice: number // precio por unidad o por kg
   lineDiscount: number // descuento sobre la línea (en pesos)
   ivaRate: number
+  taxKind?: 'iva' | 'inc' // heredado del producto (default iva)
+  taxCategory?: 'gravado' | 'exento' | 'excluido' // heredado del producto (default gravado)
   cost: number // costo unitario (para utilidad)
 }
 
@@ -220,8 +246,12 @@ export interface Sale {
   redeemPoints?: number // puntos de fidelización canjeados en esta venta (para devolverlos si se anula)
   returns?: { productId: string; qty: number; at: string }[] // devoluciones parciales
   creditNoteNumber?: string // nota crédito por devolución
+  creditNoteConcept?: 1 | 2 | 3 | 4 | 5 // concepto DIAN: 1 devolución, 2 anulación, 3 rebaja, 4 descuento, 5 otros
   debitNoteNumber?: string // nota débito (cargo adicional)
   debitNoteAmount?: number
+  debitNoteConcept?: 1 | 2 | 3 | 4 // concepto DIAN: 1 intereses, 2 gastos, 3 cambio valor, 4 otros
+  // Documento de referencia (factura original) para la nota crédito/débito.
+  referencedDoc?: { number: string; issueDate: string; docType: string }
   createdAt: string
   // Día contable y caja (turno) a la que pertenece la venta. businessDate es el
   // día en que se abrió la caja (YYYY-MM-DD): una caja que cruza medianoche

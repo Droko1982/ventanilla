@@ -56,6 +56,10 @@ export function ProductForm({
   const [price, setPrice] = useState(product ? String(product.price) : '')
   const [cost, setCost] = useState(product ? String(product.cost) : '')
   const [iva, setIva] = useState(product?.ivaRate ?? 19)
+  const [taxKind, setTaxKind] = useState<'iva' | 'inc'>(product?.taxKind ?? 'iva')
+  const [taxCategory, setTaxCategory] = useState<'gravado' | 'exento' | 'excluido'>(
+    product?.taxCategory ?? (product?.ivaRate === 0 ? 'excluido' : 'gravado'),
+  )
   const [supplierId, setSupplierId] = useState(product?.supplierId ?? '')
   const [perishable, setPerishable] = useState(product?.perishable ?? false)
   const [emoji, setEmoji] = useState(product?.imageEmoji ?? '📦')
@@ -161,6 +165,8 @@ export function ProductForm({
       price: parseCop(price),
       cost: parseCop(cost),
       ivaRate: iva,
+      taxKind: taxKind === 'inc' ? 'inc' : undefined,
+      taxCategory: taxKind === 'iva' && iva === 0 ? taxCategory : undefined,
       supplierId: supplierId || undefined,
       perishable,
       imageEmoji: emoji,
@@ -358,14 +364,51 @@ export function ProductForm({
           </div>
         </div>
 
-        <div>
-          <label className="label">IVA (DIAN)</label>
-          <select className="input" value={iva} onChange={(e) => setIva(Number(e.target.value))}>
-            <option value={0}>0% (excluido)</option>
-            <option value={5}>5%</option>
-            <option value={19}>19%</option>
-          </select>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Impuesto</label>
+            <select
+              className="input"
+              value={taxKind}
+              onChange={(e) => {
+                const k = e.target.value as 'iva' | 'inc'
+                setTaxKind(k)
+                setIva(k === 'inc' ? 8 : 19) // INC restaurantes 8%; IVA general 19%
+              }}
+            >
+              <option value="iva">IVA</option>
+              <option value="inc">INC (restaurante/bar)</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">{taxKind === 'inc' ? 'Tarifa INC' : 'IVA (DIAN)'}</label>
+            {taxKind === 'inc' ? (
+              <select className="input" value={iva} onChange={(e) => setIva(Number(e.target.value))}>
+                <option value={8}>8%</option>
+                <option value={16}>16%</option>
+              </select>
+            ) : (
+              <select className="input" value={iva} onChange={(e) => setIva(Number(e.target.value))}>
+                <option value={0}>0%</option>
+                <option value={5}>5%</option>
+                <option value={19}>19%</option>
+              </select>
+            )}
+          </div>
         </div>
+        {taxKind === 'iva' && iva === 0 && (
+          <div>
+            <label className="label">Clasificación a tarifa 0%</label>
+            <select
+              className="input"
+              value={taxCategory}
+              onChange={(e) => setTaxCategory(e.target.value as 'exento' | 'excluido')}
+            >
+              <option value="excluido">Excluido de IVA</option>
+              <option value="exento">Exento (0%)</option>
+            </select>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>

@@ -26,7 +26,7 @@ import type {
   Domicilio,
   DomicilioStatus,
 } from '@/types'
-import { ivaBreakdown } from '@/lib/documents'
+import { ivaBreakdown, docTotals, taxOptsFromTenant } from '@/lib/documents'
 
 // ============================================================================
 // Lógica de negocio (mutaciones) y consultas reutilizables.
@@ -84,6 +84,17 @@ export function nextFacturaNumber(): string { return nextSeq('ventanilla-seq-fe'
 export function nextRemisionNumber(): string { return nextSeq('ventanilla-seq-rem', 120, 'REM-') }
 export function nextCreditNoteNumber(): string { return nextSeq('ventanilla-seq-nc', 300, 'NC-') }
 export function nextDebitNoteNumber(): string { return nextSeq('ventanilla-seq-nd', 200, 'ND-') }
+
+// Documento de referencia (factura/tiquete original) que exige la DIAN en toda
+// nota crédito/débito. El CUFE/CUDE real no se computa (sistema simulado), por eso
+// no se incluye: referenciamos número, fecha y tipo del documento original.
+function refDocOf(sale: Sale): { number: string; issueDate: string; docType: string } {
+  return {
+    number: sale.dianDocNumber ?? sale.id,
+    issueDate: (sale.businessDate ?? sale.createdAt).slice(0, 10),
+    docType: sale.dianDocType,
+  }
+}
 
 // ---- Registrar una venta ---------------------------------------------------
 export interface RecordSaleInput {
@@ -186,6 +197,26 @@ export async function recordSale(input: RecordSaleInput): Promise<Sale> {
     cashSessionId: openSession?.id,
     businessDate,
     syncedAt: navigator.onLine ? now : undefined, // offline: queda sin sincronizar
+  }
+
+  // Adquiriente: si hay cliente pero faltan datos, se completan desde su ficha
+  // (la factura exige nombre/identificación del adquiriente).
+  if (input.customerId && (!sale.customerName || !sale.customerDoc)) {
+    const c = await db.customers.get(input.customerId)
+    if (c) {
+      sale.customerName = sale.customerName ?? c.name
+      sale.customerDoc = sale.customerDoc ?? c.idNumber
+      sale.customerAddress = sale.customerAddress ?? c.address
+    }
+  }
+  // Adquiriente no identificado (DIAN): en el tiquete/documento equivalente sin
+  // cliente, el adquiriente es "consumidor final" con NIT 222222222222.
+  if (docType !== 'factura' && !sale.customerName && !sale.customerId) {
+    sale.customerName = 'Consumidor final'
+    if (!sale.customerDoc) {
+      sale.customerDoc = '222222222222'
+      sale.customerIdType = 'NIT'
+    }
   }
 
   // Bloqueo de stock negativo: si un producto NO permite negativos y no alcanza,
@@ -375,6 +406,8 @@ export async function voidSale(saleId: string, userId: string, userName: string)
     sale.status = 'anulada'
     // Numera la nota crédito de la anulación (como en la devolución parcial).
     if (!sale.creditNoteNumber) sale.creditNoteNumber = nextCreditNoteNumber()
+    sale.creditNoteConcept = 2 // 2 = anulación (concepto DIAN)
+    sale.referencedDoc = sale.referencedDoc ?? refDocOf(sale)
     await db.sales.put(sale)
     // Devuelve el stock — salvo si la venta nació de una remisión (el stock ya lo
     // maneja la remisión) y sin tocar servicios/recargas/manuales (no tienen stock).
@@ -500,6 +533,8 @@ export async function returnSaleItems(
       cashRefund = cashBefore - cashAfter
     }
     if (!sale.creditNoteNumber) sale.creditNoteNumber = nextCreditNoteNumber()
+    sale.creditNoteConcept = 1 // 1 = devolución (concepto DIAN)
+    sale.referencedDoc = sale.referencedDoc ?? refDocOf(sale)
     if (sale.items.length === 0) sale.status = 'devuelta'
     await db.sales.put(sale)
   })
@@ -1116,12 +1151,14 @@ export async function registerReceptionEvent(
 }
 
 // ---- Nota débito (cargo adicional sobre una venta) ------------------------
-export async function generateDebitNote(saleId: string, amount: number, reason: string, userId: string, userName: string): Promise<string | null> {
+export async function generateDebitNote(saleId: string, amount: number, reason: string, userId: string, userName: string, concept: 1 | 2 | 3 | 4 = 4): Promise<string | null> {
   const sale = await db.sales.get(saleId)
   if (!sale) return null
   const number = nextDebitNoteNumber()
   sale.debitNoteNumber = number
+  sale.debitNoteConcept = concept // concepto DIAN de la nota débito
   sale.debitNoteAmount = amount
+  sale.referencedDoc = sale.referencedDoc ?? refDocOf(sale)
   sale.note = sale.note ? `${sale.note} · ND: ${reason}` : `ND: ${reason}`
   // Venta + saldo + libro de crédito en una sola transacción (no quedan a medias).
   await db.transaction('rw', [db.sales, db.customers, db.creditMovements], async () => {
@@ -1405,6 +1442,7 @@ export async function generateZReport(
   userName: string,
 ): Promise<ZReport> {
   const sales = await db.sales.where('locationId').equals(locationId).toArray()
+  const taxOpts = taxOptsFromTenant(await db.tenants.get(tenantId)) // No responsable de IVA / INC
 
   let count = 0, revenue = 0, base = 0, iva = 0, discounts = 0, returnsCount = 0
   const byMethod: Record<string, number> = {}
@@ -1420,11 +1458,11 @@ export async function generateZReport(
     count++; revenue += s.total; discounts += s.discount
     byDocType[s.dianDocType ?? 'tiquete_pos'] = (byDocType[s.dianDocType ?? 'tiquete_pos'] || 0) + s.total
     for (const p of s.payments) byMethod[p.method] = (byMethod[p.method] || 0) + p.amount
-    const br = ivaBreakdown(s.items, s.discount)
-    base += br.base; iva += br.iva
+    const br = docTotals(s.items, s.discount, taxOpts)
+    base += br.base; iva += br.iva + br.inc
     for (const ln of br.lines) {
       const cur = ivaAgg.get(ln.rate) ?? { base: 0, iva: 0 }
-      cur.base += ln.base; cur.iva += ln.iva
+      cur.base += ln.base; cur.iva += ln.tax
       ivaAgg.set(ln.rate, cur)
     }
   }
@@ -1436,11 +1474,24 @@ export async function generateZReport(
   // el centavo del redondeo, igual que en cada documento.
   const rRevenue = Math.round(revenue)
   const rBase = Math.round(base)
+  const zIva = rRevenue - rBase
+  // Desglose por tarifa reconciliado: la suma de las tarifas cuadra EXACTO con el
+  // consolidado (base e impuestos del Z); el redondeo se absorbe en la tarifa de
+  // mayor base. Incluye IVA e INC (para que un restaurante también cuadre).
+  const ivaByRate = [...ivaAgg.entries()]
+    .map(([rate, v]) => ({ rate, base: Math.round(v.base), iva: Math.round(v.iva) }))
+    .sort((a, b) => a.rate - b.rate)
+  if (ivaByRate.length) {
+    let top = ivaByRate[0]
+    for (const r of ivaByRate) if (r.base > top.base) top = r
+    top.base += rBase - ivaByRate.reduce((s, r) => s + r.base, 0)
+    top.iva += zIva - ivaByRate.reduce((s, r) => s + r.iva, 0)
+  }
   const z: ZReport = {
     id: prior?.id ?? uid('z'), tenantId, locationId, number: prior?.number ?? `Z-${String(existing + 1).padStart(4, '0')}`,
     date: dateStr, cumulative, count, revenue: rRevenue,
-    base: rBase, iva: rRevenue - rBase,
-    ivaByRate: [...ivaAgg.entries()].map(([rate, v]) => ({ rate, base: Math.round(v.base), iva: Math.round(v.iva) })).sort((a, b) => a.rate - b.rate),
+    base: rBase, iva: zIva,
+    ivaByRate,
     byMethod, byDocType, discounts: Math.round(discounts), returnsCount,
     generatedAt: new Date().toISOString(),
   }

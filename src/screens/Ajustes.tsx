@@ -153,6 +153,7 @@ export default function Ajustes() {
           <p className="text-sm text-slate-600">Proveedor: <b className="capitalize">{tenant.dian.provider}</b></p>
           <p className="text-sm text-slate-600">Resolución: {tenant.dian.resolutionNumber}</p>
           <p className="text-xs text-slate-400">{tenant.dian.resolutionRange}</p>
+          <p className="text-xs text-slate-500">{tenant.vatResponsible === false ? 'No responsable de IVA' : 'Responsable de IVA'}</p>
           <button onClick={() => setDianOpen(true)} className="btn btn-secondary mt-3 w-full text-sm">
             Configurar conexión DIAN
           </button>
@@ -325,7 +326,7 @@ export default function Ajustes() {
       {(empEdit || empAdd) && (
         <EmployeeForm employee={empEdit ?? undefined} tenantId={tenantId} locations={locations ?? []} onClose={() => { setEmpEdit(null); setEmpAdd(false) }} />
       )}
-      {dianOpen && <DianForm tenantId={tenantId} dian={tenant.dian} onClose={() => setDianOpen(false)} />}
+      {dianOpen && <DianForm tenantId={tenantId} tenant={tenant} onClose={() => setDianOpen(false)} />}
     </div>
   )
 }
@@ -876,25 +877,75 @@ function EmployeeForm({ employee, tenantId, locations, onClose }: { employee?: U
   )
 }
 
-function DianForm({ tenantId, dian, onClose }: { tenantId: string; dian: DianConfig; onClose: () => void }) {
+function DianForm({ tenantId, tenant, onClose }: { tenantId: string; tenant: Tenant; onClose: () => void }) {
+  const dian = tenant.dian
+  const str = (n?: number) => (n == null ? '' : String(n))
+  const numU = (v: string) => {
+    const n = parseInt(v.replace(/\D/g, ''), 10)
+    return v.trim() && Number.isFinite(n) ? n : undefined
+  }
   const [provider, setProvider] = useState(dian.provider)
   const [resolutionNumber, setRes] = useState(dian.resolutionNumber)
   const [resolutionRange, setRange] = useState(dian.resolutionRange)
   const [enabled, setEnabled] = useState(dian.enabled)
+  // Régimen tributario del emisor
+  const [vatResp, setVatResp] = useState(tenant.vatResponsible !== false)
+  const [taxResp, setTaxResp] = useState(tenant.taxResponsibilities ?? '')
+  const [regime, setRegime] = useState<'ordinario' | 'simple'>(tenant.taxRegime ?? 'ordinario')
+  // Resolución estructurada
+  const [posPrefix, setPosPrefix] = useState(dian.pos?.prefix ?? '')
+  const [posFrom, setPosFrom] = useState(str(dian.pos?.from))
+  const [posTo, setPosTo] = useState(str(dian.pos?.to))
+  const [posDate, setPosDate] = useState(dian.pos?.resolutionDate ?? '')
+  const [posVig, setPosVig] = useState(str(dian.pos?.validityMonths))
+  const [fePrefix, setFePrefix] = useState(dian.fe?.prefix ?? '')
+  const [feFrom, setFeFrom] = useState(str(dian.fe?.from))
+  const [feTo, setFeTo] = useState(str(dian.fe?.to))
+  const [feDate, setFeDate] = useState(dian.fe?.resolutionDate ?? '')
+  const [feVig, setFeVig] = useState(str(dian.fe?.validityMonths))
+  // Impuestos configurables
+  const [incRate, setIncRate] = useState(str(dian.incRate))
+  const [uvtValue, setUvtValue] = useState(str(dian.uvtValue))
+  const [posMaxUvt, setPosMaxUvt] = useState(str(dian.posMaxUvt))
   return (
     <Sheet
-      open onClose={onClose} title="Conexión DIAN"
+      open onClose={onClose} title="DIAN y régimen tributario"
       footer={
         <button className="btn btn-primary btn-lg w-full" onClick={async () => {
           await db.tenants.update(tenantId, {
-            dian: { ...dian, provider, resolutionNumber, resolutionRange, enabled, testMode: true },
+            dian: {
+              ...dian, provider, resolutionNumber, resolutionRange, enabled, testMode: true,
+              pos: { prefix: posPrefix.trim() || undefined, from: numU(posFrom), to: numU(posTo), resolutionDate: posDate || undefined, validityMonths: numU(posVig) },
+              fe: { prefix: fePrefix.trim() || undefined, from: numU(feFrom), to: numU(feTo), resolutionDate: feDate || undefined, validityMonths: numU(feVig) },
+              incRate: numU(incRate), uvtValue: numU(uvtValue), posMaxUvt: numU(posMaxUvt),
+            },
+            vatResponsible: vatResp,
+            taxResponsibilities: taxResp.trim() || undefined,
+            taxRegime: regime,
           })
           toast('success', 'Configuración DIAN guardada')
           onClose()
         }}>Guardar</button>
       }
     >
-      <div className="space-y-3">
+      <div className="space-y-4">
+        {/* Régimen tributario */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Régimen tributario</p>
+          <label className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
+            <input type="checkbox" checked={vatResp} onChange={(e) => setVatResp(e.target.checked)} className="h-5 w-5" />
+            <span className="text-sm text-slate-600">Responsable de IVA <span className="text-slate-400">(desmárcalo si tu tienda NO cobra IVA)</span></span>
+          </label>
+          <div><label className="label">Responsabilidades (se imprimen en el documento)</label><input className="input" value={taxResp} onChange={(e) => setTaxResp(e.target.value)} placeholder={vatResp ? 'Responsable de IVA' : 'No responsable de IVA'} /></div>
+          <div><label className="label">Régimen</label>
+            <select className="input" value={regime} onChange={(e) => setRegime(e.target.value as 'ordinario' | 'simple')}>
+              <option value="ordinario">Ordinario</option>
+              <option value="simple">Régimen Simple (SIMPLE)</option>
+            </select>
+          </div>
+        </div>
+        <hr className="border-slate-100" />
+        {/* Proveedor y resolución */}
         <div>
           <label className="label">Proveedor tecnológico autorizado</label>
           <select className="input" value={provider} onChange={(e) => setProvider(e.target.value as any)}>
@@ -906,13 +957,45 @@ function DianForm({ tenantId, dian, onClose }: { tenantId: string; dian: DianCon
           </select>
         </div>
         <div><label className="label">Número de resolución</label><input className="input" value={resolutionNumber} onChange={(e) => setRes(e.target.value)} /></div>
-        <div><label className="label">Rango de numeración</label><input className="input" value={resolutionRange} onChange={(e) => setRange(e.target.value)} placeholder="POS1 1 al 5000" /></div>
+        <div><label className="label">Rango de numeración (texto)</label><input className="input" value={resolutionRange} onChange={(e) => setRange(e.target.value)} placeholder="POS1 1 al 5000" /></div>
+        {/* Resolución POS estructurada */}
+        <div className="space-y-2 rounded-xl bg-slate-50 p-3">
+          <p className="text-xs font-semibold text-slate-500">Resolución · Documento POS</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div><label className="label">Prefijo</label><input className="input" value={posPrefix} onChange={(e) => setPosPrefix(e.target.value)} placeholder="POS1" /></div>
+            <div><label className="label">Desde</label><input className="input" inputMode="numeric" value={posFrom} onChange={(e) => setPosFrom(e.target.value)} /></div>
+            <div><label className="label">Hasta</label><input className="input" inputMode="numeric" value={posTo} onChange={(e) => setPosTo(e.target.value)} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className="label">Fecha resolución</label><input className="input" type="date" value={posDate} onChange={(e) => setPosDate(e.target.value)} /></div>
+            <div><label className="label">Vigencia (meses)</label><input className="input" inputMode="numeric" value={posVig} onChange={(e) => setPosVig(e.target.value)} /></div>
+          </div>
+        </div>
+        {/* Resolución FE estructurada */}
+        <div className="space-y-2 rounded-xl bg-slate-50 p-3">
+          <p className="text-xs font-semibold text-slate-500">Resolución · Factura electrónica</p>
+          <div className="grid grid-cols-3 gap-2">
+            <div><label className="label">Prefijo</label><input className="input" value={fePrefix} onChange={(e) => setFePrefix(e.target.value)} placeholder="FE" /></div>
+            <div><label className="label">Desde</label><input className="input" inputMode="numeric" value={feFrom} onChange={(e) => setFeFrom(e.target.value)} /></div>
+            <div><label className="label">Hasta</label><input className="input" inputMode="numeric" value={feTo} onChange={(e) => setFeTo(e.target.value)} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className="label">Fecha resolución</label><input className="input" type="date" value={feDate} onChange={(e) => setFeDate(e.target.value)} /></div>
+            <div><label className="label">Vigencia (meses)</label><input className="input" inputMode="numeric" value={feVig} onChange={(e) => setFeVig(e.target.value)} /></div>
+          </div>
+        </div>
+        {/* Impuestos configurables */}
+        <div className="grid grid-cols-3 gap-2">
+          <div><label className="label">INC %</label><input className="input" inputMode="numeric" value={incRate} onChange={(e) => setIncRate(e.target.value)} placeholder="8" /></div>
+          <div><label className="label">Valor UVT</label><input className="input" inputMode="numeric" value={uvtValue} onChange={(e) => setUvtValue(e.target.value)} placeholder="Ej. 49799" /></div>
+          <div><label className="label">Tiquete máx (UVT)</label><input className="input" inputMode="numeric" value={posMaxUvt} onChange={(e) => setPosMaxUvt(e.target.value)} placeholder="5" /></div>
+        </div>
         <label className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3">
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} className="h-5 w-5" />
           <span className="text-sm text-slate-600">Conexión activa</span>
         </label>
         <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          En el demo la transmisión es simulada. En producción se usan tus credenciales reales del proveedor.
+          En el demo la transmisión es simulada (no se valida ante la DIAN). En producción se usan tus credenciales reales del proveedor.
         </p>
       </div>
     </Sheet>

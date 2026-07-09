@@ -272,11 +272,23 @@ export default function POS() {
     const items = cart.lines.map((l) => ({
       productId: l.productId, name: l.name, unit: l.unit, qty: l.qty,
       unitPrice: l.unitPrice, lineDiscount: l.lineDiscount + (l.promoSaving ?? 0),
-      ivaRate: l.ivaRate, cost: l.cost,
+      ivaRate: l.ivaRate, taxKind: l.taxKind, taxCategory: l.taxCategory, cost: l.cost,
     }))
     const customerId = opts.customerId ?? cart.meta.customerId
     // El tipo de documento solo aplica en el modo Mostrador; Fichas/Lista = tiquete.
     const effectiveDoc = mode === 'counter' ? docMode : 'tiquete'
+
+    // Regla de las 5 UVT: un documento equivalente POS que supera el umbral no
+    // sirve como soporte de costos/IVA descontable para el comprador, que puede
+    // exigir factura electrónica. Aviso NO bloqueante y solo si hay UVT configurada.
+    const uvt = tenant?.dian?.uvtValue
+    const maxUvt = tenant?.dian?.posMaxUvt ?? 5
+    if (effectiveDoc === 'tiquete' && uvt && total > uvt * maxUvt) {
+      const ok = window.confirm(
+        `Esta venta (${cop(total)}) supera ${maxUvt} UVT. El comprador puede exigir factura electrónica para soportar costos/IVA.\n\nAceptar = registrar como tiquete.\nCancelar = vuelvo para emitir factura.`,
+      )
+      if (!ok) return
+    }
 
     // Mostrador 1 → Remisión (nota de entrega, no DIAN; descuenta stock; fiado si aplica).
     if (effectiveDoc === 'remision') {
